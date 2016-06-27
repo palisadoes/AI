@@ -138,6 +138,9 @@ class Data(object):
                 # Update data with heights
                 self.data.append((height, gender.lower()))
 
+                # Set global maxrows value
+                self.maxrows = row_count
+
                 # Conditional break
                 if maxrows is not None:
                     if row_count > maxrows:
@@ -481,7 +484,17 @@ class Data(object):
             tuple(lines), tuple(categories), loc='lower center', ncol=2)
 
         # Add Main Title
-        fig.suptitle('Height Histogram', fontsize=10)
+        fig.suptitle(
+            'Height Histogram',
+            horizontalalignment='center',
+            fontsize=10)
+
+        # Add Subtitle
+        axes.set_title(
+            ('Analysis of First %s Rows') % (
+                 self.maxrows),
+            multialignment='center',
+            fontsize=10)
 
         # Add grid, axis labels
         axes.grid(True)
@@ -496,7 +509,8 @@ class Data(object):
         fig.subplots_adjust(left=0.2, bottom=0.2)
 
         # Create image
-        graph_filename = ('%s/homework.png') % (directory)
+        graph_filename = ('%s/homework-%s-rows.png') % (
+            directory, self.maxrows)
 
         # Save chart
         fig.savefig(graph_filename)
@@ -708,6 +722,7 @@ def main():
 
     print('\n')
     data = Data(args.datafile, maxrows=200)
+    data.graph()
     data.table()
 
 if __name__ == "__main__":
