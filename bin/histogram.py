@@ -343,6 +343,11 @@ class Data(object):
             if bool(fcount) is False:
                 fcount = 0
 
+            # Account for zero males / females for height
+            if mcount + fcount == 0:
+                b_gender = 'N/A'
+                h_gender = 'N/A'
+
             # Print output
             output = ('%10d %15s %15.6f %15s %15.6f %6d %6d') % (
                 height,
