@@ -3,11 +3,11 @@
 
 import argparse
 import textwrap
-import math
 import sys
+import math
 from pprint import pprint
 from collections import defaultdict
-from statistics import stdev, mean, median
+from statistics import stdev, mean
 
 import numpy as np
 import matplotlib
@@ -114,10 +114,12 @@ class Data(object):
         get_cli:
     """
 
-    def __init__(self, filename):
+    def __init__(self, filename, maxrows=None):
         """Function for intializing the class."""
         # Initialize key variables
         self.data = []
+        self.meta = defaultdict(lambda: defaultdict(dict))
+        row_count = 0
 
         # Read spreadsheet
         workbook = xlrd.open_workbook(filename)
@@ -130,8 +132,31 @@ class Data(object):
 
             # Skip header, append data
             if 'gender' not in gender.lower():
-                self.data.append(
-                    (int(feet * 12 + inches), gender.lower()))
+                # Get minimum and maximum values of heights
+                height = int(feet * 12 + inches)
+
+                # Update data with heights
+                self.data.append((height, gender.lower()))
+
+                # Conditional break
+                if maxrows is not None:
+                    if row_count > maxrows:
+                        break
+                row_count = row_count + 1
+
+        # Calculate counts
+        self.data_lists = self._lists()
+
+        # Get min / max and bins
+        for category, heights in sorted(self.data_lists.items()):
+            self.meta[category]['min'] = min(heights)
+            self.meta[category]['max'] = max(heights)
+
+        # Calculate counts
+        self.data_counts = self._counts()
+
+        # Calculate probabilities
+        self.data_probability = self._probability()
 
     def keys(self):
         """Get keys in data.
@@ -149,26 +174,80 @@ class Data(object):
         # Get keys
         for pair in self.data:
             key = pair[1]
-            if key in keys:
+            if key in data:
                 continue
             data.append(key)
 
         # Return
         return data
 
-    def buckets(self, category):
-        """Get number of buckets in data.
+    def bucket_range(self):
+        """Get largest number of buckets out of all categories.
 
         Args:
             None
 
         Returns:
-            data: number of buckets
+            (min, max): Tuple
 
         """
         # Initialize key variables
-        lists = self.lists()
-        data = int(math.log2(len(lists[category])) + 1)
+        for category in self.meta.keys():
+            minimum = self.meta[category]['min']
+            maximum = self.meta[category]['max']
+
+        # Get range
+        for category in self.meta.keys():
+            minimum = min(self.meta[category]['min'], minimum)
+            maximum = max(self.meta[category]['max'], maximum)
+
+        # Return
+        return (minimum, maximum)
+
+    def buckets(self, category):
+        """Get number of buckets in data.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            bins: number of buckets
+
+        """
+        # Initialize key variables
+        bins = self._buckets(category)[0]
+
+        # Return
+        return bins
+
+    def minimum(self, category):
+        """Get minimum category key value.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            data: minimum value
+
+        """
+        # Initialize key variables
+        data = self._buckets(category)[1]
+
+        # Return
+        return data
+
+    def maximum(self, category):
+        """Get maximum category key value.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            data: maximum value
+
+        """
+        # Initialize key variables
+        data = self._buckets(category)[2]
 
         # Return
         return data
@@ -180,28 +259,14 @@ class Data(object):
             None
 
         Returns:
-            counts: list of tuples (height, gender)
+            data: Dict of counts of height keyed by category and height
 
         """
         # Initialize key variables
-        keys = []
-        counts = defaultdict(lambda: defaultdict(dict))
-
-        # Create counts dict for probabilities
-        for pair in self.data:
-            height = pair[0]
-            gender = pair[1]
-            if gender in counts:
-                if height in counts[gender]:
-                    counts[gender][height] = counts[
-                        gender][height] + 1
-                else:
-                    counts[gender][height] = 1
-            else:
-                counts[gender][height] = 1
+        data = self.data_counts
 
         # Return
-        return counts
+        return data
 
     def lists(self):
         """Convert count data lists.
@@ -214,23 +279,12 @@ class Data(object):
 
         """
         # Initialize key variables
-        frequencies = self.counts()
-        data = {}
-
-        # Create counts dict for probabilities
-        for pair in self.data:
-            height = pair[0]
-            gender = pair[1]
-            if gender in data:
-                data[gender].append(height)
-            else:
-                data[gender] = [height]
+        data = self.data_lists
 
         # Return
         return data
 
-
-    def probability(self, category=None, height=None):
+    def probability(self, height, category=None):
         """Calculate probabilities.
 
         Args:
@@ -242,25 +296,116 @@ class Data(object):
 
         """
         # Initialize key variables
-        counts = self.counts()
-        total = 0
-        frequency = 0
-
         if category is None:
-            for gender in counts.keys():
-                for key in counts[gender].keys():
-                    total = total + counts[gender][key]
-                frequency = counts[gender][height]
+            value = self.data_probability[None][height]
         else:
-            for gender in counts.keys():
-                for gender_height in counts[gender].keys():
-                    if category == gender:
-                        total = total + counts[gender][gender_height]
-            frequency = counts[category][height]
+            value = self.data_probability[category][height]
 
         # Return
-        value = frequency / total
         return value
+
+    def table(self):
+        """Create classifier chart.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Initialize key variables
+        (minimum, maximum) = self.bucket_range()
+
+        # Header
+        output = ('%10s %15s %15s %15s %15s %6s %6s') % (
+            'Height',
+            'Gender (H)', 'Prob. (H)',
+            'Gender (B)', 'Prob. (B)',
+            'Male', 'Female')
+        print(output)
+
+        # Evaluate heights
+        for height in range(minimum, maximum + 1):
+            # Get probabilities
+            b_probability = self.bayesian_classifier(height)
+            h_probability = self.histogram_classifier(height)
+
+            # Get genders
+            b_gender = _get_gender(b_probability)
+            h_gender = _get_gender(h_probability)
+
+            # Get counts
+            mcount = self.data_counts['male'][height]
+            if bool(mcount) is False:
+                mcount = 0
+            fcount = self.data_counts['female'][height]
+            if bool(fcount) is False:
+                fcount = 0
+
+            # Print output
+            output = ('%10d %15s %15.6f %15s %15.6f %6d %6d') % (
+                height,
+                h_gender, h_probability,
+                b_gender, b_probability,
+                mcount, fcount)
+            print(output)
+
+    def bayesian_classifier(self, height):
+        """Create histogram classifier chart.
+
+        Args:
+            None
+
+        Returns:
+            male_probability: Probability of being male
+
+        """
+        # Get male counts
+        mcount = self._bayesian('male', height)
+
+        # Get female counts
+        fcount = self._bayesian('female', height)
+
+        # Get male probability
+        if mcount == 0:
+            male_probability = 0
+        else:
+            male_probability = mcount / (mcount + fcount)
+
+        # Return
+        return male_probability
+
+    def histogram_classifier(self, height):
+        """Create histogram classifier chart.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Get male counts
+        if height not in self.data_counts['male']:
+            mcount = 0
+        else:
+            mcount = self.data_counts['male'][height]
+
+        # Get female counts
+        if height not in self.data_counts['female']:
+            fcount = 0
+        else:
+            fcount = self.data_counts['female'][height]
+
+        # Get male probability
+        if mcount == 0:
+            male_probability = 0
+        else:
+            male_probability = mcount / (mcount + fcount)
+
+        # Return
+        return male_probability
 
     def graph(self):
         """Graph histogram.
@@ -276,74 +421,269 @@ class Data(object):
         """
         # Initialize key variables
         directory = '/home/peter/Downloads'
-        data = self.lists()
+        data = self.counts()
+        lines = []
+        categories = []
+        heights = []
+        counts = []
+        min_height = 100000000000000000000
+        max_height = 1 - min_height
+        max_count = 1 - 100000000000000000000
+
+        # Create the histogram plot
+        fig, axes = plt.subplots(figsize=(8, 8))
+
+        # Random colors for each plot
+        prop_iter = iter(plt.rcParams['axes.prop_cycle'])
 
         # Loop through data
         for category in data:
-            # Create objects
-            bins = self.buckets(category)
-            histogram_array = np.array(data[category])
-            histogram, bins = np.histogram(histogram_array, bins=bins)
+            # Append category name
+            categories.append(category.capitalize())
 
-            # Calculate widths and center line of histogram
-            width = 0.7 * (bins[1] - bins[0])
-            center = (bins[:-1] + bins[1:]) / 2
+            # Create lists to chart
+            for height, count in sorted(data[category].items()):
+                heights.append(height)
+                counts.append(count)
 
-            # Create the histogram plot
-            fig, axes = plt.subplots(
-            figsize=(8, 8))
-            axes.bar(
-                center, histogram, align='center', width=width, color='#008db8')
+            # Create plot
+            line, = axes.plot(
+                heights, counts, alpha=0.5,
+                color=next(prop_iter)['color'])
+            lines.append(line)
 
-            # create the median plot
-            handle_median = axes.axvline(
-                x=median(histogram_array),
-                linewidth=4, color='#FFD700', alpha=.6
-            )
+            # Put ticks only on bottom and left
+            axes.xaxis.set_ticks_position('bottom')
+            axes.yaxis.set_ticks_position('left')
 
-            # create the mean plot
-            handle_mean = axes.axvline(
-                x=mean(histogram_array),
-                linewidth=4, color='#000000', alpha=.6
-            )
+            # Get max / min heights
+            max_height = max(max_height, max(heights))
+            min_height = min(min_height, min(heights))
 
-            # Add legend
-            fig.legend(
-                (handle_median, handle_mean), ('Median', 'Mean'),
-                loc='lower center', ncol=2)
+            # Get max / min counts
+            max_count = max(max_count, max(counts))
 
-            # Add Main Title
-            fig.suptitle(('%s Histogram') % (
-                category.capitalize()), fontsize=10)
+        # Set X axis ticks
+        major_ticks = np.arange(min_height, max_height, 1)
+        axes.set_xticks(major_ticks)
 
-            # Add Subtitle
-            axes.set_title(
-                ('Mean: %.5f, Median: %.5f StdDev: %.5f') % (
-                     mean(histogram_array),
-                     median(histogram_array),
-                     stdev(histogram_array)),
-                fontsize=8)
+        # Set y axis ticks
+        major_ticks = np.arange(0, max_count + 100, 50)
+        axes.set_yticks(major_ticks)
 
-            # Add grid, axis labels
-            axes.grid(True)
-            axes.set_ylabel('Count')
-            axes.set_xlabel(category.capitalize())
+        # Add legend
+        fig.legend(
+            tuple(lines), tuple(categories), loc='lower center', ncol=2)
 
-            # Rotate the labels
-            for label in axes.xaxis.get_ticklabels():
-                label.set_rotation(90)
+        # Add Main Title
+        fig.suptitle('Height Histogram', fontsize=10)
 
-            # Adjust bottom
-            fig.subplots_adjust(left=0.2, bottom=0.2)
+        # Add grid, axis labels
+        axes.grid(True)
+        axes.set_ylabel('Count')
+        axes.set_xlabel('Heights')
 
-            # Create image
-            graph_filename = ('%s/%s.png') % (directory, category)
+        # Rotate the labels
+        for label in axes.xaxis.get_ticklabels():
+            label.set_rotation(90)
 
-            # Save chart
-            fig.savefig(graph_filename)
+        # Adjust bottom
+        fig.subplots_adjust(left=0.2, bottom=0.2)
 
-            # Close the plot
-            plt.close(fig)
+        # Create image
+        graph_filename = ('%s/homework.png') % (directory)
+
+        # Save chart
+        fig.savefig(graph_filename)
+
+        # Close the plot
+        plt.close(fig)
+
+    def _bayesian(self, category, height):
+        """Create bayesian multiplier.
+
+        Args:
+            category: Category of data
+            height: Height to process
+
+        Returns:
+            value: Multiplier value
+
+        """
+        # Initialize key variables
+        sample_stdev = stdev(self.data_lists[category])
+        sample_mean = mean(self.data_lists[category])
+
+        total = len(self.data_lists[category])
+        multiplier = 1 / (math.sqrt(2 * math.pi) * sample_stdev)
+        power = math.pow((height - sample_mean) / sample_stdev, 2)
+        exponent = math.exp(-0.5 * power)
+
+        # Return
+        value = total * multiplier * exponent
+        return value
+
+    def _buckets(self, category):
+        """Get number of buckets in data.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            bins: number of buckets
+
+        """
+        # Initialize key variables
+        interval = 1
+
+        # Get min / max for category
+        minimum = self.meta[category]['min']
+        maximum = self.meta[category]['max']
+
+        # Calculate bins
+        bins = len(range(minimum, maximum, interval))
+
+        # Return
+        return (bins, minimum, maximum)
+
+    def _counts(self):
+        """Convert file data to probabilty counts.
+
+        Args:
+            None
+
+        Returns:
+            counts: Dict of counts of height keyed by category and height
+
+        """
+        # Initialize key variables
+        counts = defaultdict(lambda: defaultdict(dict))
+
+        # Create counts dict for probabilities
+        for pair in self.data:
+            height = pair[0]
+            category = pair[1]
+
+            # Calculate bin
+            nbins = self.buckets(category)
+            minx = self.minimum(category)
+            maxx = self.maximum(category)
+            bucket = int(1 + (nbins - 1) * (
+                height - minx) / (maxx - minx)) + minx
+
+            # Assign values to bins
+            if category in counts:
+                if bucket in counts[category]:
+                    counts[category][bucket] = counts[
+                        category][bucket] + 1
+                else:
+                    counts[category][bucket] = 1
+            else:
+                counts[category][bucket] = 1
+
+        # Return
+        return counts
+
+    def _lists(self):
+        """Convert count data lists.
+
+        Args:
+            None
+
+        Returns:
+            data: Dict of histogram data keyed by category (gender)
+
+        """
+        # Initialize key variables
+        data = {}
+
+        # Create counts dict for probabilities
+        for pair in self.data:
+            height = pair[0]
+            category = pair[1]
+            if category in data:
+                data[category].append(height)
+            else:
+                data[category] = [height]
+
+        # Return
+        return data
+
+    def _probability(self):
+        """Calculate probabilities.
+
+        Args:
+            category: Category of data
+            height: Height to calculate probaility for
+
+        Returns:
+            probability: Probabilities dict keyed by category and height
+
+        """
+        # Initialize key variables
+        counts = self.counts()
+        total = defaultdict(lambda: defaultdict(dict))
+        probability = defaultdict(lambda: defaultdict(dict))
+        icount = defaultdict(lambda: defaultdict(dict))
+
+        # Cycle through data to get gender totals
+        for gender in counts.keys():
+            for height in counts[gender].keys():
+                # Calculate count
+                count = counts[gender][height]
+
+                # Get total counts for gender
+                if gender in total:
+                    total[gender] = total[gender] + count
+                else:
+                    total[gender] = count
+
+                # Get total counts independent of gender
+                if None in total:
+                    total[None] = total[None] + count
+                else:
+                    total[None] = count
+
+                # Get counts independent of gender
+                if height in icount:
+                    icount[height] = icount[height] + count
+                else:
+                    icount[height] = count
+
+        # Cycle through data to get gender probabilities
+        for gender in counts.keys():
+            for height in counts[gender].keys():
+                # Do probabilities (category)
+                probability[gender][height] = counts[
+                    gender][height] / total[gender]
+
+                # Do probabilities (independent)
+                probability[None][height] = icount[height] / total[None]
+
+        # Return
+        return probability
+
+
+def _get_gender(male_probability):
+    """Determine the gender based on probability.
+
+    Args:
+        male_probability: Probability of being male
+
+    Returns:
+        gender: Gender
+
+    """
+    # Get likely gender
+    if male_probability < 0.5:
+        gender = 'Female'
+    elif male_probability == 0.5:
+        gender = 'N/A'
+    else:
+        gender = 'Male'
+
+    # Return
+    return gender
 
 
 def main():
@@ -359,9 +699,11 @@ def main():
     # Get data
     data = Data(args.datafile)
     data.graph()
-    print(data.probability(category='male', height=65))
-    print(data.probability(height=65))
+    data.table()
 
+    print('\n')
+    data = Data(args.datafile, maxrows=200)
+    data.table()
 
 if __name__ == "__main__":
     main()
