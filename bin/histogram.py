@@ -5,7 +5,6 @@ import argparse
 import textwrap
 import sys
 import math
-from pprint import pprint
 from collections import defaultdict
 from statistics import stdev, mean
 
@@ -138,13 +137,17 @@ class Data(object):
                 # Update data with heights
                 self.data.append((height, gender.lower()))
 
-                # Set global maxrows value
-                self.maxrows = row_count
-
                 # Conditional break
                 if maxrows is not None:
                     if row_count > maxrows:
                         break
+
+                    # Set global maxrows value
+                    self.maxrows = row_count
+                else:
+                    # Set global maxrows value
+                    self.maxrows = row_count + 1
+
                 row_count = row_count + 1
 
         # Calculate counts
@@ -430,46 +433,48 @@ class Data(object):
         # Initialize key variables
         directory = '/home/peter/Downloads'
         data = self.counts()
-        lines = []
         categories = []
-        heights = []
-        counts = []
+        heights = {}
+        counts = {}
         min_height = 100000000000000000000
         max_height = 1 - min_height
         max_count = 1 - 100000000000000000000
 
         # Create the histogram plot
-        fig, axes = plt.subplots(figsize=(8, 8))
+        fig, axes = plt.subplots(figsize=(7, 7))
 
         # Random colors for each plot
         prop_iter = iter(plt.rcParams['axes.prop_cycle'])
 
         # Loop through data
         for category in data:
+            # Create empty list of heights
+            heights[category] = []
+            counts[category] = []
+
             # Append category name
             categories.append(category.capitalize())
 
             # Create lists to chart
             for height, count in sorted(data[category].items()):
-                heights.append(height)
-                counts.append(count)
-
-            # Create plot
-            line, = axes.plot(
-                heights, counts, alpha=0.5,
-                color=next(prop_iter)['color'])
-            lines.append(line)
-
-            # Put ticks only on bottom and left
-            axes.xaxis.set_ticks_position('bottom')
-            axes.yaxis.set_ticks_position('left')
+                heights[category].append(height)
+                counts[category].append(count)
 
             # Get max / min heights
-            max_height = max(max_height, max(heights))
-            min_height = min(min_height, min(heights))
+            max_height = max(max_height, max(heights[category]))
+            min_height = min(min_height, min(heights[category]))
 
             # Get max / min counts
-            max_count = max(max_count, max(counts))
+            max_count = max(max_count, max(counts[category]))
+
+            # Chart line
+            plt.plot(
+                heights[category], counts[category],
+                color=next(prop_iter)['color'], label=category.capitalize())
+
+        # Put ticks only on bottom and left
+        axes.xaxis.set_ticks_position('bottom')
+        axes.yaxis.set_ticks_position('left')
 
         # Set X axis ticks
         major_ticks = np.arange(min_height, max_height, 1)
@@ -480,8 +485,9 @@ class Data(object):
         axes.set_yticks(major_ticks)
 
         # Add legend
-        fig.legend(
-            tuple(lines), tuple(categories), loc='lower center', ncol=2)
+        plt.legend()
+        #fig.legend(
+        #    tuple(lines), tuple(categories), loc='lower center', ncol=2)
 
         # Add Main Title
         fig.suptitle(
@@ -492,7 +498,7 @@ class Data(object):
         # Add Subtitle
         axes.set_title(
             ('Analysis of First %s Rows') % (
-                 self.maxrows),
+                self.maxrows),
             multialignment='center',
             fontsize=10)
 
