@@ -118,7 +118,7 @@ class Data(object):
         # Initialize key variables
         self.data = []
         self.meta = defaultdict(lambda: defaultdict(dict))
-        row_count = 0
+        self.entries = 0
 
         # Read spreadsheet
         workbook = xlrd.open_workbook(filename)
@@ -138,17 +138,10 @@ class Data(object):
                 self.data.append((height, gender.lower()))
 
                 # Conditional break
+                self.entries = self.entries + 1
                 if maxrows is not None:
-                    if row_count > maxrows:
+                    if self.entries >= maxrows:
                         break
-
-                    # Set global maxrows value
-                    self.maxrows = row_count
-                else:
-                    # Set global maxrows value
-                    self.maxrows = row_count + 1
-
-                row_count = row_count + 1
 
         # Calculate counts
         self.data_lists = self._lists()
@@ -498,7 +491,7 @@ class Data(object):
         # Add Subtitle
         axes.set_title(
             ('Analysis of First %s Rows') % (
-                self.maxrows),
+                self.entries),
             multialignment='center',
             fontsize=10)
 
@@ -516,13 +509,40 @@ class Data(object):
 
         # Create image
         graph_filename = ('%s/homework-%s-rows.png') % (
-            directory, self.maxrows)
+            directory, self.entries)
 
         # Save chart
         fig.savefig(graph_filename)
 
         # Close the plot
         plt.close(fig)
+
+    def parameters(self):
+        """Print gausian parameters for probability distribution function.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Print summary information
+        output = ('%-25s: %s') % ('Total Sample Size', len(self.data))
+        print(output)
+
+        # Calculate values for each category in data
+        for category in self.data_lists:
+            sample_stdev = stdev(self.data_lists[category])
+            sample_mean = mean(self.data_lists[category])
+
+            # Print information about the category:
+            output = ('%-25s [%s]: %-2.6f') % (
+                'Standard Deviation for ', category, sample_stdev)
+            print(output)
+            output = ('%-25s [%s]: %-2.6f') % (
+                'Mean Deviation for ', category, sample_mean)
+            print(output)
 
     def _bayesian(self, category, height):
         """Create bayesian multiplier.
@@ -725,11 +745,13 @@ def main():
     data = Data(args.datafile)
     data.graph()
     data.table()
+    data.parameters()
 
     print('\n')
     data = Data(args.datafile, maxrows=200)
     data.graph()
     data.table()
+    data.parameters()
 
 if __name__ == "__main__":
     main()
