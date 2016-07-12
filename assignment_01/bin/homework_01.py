@@ -424,7 +424,7 @@ class Data(object):
 
         """
         # Initialize key variables
-        directory = '/home/peter/Downloads'
+        directory = '~/Downloads'
         data = self.counts()
         categories = []
         heights = {}

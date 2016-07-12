@@ -92,6 +92,7 @@ def main():
     # View histogram data
     histogram = Histogram2D(data)
     pprint(histogram.histogram())
+    histogram.graph()
 
 
 if __name__ == "__main__":
