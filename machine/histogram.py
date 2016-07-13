@@ -133,11 +133,10 @@ class Histogram2D(object):
         directory = '/home/peter/Downloads'
         bins = self.bins()
         categories = []
-        lines = []
+        lines2plot = []
 
         # Create the histogram plot
         fig = plt.figure()
-        axes = Axes3D(fig)
         axes = fig.add_subplot(111, projection='3d')
 
         # Random colors for each plot
@@ -162,7 +161,7 @@ class Histogram2D(object):
             zpos = np.zeros(elements)
 
             # Lengths of the bars on relevant axes
-            dx_length = 0.5 * np.ones_like(zpos)
+            dx_length = 1.0 * np.ones_like(zpos)
             dy_length = dx_length.copy()
             dz_length = hist.flatten()
 
@@ -170,12 +169,16 @@ class Histogram2D(object):
             categories.append(category.capitalize())
 
             # Chart line
-            axes.bar3d(
+            lines2plot = axes.bar3d(
                 xpos, ypos, zpos,
                 dx_length, dy_length, dz_length,
-                alpha=0.6,
+                alpha=0.5,
+                zsort='average',
                 color=next(prop_iter)['color'],
                 label=category.capitalize())
+
+
+        """
 
         # Put ticks only on bottom and left
         axes.xaxis.set_ticks_position('bottom')
@@ -193,6 +196,8 @@ class Histogram2D(object):
         # Set z axis ticks
         major_ticks = np.arange(0, max(dz_length), 5)
         axes.set_zticks(major_ticks)
+
+        """
 
         # Add legend
         # axes.legend(lines, categories)
