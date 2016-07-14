@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """Program creates histograms."""
 
-# Standard python imports
+import argparse
+import textwrap
 import sys
 import math
 from collections import defaultdict
-from pprint import pprint
+from statistics import stdev, mean
 
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import style
+style.use("ggplot")
 
-# Non-standard python imports
-import numpy as np
+import xlrd
 
 
-class Histogram2D(object):
-    """Class for 2 dimensional histogram.
+class Histogram1D(object):
+    """Class gathers all CLI information.
 
     Args:
         None
@@ -30,118 +32,291 @@ class Histogram2D(object):
         get_cli:
     """
 
-    def __init__(self, data, labels):
+    def __init__(self, data, dimension):
         """Function for intializing the class.
 
         Args:
-            data: List of tuples of format
-                (class, dimension1, dimension2 ...)
-            labels: Labels for data columns
+            data: List tuples [(value, class)]
+            dimension: Category of data
 
         """
         # Initialize key variables
         self.data = data
-        self.labels = labels
+        self.dimension = dimension
+        self.meta = defaultdict(lambda: defaultdict(dict))
 
-        self.hgram = {}
-        minmax = defaultdict(lambda: defaultdict(dict))
-        values_by_class = defaultdict(lambda: defaultdict(dict))
-        self.x_y = defaultdict(lambda: defaultdict(dict))
+        # Calculate counts
+        self.data_lists = self._lists()
 
-        # Calculate the number of bins using sturges
-        self.bin_count = int(math.log2(len(data)) + 1)
+        # Get min / max and bins
+        for category, heights in sorted(self.data_lists.items()):
+            self.meta[category]['min'] = min(heights)
+            self.meta[category]['max'] = max(heights)
 
-        # Create a row for each column of data for each class (Transpose)
-        for item in data:
-            cls = item[0]
-            values = (item[1], item[2])
+        # Calculate counts
+        self.data_counts = self._counts()
 
-            # Track column values
-            if bool(values_by_class[cls]) is False:
-                values_by_class[cls] = [values]
-            else:
-                values_by_class[cls].append(values)
+        # Calculate probabilities
+        self.data_probability = self._probability()
 
-            # Get min / max values
-            for column in range(0, len(values)):
-                value = values[column]
-                if bool(minmax[column]) is False:
-                    minmax[column]['min'] = value
-                    minmax[column]['max'] = value
-                else:
-                    minmax[column]['min'] = min(value, minmax[column]['min'])
-                    minmax[column]['max'] = max(value, minmax[column]['max'])
+        # Get the number of entries
+        self.entries = len(data)
 
-                if bool(self.x_y[cls][column]) is False:
-                    self.x_y[cls][column] = [value]
-                else:
-                    self.x_y[cls][column].append(value)
-
-        # Create empty 2D array
-        for cls in values_by_class.keys():
-            self.hgram[cls] = np.zeros(
-                (self.bin_count, self.bin_count))
-
-        # Get bins data should be placed in
-        for cls, tuple_list in values_by_class.items():
-            for values in tuple_list:
-                row = self._placement(values[0], minmax[0])
-                col = self._placement(values[1], minmax[1])
-
-                # Update histogram
-                self.hgram[cls][row][col] += 1
-
-    def _placement(self, value, minmax):
-        """Get the row or column for 2D histogram.
+    def keys(self):
+        """Get keys in data.
 
         Args:
-            value: Value to classify
-            minmax: Dict of minimum / maximum to use
+            None
 
         Returns:
-            hbin: Row / Column for histogram
+            data: List of keys
 
         """
         # Initialize key variables
-        multiplier = self.bin_count - 1
+        data = []
 
-        # Calculate
-        maximum = minmax['max']
-        minimum = minmax['min']
-        ratio = (value - minimum) / (maximum - minimum)
-        hbin = int(round(multiplier * ratio))
+        # Get keys
+        for pair in self.data:
+            key = pair[1]
+            if key in data:
+                continue
+            data.append(key)
 
         # Return
-        return hbin
+        return data
 
-    def bins(self):
-        """Get the number of bins to use.
+    def bucket_range(self):
+        """Get largest number of buckets out of all categories.
 
         Args:
             None
 
         Returns:
-            value: number of bins to use
+            (min, max): Tuple
 
         """
-        # Return
-        value = self.bin_count
-        return value
+        # Initialize key variables
+        for category in self.meta.keys():
+            minimum = self.meta[category]['min']
+            maximum = self.meta[category]['max']
 
-    def histogram(self):
-        """Get the histogram.
+        # Get range
+        for category in self.meta.keys():
+            minimum = min(self.meta[category]['min'], minimum)
+            maximum = max(self.meta[category]['max'], maximum)
+
+        # Return
+        return (int(minimum), int(maximum))
+
+    def buckets(self, category):
+        """Get number of buckets in data.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            bins: number of buckets
+
+        """
+        # Initialize key variables
+        bins = self._buckets(category)[0]
+
+        # Return
+        return bins
+
+    def minimum(self, category):
+        """Get minimum category key value.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            data: minimum value
+
+        """
+        # Initialize key variables
+        data = self._buckets(category)[1]
+
+        # Return
+        return data
+
+    def maximum(self, category):
+        """Get maximum category key value.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            data: maximum value
+
+        """
+        # Initialize key variables
+        data = self._buckets(category)[2]
+
+        # Return
+        return data
+
+    def counts(self):
+        """Convert file data to probabilty counts.
 
         Args:
             None
 
         Returns:
-            value: 2D histogram
+            data: Dict of counts of height keyed by category and height
 
         """
-        value = self.hgram
+        # Initialize key variables
+        data = self.data_counts
+
+        # Return
+        return data
+
+    def lists(self):
+        """Convert count data lists.
+
+        Args:
+            None
+
+        Returns:
+            data: Dict of histogram data keyed by category (gender)
+
+        """
+        # Initialize key variables
+        data = self.data_lists
+
+        # Return
+        return data
+
+    def probability(self, height, category=None):
+        """Calculate probabilities.
+
+        Args:
+            category: Category of data
+            height: Height to calculate probaility for
+
+        Returns:
+            value: Value of probability
+
+        """
+        # Initialize key variables
+        if category is None:
+            value = self.data_probability[None][height]
+        else:
+            value = self.data_probability[category][height]
+
+        # Return
         return value
 
-    def graph2d(self):
+    def table(self):
+        """Create classifier chart.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Initialize key variables
+        (minimum, maximum) = self.bucket_range()
+
+        # Header
+        output = ('%10s %15s %15s %15s %15s %6s %6s') % (
+            self.dimension.capitalize(),
+            'Gender (H)', 'Prob. (H)',
+            'Gender (B)', 'Prob. (B)',
+            'Male', 'Female')
+        print(output)
+
+        # Evaluate heights
+        for height in range(minimum, maximum + 1):
+            # Get probabilities
+            b_probability = self.bayesian_classifier(height)
+            h_probability = self.histogram_classifier(height)
+
+            # Get genders
+            b_gender = _get_gender(b_probability)
+            h_gender = _get_gender(h_probability)
+
+            # Get counts
+            mcount = self.data_counts['male'][height]
+            if bool(mcount) is False:
+                mcount = 0
+            fcount = self.data_counts['female'][height]
+            if bool(fcount) is False:
+                fcount = 0
+
+            # Account for zero males / females for height
+            if mcount + fcount == 0:
+                b_gender = 'N/A'
+                h_gender = 'N/A'
+
+            # Print output
+            output = ('%10d %15s %15.6f %15s %15.6f %6d %6d') % (
+                height,
+                h_gender, h_probability,
+                b_gender, b_probability,
+                mcount, fcount)
+            print(output)
+
+    def bayesian_classifier(self, height):
+        """Create histogram classifier chart.
+
+        Args:
+            None
+
+        Returns:
+            male_probability: Probability of being male
+
+        """
+        # Get male counts
+        mcount = self._bayesian('male', height)
+
+        # Get female counts
+        fcount = self._bayesian('female', height)
+
+        # Get male probability
+        if mcount == 0:
+            male_probability = 0
+        else:
+            male_probability = mcount / (mcount + fcount)
+
+        # Return
+        return male_probability
+
+    def histogram_classifier(self, height):
+        """Create histogram classifier chart.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Get male counts
+        if height not in self.data_counts['male']:
+            mcount = 0
+        else:
+            mcount = self.data_counts['male'][height]
+
+        # Get female counts
+        if height not in self.data_counts['female']:
+            fcount = 0
+        else:
+            fcount = self.data_counts['female'][height]
+
+        # Get male probability
+        if mcount == 0:
+            male_probability = 0
+        else:
+            male_probability = mcount / (mcount + fcount)
+
+        # Return
+        return male_probability
+
+    def graph(self):
         """Graph histogram.
 
         Args:
@@ -155,161 +330,308 @@ class Histogram2D(object):
         """
         # Initialize key variables
         directory = '/home/peter/Downloads'
-        nbins = self.bins()
-
-        # Loop through data
-        for category in sorted(self.x_y.keys()):
-            # Get key data for creating histogram
-            x_array = np.array(self.x_y[category][0])
-            y_array = np.array(self.x_y[category][1])
-
-            # Estimate the 2D histogram
-            hgram, xedges, yedges = np.histogram2d(
-                x_array, y_array, bins=nbins)
-
-            print(category)
-            pprint(hgram)
-
-            # hgram needs to be rotated and flipped
-            hgram = np.rot90(hgram)
-            hgram = np.flipud(hgram)
-
-            # Mask zeros
-            # Mask pixels with a value of zero
-            hgram_masked = np.ma.masked_where(hgram == 0, hgram)
-
-            # Plot 2D histogram using pcolor
-            fig = plt.figure()
-            plt.pcolormesh(xedges, yedges, hgram_masked)
-            plt.xlabel('Height')
-            plt.ylabel('Handspan')
-            cbar = plt.colorbar()
-            cbar.ax.set_ylabel('Counts')
-
-            # Add Main Title
-            fig.suptitle(
-                ('Height and Handspan Histogram (%ss, %s Bins)') % (
-                    category.capitalize(), nbins),
-                horizontalalignment='center',
-                fontsize=10)
-
-            # Create image
-            graph_filename = (
-                '%s/homework-2-2D-%s-bins-%s.png'
-                '') % (directory, category, nbins)
-
-            # Save chart
-            fig.savefig(graph_filename)
-
-            # Close the plot
-            plt.close(fig)
-
-    def graph3d(self):
-        """Graph histogram.
-
-        Args:
-            histogram_list: List for histogram
-            category: Category (label) for data in list
-            bins: Number of bins to use
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        directory = '/home/peter/Downloads'
-        bins = self.bins()
+        dimension = self.dimension.capitalize()
+        data = self.counts()
         categories = []
+        heights = {}
+        counts = {}
+        min_height = 100000000000000000000
+        max_height = 1 - min_height
+        max_count = 1 - 100000000000000000000
+
+        # Create the histogram plot
+        fig, axes = plt.subplots(figsize=(7, 7))
 
         # Random colors for each plot
         prop_iter = iter(plt.rcParams['axes.prop_cycle'])
 
         # Loop through data
-        for category in sorted(self.x_y.keys()):
-            # Create the histogram plot
-            fig = plt.figure()
-            axes = fig.add_subplot(111, projection='3d')
-
-            # Get key data for creating histogram
-            x_array = np.array(self.x_y[category][0])
-            y_array = np.array(self.x_y[category][1])
-            (hist, xedges, yedges) = np.histogram2d(
-                x_array, y_array, bins=bins)
-
-            print('-----------------------')
-            print(category)
-            pprint(hist)
-
-            # Number of boxes
-            elements = (len(xedges) - 1) * (len(yedges) - 1)
-            (xpos, ypos) = np.meshgrid(
-                xedges[:-1] + 0.25, yedges[:-1] + 0.25)
-
-            # x and y coordinates of the bars
-            xpos = xpos.flatten()
-            ypos = ypos.flatten()
-            zpos = np.zeros(elements)
-
-            # Lengths of the bars on relevant axes
-            dx_length = 1.0 * np.ones_like(zpos)
-            dy_length = dx_length.copy()
-            dz_length = hist.flatten()
+        for category in data:
+            # Create empty list of heights
+            heights[category] = []
+            counts[category] = []
 
             # Append category name
             categories.append(category.capitalize())
 
+            # Create lists to chart
+            for height, count in sorted(data[category].items()):
+                heights[category].append(height)
+                counts[category].append(count)
+
+            # Get max / min heights
+            max_height = max(max_height, max(heights[category]))
+            min_height = min(min_height, min(heights[category]))
+
+            # Get max / min counts
+            max_count = max(max_count, max(counts[category]))
+
             # Chart line
-            axes.bar3d(
-                xpos, ypos, zpos,
-                dx_length, dy_length, dz_length,
-                alpha=0.5,
-                zsort='average',
-                color=next(prop_iter)['color'],
-                label=category.capitalize())
+            plt.plot(
+                heights[category], counts[category],
+                color=next(prop_iter)['color'], label=category.capitalize())
 
-            # Put ticks only on bottom and left
-            axes.xaxis.set_ticks_position('bottom')
-            axes.yaxis.set_ticks_position('bottom')
-            axes.zaxis.set_ticks_position('bottom')
+        # Put ticks only on bottom and left
+        axes.xaxis.set_ticks_position('bottom')
+        axes.yaxis.set_ticks_position('left')
 
-            # Set X axis ticks
-            major_ticks = np.arange(0, bins, 1)
-            axes.set_xticks(major_ticks)
+        # Set X axis ticks
+        major_ticks = np.arange(min_height, max_height, 1)
+        axes.set_xticks(major_ticks)
 
-            # Set y axis ticks
-            major_ticks = np.arange(0, bins, 1)
-            axes.set_yticks(major_ticks)
+        # Set y axis ticks
+        major_ticks = np.arange(0, max_count + 100, 50)
+        axes.set_yticks(major_ticks)
 
-            # Set z axis ticks
-            major_ticks = np.arange(0, max(dz_length), 5)
-            axes.set_zticks(major_ticks)
+        # Add legend
+        plt.legend()
+        #fig.legend(
+        #    tuple(lines), tuple(categories), loc='lower center', ncol=2)
 
-            # Add legend
-            # axes.legend(lines, categories)
-            # plt.legend()
+        # Add Main Title
+        fig.suptitle(
+            ('%s Histogram') % (dimension),
+            horizontalalignment='center',
+            fontsize=10)
 
-            # Add Main Title
-            fig.suptitle(
-                'Height and Handspan Histogram',
-                horizontalalignment='center',
-                fontsize=10)
+        # Add Subtitle
+        axes.set_title(
+            ('Analysis of First %s Rows') % (
+                self.entries),
+            multialignment='center',
+            fontsize=10)
 
-            # Add grid, axis labels
-            axes.grid(True)
-            axes.set_ylabel('Handspans')
-            axes.set_xlabel('Heights')
-            axes.set_zlabel('Count')
+        # Add grid, axis labels
+        axes.grid(True)
+        axes.set_ylabel('Count')
+        axes.set_xlabel(dimension)
 
-            # Adjust bottom
-            fig.subplots_adjust(left=0.2, bottom=0.2)
+        # Rotate the labels
+        for label in axes.xaxis.get_ticklabels():
+            label.set_rotation(90)
 
-            # Create image
-            graph_filename = (
-                '%s/homework-2-3D-%s-bins-%s.png'
-                '') % (directory, category, bins)
+        # Adjust bottom
+        fig.subplots_adjust(left=0.2, bottom=0.2)
 
-            # Save chart
-            fig.savefig(graph_filename)
+        # Create image
+        graph_filename = ('%s/homework-%s-%s-rows.png') % (
+            directory, self.dimension, self.entries)
 
-            # Close the plot
-            plt.close(fig)
+        # Save chart
+        fig.savefig(graph_filename)
+
+        # Close the plot
+        plt.close(fig)
+
+    def parameters(self):
+        """Print gausian parameters for probability distribution function.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Print summary information
+        output = ('%-25s: %s') % ('Total Sample Size', len(self.data))
+        print(output)
+
+        # Calculate values for each category in data
+        for category in self.data_lists:
+            sample_stdev = stdev(self.data_lists[category])
+            sample_mean = mean(self.data_lists[category])
+
+            # Print information about the category:
+            output = ('%-25s [%s]: %-2.6f') % (
+                'Standard Deviation for ', category, sample_stdev)
+            print(output)
+            output = ('%-25s [%s]: %-2.6f') % (
+                'Mean Deviation for ', category, sample_mean)
+            print(output)
+
+    def _bayesian(self, category, height):
+        """Create bayesian multiplier.
+
+        Args:
+            category: Category of data
+            height: Height to process
+
+        Returns:
+            value: Multiplier value
+
+        """
+        # Initialize key variables
+        sample_stdev = stdev(self.data_lists[category])
+        sample_mean = mean(self.data_lists[category])
+
+        total = len(self.data_lists[category])
+        multiplier = 1 / (math.sqrt(2 * math.pi) * sample_stdev)
+        power = math.pow((height - sample_mean) / sample_stdev, 2)
+        exponent = math.exp(-0.5 * power)
+
+        # Return
+        value = total * multiplier * exponent
+        return value
+
+    def _buckets(self, category):
+        """Get number of buckets in data.
+
+        Args:
+            category: Category of data
+
+        Returns:
+            bins: number of buckets
+
+        """
+        # Initialize key variables
+        interval = 1
+
+        # Get min / max for category
+        minimum = int(self.meta[category]['min'])
+        maximum = int(self.meta[category]['max'])
+
+        # Calculate bins
+        bins = len(range(minimum, maximum, interval))
+
+        # Return
+        return (bins, minimum, maximum)
+
+    def _counts(self):
+        """Convert file data to probabilty counts.
+
+        Args:
+            None
+
+        Returns:
+            counts: Dict of counts of height keyed by category and height
+
+        """
+        # Initialize key variables
+        counts = defaultdict(lambda: defaultdict(dict))
+
+        # Create counts dict for probabilities
+        for pair in self.data:
+            height = pair[0]
+            category = pair[1]
+
+            # Calculate bin
+            nbins = self.buckets(category)
+            minx = self.minimum(category)
+            maxx = self.maximum(category)
+            bucket = int(1 + (nbins - 1) * (
+                height - minx) / (maxx - minx)) + minx
+
+            # Assign values to bins
+            if category in counts:
+                if bucket in counts[category]:
+                    counts[category][bucket] = counts[
+                        category][bucket] + 1
+                else:
+                    counts[category][bucket] = 1
+            else:
+                counts[category][bucket] = 1
+
+        # Return
+        return counts
+
+    def _lists(self):
+        """Convert count data lists.
+
+        Args:
+            None
+
+        Returns:
+            data: Dict of histogram data keyed by category (gender)
+
+        """
+        # Initialize key variables
+        data = {}
+
+        # Create counts dict for probabilities
+        for pair in self.data:
+            height = pair[0]
+            category = pair[1]
+            if category in data:
+                data[category].append(height)
+            else:
+                data[category] = [height]
+
+        # Return
+        return data
+
+    def _probability(self):
+        """Calculate probabilities.
+
+        Args:
+            category: Category of data
+            height: Height to calculate probaility for
+
+        Returns:
+            probability: Probabilities dict keyed by category and height
+
+        """
+        # Initialize key variables
+        counts = self.counts()
+        total = defaultdict(lambda: defaultdict(dict))
+        probability = defaultdict(lambda: defaultdict(dict))
+        icount = defaultdict(lambda: defaultdict(dict))
+
+        # Cycle through data to get gender totals
+        for gender in counts.keys():
+            for height in counts[gender].keys():
+                # Calculate count
+                count = counts[gender][height]
+
+                # Get total counts for gender
+                if gender in total:
+                    total[gender] = total[gender] + count
+                else:
+                    total[gender] = count
+
+                # Get total counts independent of gender
+                if None in total:
+                    total[None] = total[None] + count
+                else:
+                    total[None] = count
+
+                # Get counts independent of gender
+                if height in icount:
+                    icount[height] = icount[height] + count
+                else:
+                    icount[height] = count
+
+        # Cycle through data to get gender probabilities
+        for gender in counts.keys():
+            for height in counts[gender].keys():
+                # Do probabilities (category)
+                probability[gender][height] = counts[
+                    gender][height] / total[gender]
+
+                # Do probabilities (independent)
+                probability[None][height] = icount[height] / total[None]
+
+        # Return
+        return probability
+
+
+def _get_gender(male_probability):
+    """Determine the gender based on probability.
+
+    Args:
+        male_probability: Probability of being male
+
+    Returns:
+        gender: Gender
+
+    """
+    # Get likely gender
+    if male_probability < 0.5:
+        gender = 'Female'
+    elif male_probability == 0.5:
+        gender = 'N/A'
+    else:
+        gender = 'Male'
+
+    # Return
+    return gender

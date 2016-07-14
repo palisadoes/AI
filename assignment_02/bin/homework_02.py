@@ -4,12 +4,13 @@
 # Standard python imports
 import argparse
 from pprint import pprint
+from collections import defaultdict
 
 # Non-standard python imports
 import xlrd
 
 # Custom libraries
-from machine.histogram import Histogram2D
+from machine.histogram import Histogram1D
 
 
 def ingest(filename):
@@ -23,7 +24,7 @@ def ingest(filename):
 
     """
     # Initialize key variables
-    data = []
+    data = defaultdict(lambda: defaultdict(dict))
     labels = None
 
     # Read spreadsheet
@@ -36,17 +37,23 @@ def ingest(filename):
         height = worksheet.row(row)[1].value
         handspan = worksheet.row(row)[2].value
 
+        # Populate data
+        if 'height' not in data:
+            data['height'] = []
+            data['handspan'] = []
+
         # Skip header, append data
         if 'sex' not in sex.lower():
             # Update data with heights
-            data.append(
-                (sex.lower(), height, handspan)
+            data['height'].append(
+                (height, sex.lower())
             )
-        else:
-            labels = (height, handspan)
+            data['handspan'].append(
+                (handspan, sex.lower())
+            )
 
     # Return
-    return (data, labels)
+    return data
 
 
 def cli():
@@ -90,13 +97,16 @@ def main():
     """
     # Ingest data
     args = cli()
-    (data, labels) = ingest(args.filename)
+    data = ingest(args.filename)
 
     # View histogram data
-    histogram = Histogram2D(data, labels)
-    pprint(histogram.histogram())
-    histogram.graph2d()
-    histogram.graph3d()
+    for dimension in sorted(data.keys()):
+        histogram = Histogram1D(data[dimension], dimension)
+        histogram.graph()
+        histogram.table()
+        histogram.parameters()
+        print('\n')
+
 
 
 if __name__ == "__main__":
