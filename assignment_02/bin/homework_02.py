@@ -24,6 +24,7 @@ def ingest(filename):
     """
     # Initialize key variables
     data = []
+    labels = None
 
     # Read spreadsheet
     workbook = xlrd.open_workbook(filename)
@@ -41,9 +42,11 @@ def ingest(filename):
             data.append(
                 (sex.lower(), height, handspan)
             )
+        else:
+            labels = (height, handspan)
 
     # Return
-    return data
+    return (data, labels)
 
 
 def cli():
@@ -87,12 +90,13 @@ def main():
     """
     # Ingest data
     args = cli()
-    data = ingest(args.filename)
+    (data, labels) = ingest(args.filename)
 
     # View histogram data
-    histogram = Histogram2D(data)
+    histogram = Histogram2D(data, labels)
     pprint(histogram.histogram())
-    histogram.graph()
+    histogram.graph2d()
+    histogram.graph3d()
 
 
 if __name__ == "__main__":
