@@ -137,8 +137,8 @@ class PCA2d(object):
         (rows, columns) = z_values.shape
         matrix = np.zeros(shape=(columns, columns))
 
-        # Iterate
-        for (row, column), _ in np.ndenumerate(z_values):
+        # Iterate over the matrix
+        for (row, column), _ in np.ndenumerate(matrix):
             # Sum multiplying
             summation = 0
             for ptr_row in range(0, rows):
