@@ -8,7 +8,7 @@ from collections import defaultdict
 
 # Import AI library
 from machine import mnist
-from machine import histogram2d
+from machine import pca
 
 
 def cli():
@@ -61,13 +61,19 @@ def main():
     (minst_images, minst_labels) = minst_data.load_training()
 
     # Get data for digits
-    for index, value in enumerate(minst_labels):
+    for pointer, value in enumerate(minst_labels):
         if value in digits:
             data.append(
-                (value, minst_images[value])
+                (value, minst_images[pointer])
             )
 
-    # Instantiate histogram
+    # Instantiate PCA
+    pca_object = pca.PCA2d(data)
+    # pca_object.image(1, 500)
+    # print(pca_object.zvalues(1)[0])
+    # pca_object.zvalues(1)
+    matrix = pca_object.covariance(0)
+    pca.image_by_list(matrix)
 
 
 if __name__ == "__main__":

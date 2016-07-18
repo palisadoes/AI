@@ -3,20 +3,16 @@
 
 # Standard python imports
 import sys
-import math
+import csv
 from collections import defaultdict
+import math
 from pprint import pprint
-
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 # Non-standard python imports
 import numpy as np
 
 
-class PCA(object):
+class PCA2d(object):
     """Class for 2 dimensional histogram.
 
     Args:
@@ -40,7 +36,6 @@ class PCA(object):
         """
         # Initialize key variables
         self.data = data
-        classes = {}
         class_rows = {}
         self.x_values = {}
         minmax = defaultdict(lambda: defaultdict(dict))
@@ -48,88 +43,144 @@ class PCA(object):
         self.x_y = defaultdict(lambda: defaultdict(dict))
 
         # Determine the number of dimensions in vector
-        for _, vector in data:
-            dimensions = len(vector)
-            break
-
         for cls, vector in data:
-            classes[cls] = None
             if cls in class_rows:
-                class_rows[cls].append(0)
+                class_rows[cls].append(vector)
             else:
-                class_rows[cls] = [0]
+                class_rows[cls] = [vector]
 
         # Create a numpy array for the class
-        for cls in classes.keys():
-            self.x_values[cls] = np.zeros(
-                len(class_rows[cls]), dimensions)
+        for cls in class_rows.keys():
+            self.x_values[cls] = np.asarray(class_rows[cls])
 
         # Create a numpy array for the class
+        if len(self.x_values.keys()) != 2:
+            print('PCA2d class works best with two keys')
+            sys.exit(0)
 
+        for cls in self.x_values.keys():
+            print(self.x_values[cls].shape)
 
-        # Create a row for each column of data for each class (Transpose)
-        for cls, vectors in data:
-            cls = item[0]
-            vectors = item[1]
-
-            # Track column values
-            if bool(values_by_class[cls]) is False:
-                values_by_class[cls] = [values]
-            else:
-                values_by_class[cls].append(values)
-
-            # Get min / max values
-            for column in range(0, len(values)):
-                value = values[column]
-                if bool(minmax[column]) is False:
-                    minmax[column]['min'] = value
-                    minmax[column]['max'] = value
-                else:
-                    minmax[column]['min'] = min(value, minmax[column]['min'])
-                    minmax[column]['max'] = max(value, minmax[column]['max'])
-
-                if bool(self.x_y[cls][column]) is False:
-                    self.x_y[cls][column] = [value]
-                else:
-                    self.x_y[cls][column].append(value)
-
-        # Create empty 2D array
-        for cls in values_by_class.keys():
-            self.x_values[cls] = np.zeros(
-                (self.bin_count, self.bin_count))
-
-        # Get bins data should be placed in
-        for cls, tuple_list in values_by_class.items():
-            for values in tuple_list:
-                row = self._placement(values[0], minmax[0])
-                col = self._placement(values[1], minmax[1])
-
-                # Update histogram
-                self.x_values[cls][row][col] += 1
-
-        # Assign global variables
-        self.minmax = minmax
-
-    def _placement(self, value, minmax):
-        """Get the row or column for 2D histogram.
+    def image(self, cls, pointer):
+        """Create a representative image from ingested data arrays.
 
         Args:
-            value: Value to classify
-            minmax: Dict of minimum / maximum to use
+            cls: Class of data
+            pointer: Pointer to bytes representing image
 
         Returns:
-            hbin: Row / Column for histogram
+            None
 
         """
         # Initialize key variables
-        multiplier = self.bin_count - 1
+        body = self.x_values[cls][pointer]
 
-        # Calculate
-        maximum = minmax['max']
-        minimum = minmax['min']
-        ratio = (value - minimum) / (maximum - minimum)
-        hbin = int(round(multiplier * ratio))
+        # Create final image
+        image_by_list(body)
+
+    def meanvector(self, cls):
+        """Get the column wise means of ingested data arrays.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            mean_v: Column wise means as nparray
+
+        """
+        # Return
+        data = self.x_values[cls]
+        mean_v = data.mean(axis=0)
+        return mean_v
+
+    def zvalues(self, cls):
+        """Get the normalized values of ingested data arrays.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            z_values: Normalized values
+
+        """
+        # Get zvalues
+        data = self.x_values[cls]
+        mean_v = self.meanvector(cls)
+        z_values = np.subtract(data, mean_v)
+        return z_values
+
+    def meanofz(self, cls):
+        """Get mean vector of Z. This is a test, result must be all zeros.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            z_values: Normalized values
+
+        """
+        # Get values
+        data = self.zvalues(cls)
+        mean_v = data.mean(axis=0)
+        return mean_v
+
+    def covariance(self, cls, rounding=False):
+        """Get covariance of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            matrix: Covariance matrix
+
+        """
+        # Initialize key variables
+        z_values = self.zvalues(cls)
+        (rows, columns) = z_values.shape
+        matrix = np.zeros(shape=(columns, columns))
+
+        # Iterate
+        for (row, column), _ in np.ndenumerate(z_values):
+            # Sum multiplying
+            summation = 0
+            for ptr_row in range(0, rows):
+                summation = summation + (
+                    z_values[ptr_row, row] * z_values[ptr_row, column])
+            matrix[row, column] = summation / (columns - 1)
+
+            # Create a matrix suitable for viewing as pgm file for verification
+            if rounding is True:
+                matrix[row, column] = matrix[row, column] * 255
 
         # Return
-        return hbin
+        return matrix
 
+
+def image_by_list(body):
+    """Create a representative image from ingested data arrays.
+
+    Args:
+        body: Body of .pgm image as numpy array of pixels
+
+    Returns:
+        None
+
+    """
+    # Initialize key variables
+    filename = '/home/peter/Downloads/test.pgm'
+    final_image = []
+    body_as_list = body.astype(int).tolist()
+
+    # Create header
+    rows = math.sqrt(len(body_as_list))
+    columns = rows
+    header = ['P2', rows, columns, 255]
+
+    # Create final image
+    final_image.extend(header)
+    final_image.extend(body_as_list)
+
+    # Save file
+    with open(filename, 'w') as csvfile:
+        spamwriter = csv.writer(csvfile, delimiter='\n')
+        spamwriter.writerow(final_image)
