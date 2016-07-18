@@ -4,6 +4,7 @@
 # Standard python imports
 import sys
 import csv
+import time
 from collections import defaultdict
 import math
 from pprint import pprint
@@ -124,7 +125,7 @@ class PCA2d(object):
         mean_v = data.mean(axis=0)
         return mean_v
 
-    def covariance(self, cls, rounding=False):
+    def covariance(self, cls):
         """Get covariance of input data array for a given class.
 
         Args:
@@ -148,9 +149,22 @@ class PCA2d(object):
                     z_values[ptr_row, row] * z_values[ptr_row, column])
             matrix[row, column] = summation / (columns - 1)
 
-            # Create a matrix suitable for viewing as pgm file for verification
-            if rounding is True:
-                matrix[row, column] = matrix[row, column] * 255
+        # Return
+        return matrix
+
+    def covariance_quick(self, cls):
+        """Get covariance of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            matrix: Covariance matrix
+
+        """
+        # Initialize key variables
+        stack = np.vstack(self.zvalues(cls))
+        matrix = np.cov(stack)
 
         # Return
         return matrix
@@ -167,12 +181,12 @@ def image_by_list(body):
 
     """
     # Initialize key variables
-    filename = '/home/peter/Downloads/test.pgm'
+    filename = ('/home/peter/Downloads/test-%s.pgm') % (int(time.time()))
     final_image = []
-    body_as_list = body.astype(int).tolist()
+    body_as_list = body.astype(int).flatten().tolist()
 
     # Create header
-    rows = math.sqrt(len(body_as_list))
+    rows = int(math.sqrt(len(body_as_list)))
     columns = rows
     header = ['P2', rows, columns, 255]
 

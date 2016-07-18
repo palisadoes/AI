@@ -3,6 +3,7 @@
 
 # Standard python imports
 import argparse
+import time
 from pprint import pprint
 from collections import defaultdict
 
@@ -69,11 +70,16 @@ def main():
 
     # Instantiate PCA
     pca_object = pca.PCA2d(data)
-    # pca_object.image(1, 500)
+    pca_object.image(1, 500)
     # print(pca_object.zvalues(1)[0])
     # pca_object.zvalues(1)
+    print('Quick', int(time.time()))
+    matrix = pca_object.covariance_quick(0)
+    pca.image_by_list(matrix)
+    print('Slow', int(time.time()))
     matrix = pca_object.covariance(0)
     pca.image_by_list(matrix)
+    print('Done', int(time.time()))
 
 
 if __name__ == "__main__":
