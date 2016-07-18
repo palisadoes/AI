@@ -39,9 +39,6 @@ class PCA2d(object):
         self.data = data
         class_rows = {}
         self.x_values = {}
-        minmax = defaultdict(lambda: defaultdict(dict))
-        values_by_class = defaultdict(lambda: defaultdict(dict))
-        self.x_y = defaultdict(lambda: defaultdict(dict))
 
         # Determine the number of dimensions in vector
         for cls, vector in data:
@@ -148,6 +145,7 @@ class PCA2d(object):
                 summation = summation + (
                     z_values[ptr_row, row] * z_values[ptr_row, column])
             matrix[row, column] = summation / (columns - 1)
+            print(row, column)
 
         # Return
         return matrix
@@ -163,8 +161,8 @@ class PCA2d(object):
 
         """
         # Initialize key variables
-        stack = np.vstack(self.zvalues(cls))
-        matrix = np.cov(stack)
+        # stack = np.vstack(self.zvalues(cls))
+        matrix = np.cov(self.zvalues(cls), rowvar=False)
 
         # Return
         return matrix
@@ -183,18 +181,50 @@ def image_by_list(body):
     # Initialize key variables
     filename = ('/home/peter/Downloads/test-%s.pgm') % (int(time.time()))
     final_image = []
+    maxshade = int(255)
     body_as_list = body.astype(int).flatten().tolist()
+    new_list = [0] * len(body_as_list)
 
     # Create header
     rows = int(math.sqrt(len(body_as_list)))
     columns = rows
-    header = ['P2', rows, columns, 255]
+    header = ['P2', rows, columns, maxshade]
+
+    # Normalize values from 1 - 255
+    minval = min(body_as_list)
+    maxval = max(body_as_list)
+    for pointer, value in enumerate(body_as_list):
+        shade = _shade(value, minval, maxval)
+        new_list[pointer] = shade
 
     # Create final image
     final_image.extend(header)
-    final_image.extend(body_as_list)
+    final_image.extend(new_list)
 
     # Save file
     with open(filename, 'w') as csvfile:
         spamwriter = csv.writer(csvfile, delimiter='\n')
         spamwriter.writerow(final_image)
+
+
+def _shade(value, minimum, maximum):
+    """Get the row or column for 2D histogram.
+
+    Args:
+        value: Value to classify
+        minmax: Dict of minimum / maximum to use
+
+    Returns:
+        hbin: Row / Column for histogram
+
+    """
+    # Initialize key variables
+    multiplier = 254
+    delta = maximum - minimum
+
+    # Calculate
+    ratio = (value + abs(minimum)) / delta
+    hbin = int(round(multiplier * ratio))
+
+    # Return
+    return hbin
