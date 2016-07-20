@@ -70,16 +70,52 @@ def main():
 
     # Instantiate PCA
     pca_object = pca.PCA2d(data)
-    pca_object.image(1, 500)
-    # print(pca_object.zvalues(1)[0])
-    # pca_object.zvalues(1)
+    # pca_object.image(1, 500)
+
+    """
+    values = pca_object.eigen_values_vectors(1)
+    pprint(values[0])
+    print('\n')
+    pprint(values[1])
+    print('\n')
+    print(values[0].shape)
+    print(values[1].shape)
+    print('\n')
+    print(values[1][400])
+    print('\n')
+    print(values[1][400][0])
+    print(values[1][400][1])
+    print(values[1][400][2])
+    print('\n')
+    eigens = pca_object.eigen_vectors(1)
+    pprint(eigens[400])
+    print('\n')
+    checker = pca_object.eigen_vector_check(1)
+    pprint(checker)
+    print(pca_object.zvalues(1)[0])
+    pca_object.zvalues(1)
     print('Quick', int(time.time()))
-    matrix = pca_object.covariance_quick(0)
+    matrix = pca_object.covariance_manual(0)
     pca.image_by_list(matrix)
     print('Slow', int(time.time()))
     matrix = pca_object.covariance(0)
     pca.image_by_list(matrix)
     print('Done', int(time.time()))
+
+    eigens = pca_object.eigen_vectors(1)
+    count = 0
+    for eigen in eigens:
+        pprint(eigen)
+        pca_object.image_by_vector(eigen)
+        time.sleep(1.1)
+        if count == 4:
+            break
+        count += 1
+    """
+    eigens = pca_object.eigen_vectors(1)
+    pprint(eigens[0])
+    pprint(eigens[1])
+    # pca_object.image_by_vector(eigens[400])
 
 
 if __name__ == "__main__":

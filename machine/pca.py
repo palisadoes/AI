@@ -76,6 +76,19 @@ class PCA2d(object):
         # Create final image
         image_by_list(body)
 
+    def image_by_vector(self, vector):
+        """Create a representative image from a vector.
+
+        Args:
+            vector: Vector
+
+        Returns:
+            None
+
+        """
+        # Create final image
+        image_by_list(vector)
+
     def meanvector(self, cls):
         """Get the column wise means of ingested data arrays.
 
@@ -122,7 +135,7 @@ class PCA2d(object):
         mean_v = data.mean(axis=0)
         return mean_v
 
-    def covariance(self, cls):
+    def covariance_manual(self, cls):
         """Get covariance of input data array for a given class.
 
         Args:
@@ -150,7 +163,7 @@ class PCA2d(object):
         # Return
         return matrix
 
-    def covariance_quick(self, cls):
+    def covariance(self, cls):
         """Get covariance of input data array for a given class.
 
         Args:
@@ -161,8 +174,68 @@ class PCA2d(object):
 
         """
         # Initialize key variables
-        # stack = np.vstack(self.zvalues(cls))
         matrix = np.cov(self.zvalues(cls), rowvar=False)
+
+        # Return
+        return matrix
+
+    def eigen_values_vectors(self, cls):
+        """Get eigen of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            values: tuple of (eigenvalues, eigenvectors)
+
+        """
+        # Initialize key variables
+        values = np.linalg.eigh(self.covariance(cls))
+
+        # Return
+        return values
+
+    def eigen_vectors(self, cls):
+        """Get eigen of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            values: nparray of real eigenvectors
+
+        """
+        # Initialize key variables
+        values = np.real(self.eigen_values_vectors(cls)[1])
+
+        # Return
+        return values
+
+    def eigen_vector_check(self, cls):
+        """Verify that the eigen vectors are calcualted OK.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            matrix: Numpy array of all ones
+
+        """
+        # Initialize key variables
+        vectors = self.eigen_vectors(cls)
+        (_, columns) = vectors.shape
+        matrix = np.zeros(shape=(1, columns))
+
+        # Iterate over the matrix
+        for column in range(0, columns):
+            column_array = vectors[:, column]
+
+            column_sum = 0
+            for item in column_array:
+                column_sum = column_sum + (item * item)
+
+            # Get square root of column_sum
+            matrix[0, column] = math.sqrt(column_sum)
 
         # Return
         return matrix
@@ -179,7 +252,7 @@ def image_by_list(body):
 
     """
     # Initialize key variables
-    filename = ('/home/peter/Downloads/test-%s.pgm') % (int(time.time()))
+    filename = ('/home/peter/Downloads/UCSC/test-%s.pgm') % (int(time.time()))
     final_image = []
     maxshade = int(255)
     body_as_list = body.astype(int).flatten().tolist()
