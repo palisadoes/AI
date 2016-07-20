@@ -112,9 +112,15 @@ def main():
             break
         count += 1
     """
-    eigens = pca_object.eigen_vectors(1)
+    covariance = pca_object.covariance(0)
+    pprint(covariance[400])
+    pprint(covariance[0])
+    print('------------------')
+    eigens = pca_object.eigen_vectors(0)
     pprint(eigens[0])
     pprint(eigens[1])
+    pprint(eigens[2])
+    pprint(eigens[3])
     # pca_object.image_by_vector(eigens[400])
 
 
