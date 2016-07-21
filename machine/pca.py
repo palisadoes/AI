@@ -56,9 +56,6 @@ class PCA2d(object):
             print('PCA2d class works best with two keys')
             sys.exit(0)
 
-        for cls in self.x_values.keys():
-            print(self.x_values[cls].shape)
-
     def image(self, cls, pointer):
         """Create a representative image from ingested data arrays.
 
@@ -103,6 +100,20 @@ class PCA2d(object):
         data = self.x_values[cls]
         mean_v = data.mean(axis=0)
         return mean_v
+
+    def xvalues(self, cls):
+        """Return the input vector array for the input class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            data: Normalized values
+
+        """
+        # Get xvalues
+        data = self.x_values[cls]
+        return data
 
     def zvalues(self, cls):
         """Get the normalized values of ingested data arrays.
@@ -158,7 +169,6 @@ class PCA2d(object):
                 summation = summation + (
                     z_values[ptr_row, row] * z_values[ptr_row, column])
             matrix[row, column] = summation / (columns - 1)
-            print(row, column)
 
         # Return
         return matrix
@@ -174,9 +184,8 @@ class PCA2d(object):
 
         """
         # Initialize key variables
-        matrix = np.cov(self.zvalues(cls), rowvar=False)
-
-        # Return
+        zmatrix = self.zvalues(cls).T
+        matrix = np.cov(zmatrix)
         return matrix
 
     def eigen_values_vectors(self, cls):
@@ -190,7 +199,7 @@ class PCA2d(object):
 
         """
         # Initialize key variables
-        values = np.linalg.eigh(self.covariance(cls))
+        values = np.linalg.eig(self.covariance(cls))
 
         # Return
         return values
@@ -252,10 +261,10 @@ def image_by_list(body):
 
     """
     # Initialize key variables
-    filename = ('/home/peter/Downloads/UCSC/test-%s.pgm') % (int(time.time()))
+    filename = ('/home/peter/Downloads/UCSC/test-%s.pgm') % (time.time())
     final_image = []
     maxshade = int(255)
-    body_as_list = body.astype(int).flatten().tolist()
+    body_as_list = body.astype(float).flatten().tolist()
     new_list = [0] * len(body_as_list)
 
     # Create header
@@ -291,13 +300,8 @@ def _shade(value, minimum, maximum):
         hbin: Row / Column for histogram
 
     """
-    # Initialize key variables
-    multiplier = 254
-    delta = maximum - minimum
-
-    # Calculate
-    ratio = (value + abs(minimum)) / delta
-    hbin = int(round(multiplier * ratio))
-
     # Return
+    multiplier = 254
+    hbin = int(multiplier * (value - minimum) / (maximum - minimum))
+    # print(hbin, value, minimum, maximum)
     return hbin
