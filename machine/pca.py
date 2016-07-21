@@ -188,21 +188,27 @@ class PCA2d(object):
         matrix = np.cov(zmatrix)
         return matrix
 
-    def eigen_values_vectors(self, cls):
+    def eigen_values_vectors(self, cls, imaginary=False):
         """Get eigen of input data array for a given class.
 
         Args:
             cls: Class of data
 
         Returns:
-            values: tuple of (eigenvalues, eigenvectors)
+            result: tuple of (eigenvalues, eigenvectors)
 
         """
         # Initialize key variables
         values = np.linalg.eig(self.covariance(cls))
+        if imaginary is False:
+            (eigenvalues, eigenvectors) = values
+            real_vectors = np.real(eigenvectors)
+            result = (eigenvalues, real_vectors)
+        else:
+            result = values
 
         # Return
-        return values
+        return result
 
     def eigen_vectors(self, cls):
         """Get eigen of input data array for a given class.
@@ -219,6 +225,22 @@ class PCA2d(object):
 
         # Return
         return values
+
+    def principal_components(self, cls):
+        """Get eigen of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            result: nparray of real eigenvectors
+
+        """
+        # Initialize key variables
+        z_values = self.zvalues(cls)
+        (eigenvalues, eigenvectors) = self.eigen_values_vectors(cls)
+        result = numpy.dot(z_values, eigenvectors.T)
+        return (result, eigenvalues)
 
     def eigen_vector_check(self, cls):
         """Verify that the eigen vectors are calcualted OK.

@@ -107,13 +107,15 @@ def main():
     # Visually confirm that the list is correctly sorted by decreasing eigenvalues
     print('Eigenvalues in descending order:')
     count = 0
-    for eigenvalue, eigenvector in eig_pairs:
-        real_vector = np.real(eigenvector)
-        pprint(real_vector)
-        pca.image_by_list(real_vector)
+    for _, eigenvector in eig_pairs:
+        # real_vector = np.real(eigenvector)
+        # pprint(real_vector)
+        pca.image_by_list(eigenvector)
         count += 1
         if count == 5:
             break
+
+    # (principal_components, e_values) = pca_object.principal_components(test_key)
 
 
     """
