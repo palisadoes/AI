@@ -8,8 +8,10 @@ import time
 from pprint import pprint
 from collections import defaultdict
 from random import randint
-import numpy as np
 import operator
+
+# Non standard python imports
+import numpy as np
 
 # Import AI library
 from machine import mnist
@@ -98,16 +100,18 @@ def main():
     """
 
     # Make a list of (eigenvalue, eigenvector) tuples
-    eig_pairs = [(np.abs(eigenvalues[i]), eigenvectors[:,i]) for i in range(len(eigenvalues))]
+    eig_pairs = [(np.abs(
+        eigenvalues[i]), eigenvectors[:, i]) for i in range(len(eigenvalues))]
 
     # Sort the (eigenvalue, eigenvector) tuples from high to low
-    eig_pairs.sort(key = operator.itemgetter(0))
+    eig_pairs.sort(key=operator.itemgetter(0))
     eig_pairs.reverse()
 
-    # Visually confirm that the list is correctly sorted by decreasing eigenvalues
+    # Visually confirm that the list is correctly
+    # sorted by decreasing eigenvalues
     print('Eigenvalues in descending order:')
     count = 0
-    for _, eigenvector in eig_pairs:
+    for _, eigenvector, _ in eig_pairs:
         # real_vector = np.real(eigenvector)
         # pprint(real_vector)
         pca.image_by_list(eigenvector)
@@ -115,8 +119,15 @@ def main():
         if count == 5:
             break
 
-    # (principal_components, e_values) = pca_object.principal_components(test_key)
-
+    # Try recreating images
+    number_of_components = 2
+    principal_components = pca_object.principal_components(test_key)
+    p1p2 = principal_components[: 1:][:, : 2]
+    v1v2 = eigenvectors[: 2:, ]
+    image_vectors = np.dot(p1p2, v1v2)
+    print(image_vectors.shape)
+    pprint(image_vectors)
+    pca.image_by_list(image_vectors)
 
     """
     print('Eigen')
@@ -188,14 +199,14 @@ def main():
     # Test
     data = []
     for digit in digits:
-        for row in range(1 , 6):
+        for row in range(1, 6):
             data.append(
                 (digit, (
                     row,
-                    randint(0,30),
-                    randint(0,30),
-                    randint(0,30),
-                    randint(0,30)))
+                    randint(0, 30),
+                    randint(0, 30),
+                    randint(0, 30),
+                    randint(0, 30)))
             )
     pprint(data)
 

@@ -203,7 +203,7 @@ class PCA2d(object):
         if imaginary is False:
             (eigenvalues, eigenvectors) = values
             real_vectors = np.real(eigenvectors)
-            result = (eigenvalues, real_vectors)
+            result = (eigenvalues, real_vectors, np.arange(1, 754))
         else:
             result = values
 
@@ -227,7 +227,7 @@ class PCA2d(object):
         return values
 
     def principal_components(self, cls):
-        """Get eigen of input data array for a given class.
+        """Get principal components of input data array for a given class.
 
         Args:
             cls: Class of data
@@ -238,9 +238,9 @@ class PCA2d(object):
         """
         # Initialize key variables
         z_values = self.zvalues(cls)
-        (eigenvalues, eigenvectors) = self.eigen_values_vectors(cls)
-        result = numpy.dot(z_values, eigenvectors.T)
-        return (result, eigenvalues)
+        (_, eigenvectors, _) = self.eigen_values_vectors(cls)
+        result = np.dot(z_values, eigenvectors.T)
+        return result
 
     def eigen_vector_check(self, cls):
         """Verify that the eigen vectors are calcualted OK.
