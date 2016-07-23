@@ -89,29 +89,13 @@ def main():
     matrix = pca_object.covariance(test_key)
 
     print('Eigen')
-    (eigenvalues, eigenvectors) = pca_object.eigen_values_vectors(test_key)
-
-    """
-    print('Eigen Images')
-    maximages = 10
-    for image in range(0, len(eigenvectors)):
-        print (image)
-        pca.image_by_list(eigenvectors[image])
-    """
-
-    # Make a list of (eigenvalue, eigenvector) tuples
-    eig_pairs = [(np.abs(
-        eigenvalues[i]), eigenvectors[:, i]) for i in range(len(eigenvalues))]
-
-    # Sort the (eigenvalue, eigenvector) tuples from high to low
-    eig_pairs.sort(key=operator.itemgetter(0))
-    eig_pairs.reverse()
+    eigenvectors = pca_object.eigenvectors(test_key)
 
     # Visually confirm that the list is correctly
     # sorted by decreasing eigenvalues
     print('Eigenvalues in descending order:')
     count = 0
-    for _, eigenvector, _ in eig_pairs:
+    for eigenvector in eigenvectors:
         # real_vector = np.real(eigenvector)
         # pprint(real_vector)
         pca.image_by_list(eigenvector)
@@ -122,79 +106,13 @@ def main():
     # Try recreating images
     number_of_components = 2
     principal_components = pca_object.principal_components(test_key)
+    print(principal_components.shape)
     p1p2 = principal_components[: 1:][:, : 2]
     v1v2 = eigenvectors[: 2:, ]
     image_vectors = np.dot(p1p2, v1v2)
     print(image_vectors.shape)
     pprint(image_vectors)
     pca.image_by_list(image_vectors)
-
-    """
-    print('Eigen')
-    print(vectors[0])
-    print('\n')
-    print(pca_object.xvalues(test_key)[0])
-    print('\n')
-    print(pca_object.covariance(test_key)[0])
-    sys.exit(0)
-    """
-
-    """
-    values = pca_object.eigen_values_vectors(1)
-    pprint(values[0])
-    print('\n')
-    pprint(values[1])
-    print('\n')
-    print(values[0].shape)
-    print(values[1].shape)
-    print('\n')
-    print(values[1][400])
-    print('\n')
-    print(values[1][400][0])
-    print(values[1][400][1])
-    print(values[1][400][2])
-    print('\n')
-    eigens = pca_object.eigen_vectors(1)
-    pprint(eigens[400])
-    print('\n')
-    checker = pca_object.eigen_vector_check(1)
-    pprint(checker)
-    print(pca_object.zvalues(1)[0])
-    pca_object.zvalues(1)
-    print('Quick', int(time.time()))
-    matrix = pca_object.covariance_manual(0)
-    pca.image_by_list(matrix)
-    print('Slow', int(time.time()))
-    matrix = pca_object.covariance(0)
-    pca.image_by_list(matrix)
-    print('Done', int(time.time()))
-
-    pca_object.image(test_key, 500)
-    eigens = pca_object.eigen_vectors(test_key)
-    #print(pca_object.eigen_values_vectors(test_key))
-    count = 0
-    for eigen in eigens:
-        # pprint(eigen)
-        pca_object.image_by_vector(eigen)
-        time.sleep(1.1)
-        if count == 4:
-            break
-        count += 1
-
-    matrix = pca_object.covariance(test_key)
-    pca.image_by_list(matrix)
-
-    covariance = pca_object.covariance(test_key)
-    pprint(covariance[400])
-    pprint(covariance[0])
-    print('------------------')
-    eigens = pca_object.eigen_vectors(test_key)
-    pprint(eigens[0])
-    pprint(eigens[1])
-    pprint(eigens[2])
-    pprint(eigens[3])
-    # pca_object.image_by_vector(eigens[400])
-    """
 
     # Test
     data = []
@@ -230,10 +148,10 @@ def main():
     pprint(covariance)
 
     print('\nEigen Values & Vectors')
-    pprint(pca_object.eigen_values_vectors(test_key))
+    pprint(pca_object._eigen_values_vectors(test_key))
 
     print('\nEigen Vectors')
-    eigen = pca_object.eigen_vectors(test_key)
+    eigen = pca_object.eigenvectors(test_key)
     pprint(eigen)
     total = 0
     for column in range(0, len(eigen[0])):
@@ -243,29 +161,6 @@ def main():
     print('\nEigen Vector Check')
     pprint(pca_object.eigen_vector_check(test_key))
 
-    """
-    (rows, columns) = eigen.shape
-    matrix = np.zeros(shape=(1, columns))
-    for (row, column), _ in np.ndenumerate(matrix):
-        summation = 0
-        for ptr_col in range(0, columns):
-            summation = summation + (
-                eigen[row, ptr_col] * covariance[ptr_col, column])
-        matrix[row, column] = summation
-
-    check = np.zeros(shape=(1, rows))
-    for row in check:
-        summation = 0
-        for column in check.T:
-            summation = summation + (
-                matrix[row, column] * matrix[row, column])
-        check[row] = math.sqrt(summation)
-
-    zeros = np.zeros(shape=(1, rows))
-    for (row, column), _ in np.ndenumerate(matrix):
-        summation = 0
-        for column in
-    """
 
 if __name__ == "__main__":
     main()

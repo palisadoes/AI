@@ -7,6 +7,7 @@ import csv
 import time
 from collections import defaultdict
 import math
+import operator
 from pprint import pprint
 
 # Non-standard python imports
@@ -39,6 +40,7 @@ class PCA2d(object):
         self.data = data
         class_rows = {}
         self.x_values = {}
+        self.pca = defaultdict(lambda: defaultdict(dict))
 
         # Determine the number of dimensions in vector
         for cls, vector in data:
@@ -55,6 +57,16 @@ class PCA2d(object):
         if len(self.x_values.keys()) != 2:
             print('PCA2d class works best with two keys')
             sys.exit(0)
+
+        # Precalculate values
+        for cls in class_rows.keys():
+            self.pca['xvalues'][cls] = self.xvalues(cls)
+            self.pca['meanvector'][cls] = self._meanvector(cls)
+            self.pca['zvalues'][cls] = self._zvalues(cls)
+            self.pca['covariance'][cls] = self._covariance(cls)
+            self.pca['eigenvectors'][cls] = self._eigenvectors(cls)
+            self.pca['principal_components'][
+                cls] = self._principal_components(cls)
 
     def image(self, cls, pointer):
         """Create a representative image from ingested data arrays.
@@ -73,34 +85,6 @@ class PCA2d(object):
         # Create final image
         image_by_list(body)
 
-    def image_by_vector(self, vector):
-        """Create a representative image from a vector.
-
-        Args:
-            vector: Vector
-
-        Returns:
-            None
-
-        """
-        # Create final image
-        image_by_list(vector)
-
-    def meanvector(self, cls):
-        """Get the column wise means of ingested data arrays.
-
-        Args:
-            cls: Class of data
-
-        Returns:
-            mean_v: Column wise means as nparray
-
-        """
-        # Return
-        data = self.x_values[cls]
-        mean_v = data.mean(axis=0)
-        return mean_v
-
     def xvalues(self, cls):
         """Return the input vector array for the input class.
 
@@ -108,7 +92,7 @@ class PCA2d(object):
             cls: Class of data
 
         Returns:
-            data: Normalized values
+            data: X values for the class
 
         """
         # Get xvalues
@@ -122,14 +106,64 @@ class PCA2d(object):
             cls: Class of data
 
         Returns:
-            z_values: Normalized values
+
+            self.pca['zvalues'][cls]: zvalues for the class
 
         """
         # Get zvalues
-        data = self.x_values[cls]
-        mean_v = self.meanvector(cls)
-        z_values = np.subtract(data, mean_v)
-        return z_values
+        return self.pca['zvalues'][cls]
+
+    def meanvector(self, cls):
+        """Calculate the mean vector of the X array.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            self.pca['meanvector'][cls]: meanvector for the class
+
+        """
+        # Get meanvector
+        return self.pca['meanvector'][cls]
+
+    def covariance(self, cls):
+        """Get covariance of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            self.pca['covariance'][cls]: covariance for the class
+
+        """
+        # Get covariance
+        return self.pca['covariance'][cls]
+
+    def eigenvectors(self, cls):
+        """Get reverse sorted numpy array of eigenvectors for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            z_values: Normalized values
+
+        """
+        # Get eigenvectors
+        return self.pca['eigenvectors'][cls]
+
+    def principal_components(self, cls):
+        """Get principal components of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            z_values: Normalized values
+
+        """
+        # Get principal_components
+        return self.pca['principal_components'][cls]
 
     def meanofz(self, cls):
         """Get mean vector of Z. This is a test, result must be all zeros.
@@ -143,6 +177,37 @@ class PCA2d(object):
         """
         # Get values
         data = self.zvalues(cls)
+        mean_v = data.mean(axis=0)
+        return mean_v
+
+    def _zvalues(self, cls):
+        """Get the normalized values of ingested data arrays.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            z_values: Values for the class
+
+        """
+        # Get zvalues
+        data = self.pca['xvalues'][cls]
+        mean_v = self.meanvector(cls)
+        z_values = np.subtract(data, mean_v)
+        return z_values
+
+    def _meanvector(self, cls):
+        """Calculate the mean vector of the X array.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            mean_v: Column wise means as nparray
+
+        """
+        # Return
+        data = self.pca['xvalues'][cls]
         mean_v = data.mean(axis=0)
         return mean_v
 
@@ -173,7 +238,7 @@ class PCA2d(object):
         # Return
         return matrix
 
-    def covariance(self, cls):
+    def _covariance(self, cls):
         """Get covariance of input data array for a given class.
 
         Args:
@@ -188,30 +253,56 @@ class PCA2d(object):
         matrix = np.cov(zmatrix)
         return matrix
 
-    def eigen_values_vectors(self, cls, imaginary=False):
+    def _eigen_values_vectors(self, cls):
         """Get eigen of input data array for a given class.
 
         Args:
             cls: Class of data
 
         Returns:
-            result: tuple of (eigenvalues, eigenvectors)
+            result: Tuple of (eigenvalues, eigenvectors)
+                using real eigenvector values
 
         """
         # Initialize key variables
         values = np.linalg.eig(self.covariance(cls))
-        if imaginary is False:
-            (eigenvalues, eigenvectors) = values
-            real_vectors = np.real(eigenvectors)
-            result = (eigenvalues, real_vectors, np.arange(1, 754))
-        else:
-            result = values
+        (eigenvalues, eigenvectors) = values
+        real_vectors = np.real(eigenvectors)
+        result = (eigenvalues, real_vectors)
 
         # Return
         return result
 
-    def eigen_vectors(self, cls):
-        """Get eigen of input data array for a given class.
+    def _eigen_tuples(self, cls):
+        """Get eigens of input data array for a given class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            eig_pairs: Tuples of lists of eigenvalues and eigenvectors.
+                Both sorted by eigenvalue.
+                ([eigenvalues], [eigenvectors])
+
+        """
+        # Initialize key variables
+        (eigenvalues, eigenvectors) = self._eigen_values_vectors(cls)
+
+        # Convert numpy arrays of [eigenvalue], [eigenvector] to
+        # a list of pairs of tuples
+        eig_pairs = [(np.abs(
+            eigenvalues[i]), eigenvectors[:, i]) for i in range(
+                len(eigenvalues))]
+
+        # Sort the (eigenvalue, eigenvector) tuples from high to low
+        eig_pairs.sort(key=operator.itemgetter(0))
+        eig_pairs.reverse()
+
+        # Return
+        return eig_pairs
+
+    def _eigenvectors(self, cls):
+        """Get reverse sorted numpy array of eigenvectors for a given class.
 
         Args:
             cls: Class of data
@@ -221,12 +312,18 @@ class PCA2d(object):
 
         """
         # Initialize key variables
-        values = np.real(self.eigen_values_vectors(cls)[1])
+        vector_list = []
+
+        # Proecess data
+        eig_pairs = self._eigen_tuples(cls)
+        for (_, eigenvector) in eig_pairs:
+            vector_list.append(eigenvector)
+        values = np.asarray(vector_list)
 
         # Return
         return values
 
-    def principal_components(self, cls):
+    def _principal_components(self, cls):
         """Get principal components of input data array for a given class.
 
         Args:
@@ -238,7 +335,7 @@ class PCA2d(object):
         """
         # Initialize key variables
         z_values = self.zvalues(cls)
-        (_, eigenvectors, _) = self.eigen_values_vectors(cls)
+        eigenvectors = self.eigenvectors(cls)
         result = np.dot(z_values, eigenvectors.T)
         return result
 
@@ -253,7 +350,7 @@ class PCA2d(object):
 
         """
         # Initialize key variables
-        vectors = self.eigen_vectors(cls)
+        vectors = self.eigenvectors(cls)
         (_, columns) = vectors.shape
         matrix = np.zeros(shape=(1, columns))
 
@@ -325,5 +422,4 @@ def _shade(value, minimum, maximum):
     # Return
     multiplier = 254
     hbin = int(multiplier * (value - minimum) / (maximum - minimum))
-    # print(hbin, value, minimum, maximum)
     return hbin
