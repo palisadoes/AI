@@ -4,8 +4,8 @@
 # Standard python imports
 import argparse
 from pprint import pprint
-from collections import defaultdict
 from random import randint
+import time
 
 # Non standard python imports
 import numpy as np
@@ -13,6 +13,7 @@ import numpy as np
 # Import AI library
 from machine import mnist
 from machine import pca
+from machine import chart
 
 
 def cli():
@@ -55,8 +56,8 @@ def main():
 
     """
     # Initialize key variables
-    test_key = 6
     digits = [5, 6]
+    test_key = digits[0]
     data = []
 
     # Ingest data
@@ -66,10 +67,10 @@ def main():
     (minst_images, minst_labels) = minst_data.load_training()
 
     # Get data for digits
-    for pointer, value in enumerate(minst_labels):
-        if value in digits:
+    for pointer, cls in enumerate(minst_labels):
+        if cls in digits:
             data.append(
-                (value, minst_images[pointer])
+                (cls, minst_images[pointer])
             )
 
     # Instantiate PCA
@@ -79,6 +80,7 @@ def main():
     print('Eigen')
     eigenvectors = pca_object.eigenvectors(test_key)
 
+    """
     # Visually confirm that the list is correctly
     # sorted by decreasing eigenvalues
     print('Eigenvalues in descending order:')
@@ -88,6 +90,7 @@ def main():
         # pprint(real_vector)
         pca.image_by_list(eigenvector)
         count += 1
+        time.sleep(0.5)
         if count == maximages:
             break
 
@@ -98,9 +101,41 @@ def main():
     p1p2 = principal_components[: 1:][:, : 2]
     v1v2 = eigenvectors[: 2:, ]
     image_vectors = np.dot(p1p2, v1v2)
-    print(image_vectors.shape)
-    pprint(image_vectors)
+    # print(image_vectors.shape)
+    # pprint(image_vectors)
+    time.sleep(0.5)
     pca.image_by_list(image_vectors)
+
+    """
+
+    #########################################################################
+    # Do reconstruction
+    #########################################################################
+    data = []
+    number_of_components = 2
+    for cls in digits:
+        principal_components = pca_object.principal_components(cls)
+        eigenvectors = pca_object.eigenvectors(cls)
+        p1p2 = principal_components[: 1:][:, : 2]
+        v1v2 = eigenvectors[: 2:, ]
+        image_vectors = np.dot(p1p2, v1v2)
+        time.sleep(0.5)
+        pca.image_by_list(image_vectors)
+
+    #########################################################################
+    # Do scatter plot
+    #########################################################################
+    data = []
+    number_of_components = 2
+    for cls in digits:
+        principal_components = pca_object.principal_components(cls)
+        data.append(
+            (cls,
+             principal_components[:, 0],
+             principal_components[:, 1])
+        )
+    graph = chart.Chart(data)
+    graph.graph()
 
     # Test
     data = []
