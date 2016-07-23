@@ -50,6 +50,7 @@ class Histogram2D(object):
 
         # Calculate the number of bins using sturges
         self.bin_count = int(math.log2(len(data)) + 1)
+        self.bin_count = 15
 
         # Create a row for each column of data for each class (Transpose)
         for item in data:
@@ -149,7 +150,7 @@ class Histogram2D(object):
 
         Args:
             histogram_list: List for histogram
-            category: Category (label) for data in list
+            cls: Category (label) for data in list
             bins: Number of bins to use
 
         Returns:
@@ -161,10 +162,10 @@ class Histogram2D(object):
         nbins = self.bins()
 
         # Loop through data
-        for category in sorted(self.x_y.keys()):
+        for cls in sorted(self.x_y.keys()):
             # Get key data for creating histogram
-            x_array = np.array(self.x_y[category][0])
-            y_array = np.array(self.x_y[category][1])
+            x_array = np.array(self.x_y[cls][0])
+            y_array = np.array(self.x_y[cls][1])
 
             # Estimate the 2D histogram
             hgram, xedges, yedges = np.histogram2d(
@@ -189,14 +190,14 @@ class Histogram2D(object):
             # Add Main Title
             fig.suptitle(
                 ('Height and Handspan Histogram (%ss, %s Bins)') % (
-                    category.capitalize(), nbins),
+                    cls.capitalize(), nbins),
                 horizontalalignment='center',
                 fontsize=10)
 
             # Create image
             graph_filename = (
                 '%s/homework-2-2D-%s-bins-%s.png'
-                '') % (directory, category, nbins)
+                '') % (directory, cls, nbins)
 
             # Save chart
             fig.savefig(graph_filename)
@@ -208,9 +209,6 @@ class Histogram2D(object):
         """Graph histogram.
 
         Args:
-            histogram_list: List for histogram
-            category: Category (label) for data in list
-            bins: Number of bins to use
 
         Returns:
             None
@@ -219,85 +217,134 @@ class Histogram2D(object):
         # Initialize key variables
         directory = '/home/peter/Downloads'
         bins = self.bins()
+        handles = []
+        labels = []
 
         # Random colors for each plot
         prop_iter = iter(plt.rcParams['axes.prop_cycle'])
 
-        # Loop through data
-        for category in sorted(self.x_y.keys()):
-            # Create the histogram plot
-            fig = plt.figure()
-            axes = fig.add_subplot(111, projection='3d')
+        # Initialize the figure
+        fig = plt.figure()
+        axes = fig.add_subplot(111, projection='3d')
 
+        # Loop through data
+        for cls in sorted(self.x_y.keys()):
             # Initialize various arrays
-            x_values = []
-            y_values = []
-            z_values = []
+            x_positions = []
+            y_positions = []
+            z_positions = []
+            z_height = []
+
+            # Define data
+            data = self.histogram()[cls]
 
             # Assign values to array
-            for (x_pos, y_pos), z_pos in np.ndenumerate(
-                    self.histogram()[category]):
-                x_values.append(x_pos)
-                y_values.append(y_pos)
-                z_values.append(z_pos)
+            for (x_pos, y_pos), z_pos in np.ndenumerate(data):
+                # Setup lists to only plot when there are
+                # meaningful values.
+                if x_pos and y_pos and z_pos:
+                    # Get coordinates for the bottom of the
+                    # bar chart
+                    x_positions.append(self._fixed_value(x_pos, 0))
+                    y_positions.append(self._fixed_value(y_pos, 1))
+                    z_positions.append(0)
 
-            num_elements = len(x_values)
-            dx = np.ones(num_elements)
-            dy = np.ones(num_elements)
-            dz = np.ones(num_elements)
-            print(x_values)
-            print(y_values)
-            print(z_values)
+                    # Keep track of the desired column height
+                    z_height.append(z_pos)
 
+            # Create elements defining the sides of each column
+            num_elements = len(x_positions)
+            x_col_width = np.ones(num_elements)
+            y_col_depth = np.ones(num_elements)
+            z_col_height = np.asarray(z_height)
+
+            # Get color of plot
+            color = next(prop_iter)['color']
+
+            # Do the plot
             axes.bar3d(
-                x_values, y_values, z_values,
-                dx, dy, dz,
-                color=next(prop_iter)['color'])
+                x_positions, y_positions, z_positions,
+                x_col_width, y_col_depth, z_col_height,
+                zsort='average',
+                alpha=0.6,
+                color=color)
 
-            # Put ticks only on bottom and left
-            axes.xaxis.set_ticks_position('bottom')
-            axes.yaxis.set_ticks_position('bottom')
-            axes.zaxis.set_ticks_position('bottom')
+            # Prepare values for legend
+            handles.append(plt.Rectangle((0, 0), 1, 1, fc=color))
+            labels.append(cls.capitalize())
 
-            # Set X axis ticks (Height 0)
-            #major_ticks = np.arange(0, bins, 1)
-            #axes.set_xticks(major_ticks)
+        # Add Main Title
+        fig.suptitle(
+            ('%s and %s Histogram (%s Bins)') % (
+                self.labels[0].capitalize(),
+                self.labels[1].capitalize(),
+                self.bins()),
+            horizontalalignment='center',
+            fontsize=10)
 
-            # Set y axis ticks (Handspan 1)
-            #major_ticks = np.arange(0, bins, 1)
-            #axes.set_yticks(major_ticks)
+        # Add legend
+        axes.legend(handles, labels)
 
-            # Set z axis ticks
-            # major_ticks = np.arange(0, max(dz_length), 5)
-            # axes.set_zticks(major_ticks)
+        # Add grid, axis labels
+        axes.grid(True)
+        axes.set_ylabel('Handspans')
+        axes.set_xlabel('Heights')
+        axes.set_zlabel('Count')
 
-            # Add legend
-            # axes.legend(lines, categories)
-            # plt.legend()
+        # Adjust bottom
+        fig.subplots_adjust(left=0.2, bottom=0.2)
 
-            # Add Main Title
-            fig.suptitle(
-                ('Height and Handspan Histogram (%ss, %s Bins)') % (
-                    category.capitalize(), self.bins()),
-                horizontalalignment='center',
-                fontsize=10)
+        # Create image
+        graph_filename = ('%s/homework-2-3D.png') % (directory)
 
-            # Add grid, axis labels
-            axes.grid(True)
-            axes.set_ylabel('Handspans')
-            axes.set_xlabel('Heights')
-            axes.set_zlabel('Count')
+        # Save chart
+        fig.savefig(graph_filename)
 
-            # Adjust bottom
-            fig.subplots_adjust(left=0.2, bottom=0.2)
+        # Close the plot
+        plt.close(fig)
 
-            # Create image
-            graph_filename = (
-                '%s/homework-2-3D-%s-bins-new-%s.png'
-                '') % (directory, category, bins)
+    def _fixed_value(self, value, pointer):
+        """Fix the value plotted on the histogram based on the bin.
 
-            # Save chart
-            fig.savefig(graph_filename)
+        Args:
+            value: Bin value
+            pointer:
 
-            # Close the plot
-            plt.close(fig)
+        Returns:
+
+            fixed: Fixed value
+
+        """
+        # Initialize key variables
+        minimum = self.minmax[pointer]['min']
+        maximum = self.minmax[pointer]['max']
+        delta = maximum - minimum
+
+        # Calculate
+        fixed = (value * delta / self.bins()) + self.minmax[pointer]['min']
+
+        # Return
+        return fixed
+
+    def _width_value(self, pointer):
+        """Fix the width of the value plotted on the histogram based on the bin.
+
+        Args:
+            value: Bin value
+            pointer:
+
+        Returns:
+
+            fixed: Fixed value
+
+        """
+        # Initialize key variables
+        minimum = self.minmax[pointer]['min']
+        maximum = self.minmax[pointer]['max']
+        delta = maximum - minimum
+
+        # Calculate
+        fixed = self.bins() / delta
+
+        # Return
+        return fixed

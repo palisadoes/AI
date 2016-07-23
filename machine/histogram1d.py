@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Program creates histograms."""
 
-import argparse
-import textwrap
-import sys
 import math
 from collections import defaultdict
 from statistics import stdev, mean
@@ -14,8 +11,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import style
 style.use("ggplot")
-
-import xlrd
 
 
 class Histogram1D(object):
@@ -32,26 +27,28 @@ class Histogram1D(object):
         get_cli:
     """
 
-    def __init__(self, data, dimension):
+    def __init__(self, data):
         """Function for intializing the class.
 
         Args:
-            data: List tuples [(value, class)]
-            dimension: Category of data
+            data: List tuples [(class, value)]
 
         """
         # Initialize key variables
         self.data = data
-        self.dimension = dimension
         self.meta = defaultdict(lambda: defaultdict(dict))
+        self.classes = []
 
         # Calculate counts
         self.data_lists = self._lists()
 
         # Get min / max and bins
-        for category, heights in sorted(self.data_lists.items()):
-            self.meta[category]['min'] = min(heights)
-            self.meta[category]['max'] = max(heights)
+        for cls, features in sorted(self.data_lists.items()):
+            self.meta[cls]['min'] = min(features)
+            self.meta[cls]['max'] = max(features)
+
+        # Get list of categories
+        self.classes = sorted(self.meta.keys())
 
         # Calculate counts
         self.data_counts = self._counts()
@@ -96,62 +93,62 @@ class Histogram1D(object):
 
         """
         # Initialize key variables
-        for category in self.meta.keys():
-            minimum = self.meta[category]['min']
-            maximum = self.meta[category]['max']
+        for cls in self.meta.keys():
+            minimum = self.meta[cls]['min']
+            maximum = self.meta[cls]['max']
 
         # Get range
-        for category in self.meta.keys():
-            minimum = min(self.meta[category]['min'], minimum)
-            maximum = max(self.meta[category]['max'], maximum)
+        for cls in self.meta.keys():
+            minimum = min(self.meta[cls]['min'], minimum)
+            maximum = max(self.meta[cls]['max'], maximum)
 
         # Return
         return (int(minimum), int(maximum))
 
-    def buckets(self, category):
+    def buckets(self, cls):
         """Get number of buckets in data.
 
         Args:
-            category: Category of data
+            cls: Category of data
 
         Returns:
             bins: number of buckets
 
         """
         # Initialize key variables
-        bins = self._buckets(category)[0]
+        bins = self._buckets(cls)[0]
 
         # Return
         return bins
 
-    def minimum(self, category):
-        """Get minimum category key value.
+    def minimum(self, cls):
+        """Get minimum class key value.
 
         Args:
-            category: Category of data
+            cls: Category of data
 
         Returns:
             data: minimum value
 
         """
         # Initialize key variables
-        data = self._buckets(category)[1]
+        data = self._buckets(cls)[1]
 
         # Return
         return data
 
-    def maximum(self, category):
-        """Get maximum category key value.
+    def maximum(self, cls):
+        """Get maximum class key value.
 
         Args:
-            category: Category of data
+            cls: Category of data
 
         Returns:
             data: maximum value
 
         """
         # Initialize key variables
-        data = self._buckets(category)[2]
+        data = self._buckets(cls)[2]
 
         # Return
         return data
@@ -163,7 +160,7 @@ class Histogram1D(object):
             None
 
         Returns:
-            data: Dict of counts of height keyed by category and height
+            data: Dict of counts of feature keyed by class and feature
 
         """
         # Initialize key variables
@@ -179,7 +176,7 @@ class Histogram1D(object):
             None
 
         Returns:
-            data: Dict of histogram data keyed by category (gender)
+            data: Dict of histogram data keyed by class (gender)
 
         """
         # Initialize key variables
@@ -188,31 +185,31 @@ class Histogram1D(object):
         # Return
         return data
 
-    def probability(self, height, category=None):
+    def probability(self, feature, cls=None):
         """Calculate probabilities.
 
         Args:
-            category: Category of data
-            height: Height to calculate probaility for
+            cls: Category of data
+            feature: Height to calculate probaility for
 
         Returns:
             value: Value of probability
 
         """
         # Initialize key variables
-        if category is None:
-            value = self.data_probability[None][height]
+        if cls is None:
+            value = self.data_probability[None][feature]
         else:
-            value = self.data_probability[category][height]
+            value = self.data_probability[cls][feature]
 
         # Return
         return value
 
-    def table(self):
+    def table(self, feature_label):
         """Create classifier chart.
 
         Args:
-            None
+            feature_label: Feature label
 
         Returns:
             None
@@ -220,47 +217,48 @@ class Histogram1D(object):
         """
         # Initialize key variables
         (minimum, maximum) = self.bucket_range()
+        [cls_0, cls_1] = self.classes
 
         # Header
         output = ('%10s %15s %15s %15s %15s %6s %6s') % (
-            self.dimension.capitalize(),
-            'Gender (H)', 'Prob. (H)',
-            'Gender (B)', 'Prob. (B)',
-            'Male', 'Female')
+            feature_label.capitalize(),
+            'Class (H)', 'Prob. (H)',
+            'Class (B)', 'Prob. (B)',
+            cls_1.capitalize(), cls_0.capitalize())
         print(output)
 
-        # Evaluate heights
-        for height in range(minimum, maximum + 1):
+        # Evaluate features
+        for feature in range(minimum, maximum + 1):
             # Get probabilities
-            b_probability = self.bayesian_classifier(height)
-            h_probability = self.histogram_classifier(height)
+            b_probability = self.bayesian_classifier(feature)
+            h_probability = self.histogram_classifier(feature)
 
             # Get genders
-            b_gender = _get_gender(b_probability)
-            h_gender = _get_gender(h_probability)
+            b_class = _get_class(b_probability)
+            h_class = _get_class(h_probability)
 
             # Get counts
-            mcount = self.data_counts['male'][height]
+            mcount = self.data_counts[cls_1][feature]
             if bool(mcount) is False:
                 mcount = 0
-            fcount = self.data_counts['female'][height]
+            fcount = self.data_counts[cls_0][feature]
             if bool(fcount) is False:
                 fcount = 0
 
-            # Account for zero males / females for height
+            # Account for zero males / females for feature
             if mcount + fcount == 0:
-                b_gender = 'N/A'
-                h_gender = 'N/A'
+                b_class = 'N/A'
+                h_class = 'N/A'
 
             # Print output
             output = ('%10d %15s %15.6f %15s %15.6f %6d %6d') % (
-                height,
-                h_gender, h_probability,
-                b_gender, b_probability,
+                feature,
+                h_class, h_probability,
+                b_class, b_probability,
                 mcount, fcount)
             print(output)
 
-    def bayesian_classifier(self, height):
+    def bayesian_classifier(self, feature):
         """Create histogram classifier chart.
 
         Args:
@@ -270,11 +268,14 @@ class Histogram1D(object):
             male_probability: Probability of being male
 
         """
-        # Get male counts
-        mcount = self._bayesian('male', height)
+        # Initialize key variables
+        [cls_0, cls_1] = self.classes
 
-        # Get female counts
-        fcount = self._bayesian('female', height)
+        # Get class 1 counts (male)
+        mcount = self._bayesian(cls_1, feature)
+
+        # Get class 0 counts (female)
+        fcount = self._bayesian(cls_0, feature)
 
         # Get male probability
         if mcount == 0:
@@ -285,7 +286,7 @@ class Histogram1D(object):
         # Return
         return male_probability
 
-    def histogram_classifier(self, height):
+    def histogram_classifier(self, feature):
         """Create histogram classifier chart.
 
         Args:
@@ -295,17 +296,20 @@ class Histogram1D(object):
             None
 
         """
+        # Initialize key variables
+        [cls_0, cls_1] = self.classes
+
         # Get male counts
-        if height not in self.data_counts['male']:
+        if feature not in self.data_counts[cls_1]:
             mcount = 0
         else:
-            mcount = self.data_counts['male'][height]
+            mcount = self.data_counts[cls_1][feature]
 
         # Get female counts
-        if height not in self.data_counts['female']:
+        if feature not in self.data_counts[cls_0]:
             fcount = 0
         else:
-            fcount = self.data_counts['female'][height]
+            fcount = self.data_counts[cls_0][feature]
 
         # Get male probability
         if mcount == 0:
@@ -316,13 +320,11 @@ class Histogram1D(object):
         # Return
         return male_probability
 
-    def graph(self):
+    def graph(self, feature_label):
         """Graph histogram.
 
         Args:
-            histogram_list: List for histogram
-            category: Category (label) for data in list
-            bins: Number of bins to use
+            feature_label: Feature label
 
         Returns:
             None
@@ -330,13 +332,12 @@ class Histogram1D(object):
         """
         # Initialize key variables
         directory = '/home/peter/Downloads'
-        dimension = self.dimension.capitalize()
         data = self.counts()
         categories = []
-        heights = {}
+        features = {}
         counts = {}
-        min_height = 100000000000000000000
-        max_height = 1 - min_height
+        min_feature = 100000000000000000000
+        max_feature = 1 - min_feature
         max_count = 1 - 100000000000000000000
 
         # Create the histogram plot
@@ -346,37 +347,37 @@ class Histogram1D(object):
         prop_iter = iter(plt.rcParams['axes.prop_cycle'])
 
         # Loop through data
-        for category in data:
-            # Create empty list of heights
-            heights[category] = []
-            counts[category] = []
+        for cls in data:
+            # Create empty list of features
+            features[cls] = []
+            counts[cls] = []
 
-            # Append category name
-            categories.append(category.capitalize())
+            # Append cls name
+            categories.append(cls.capitalize())
 
             # Create lists to chart
-            for height, count in sorted(data[category].items()):
-                heights[category].append(height)
-                counts[category].append(count)
+            for feature, count in sorted(data[cls].items()):
+                features[cls].append(feature)
+                counts[cls].append(count)
 
-            # Get max / min heights
-            max_height = max(max_height, max(heights[category]))
-            min_height = min(min_height, min(heights[category]))
+            # Get max / min features
+            max_feature = max(max_feature, max(features[cls]))
+            min_feature = min(min_feature, min(features[cls]))
 
             # Get max / min counts
-            max_count = max(max_count, max(counts[category]))
+            max_count = max(max_count, max(counts[cls]))
 
             # Chart line
             plt.plot(
-                heights[category], counts[category],
-                color=next(prop_iter)['color'], label=category.capitalize())
+                features[cls], counts[cls],
+                color=next(prop_iter)['color'], label=cls.capitalize())
 
         # Put ticks only on bottom and left
         axes.xaxis.set_ticks_position('bottom')
         axes.yaxis.set_ticks_position('left')
 
         # Set X axis ticks
-        major_ticks = np.arange(min_height, max_height, 1)
+        major_ticks = np.arange(min_feature, max_feature, 1)
         axes.set_xticks(major_ticks)
 
         # Set y axis ticks
@@ -385,12 +386,10 @@ class Histogram1D(object):
 
         # Add legend
         plt.legend()
-        #fig.legend(
-        #    tuple(lines), tuple(categories), loc='lower center', ncol=2)
 
         # Add Main Title
         fig.suptitle(
-            ('%s Histogram') % (dimension),
+            ('%s Histogram') % (feature_label),
             horizontalalignment='center',
             fontsize=10)
 
@@ -404,7 +403,7 @@ class Histogram1D(object):
         # Add grid, axis labels
         axes.grid(True)
         axes.set_ylabel('Count')
-        axes.set_xlabel(dimension)
+        axes.set_xlabel(feature_label)
 
         # Rotate the labels
         for label in axes.xaxis.get_ticklabels():
@@ -415,7 +414,7 @@ class Histogram1D(object):
 
         # Create image
         graph_filename = ('%s/homework-%s-%s-rows.png') % (
-            directory, self.dimension, self.entries)
+            directory, feature_label, self.entries)
 
         # Save chart
         fig.savefig(graph_filename)
@@ -437,48 +436,48 @@ class Histogram1D(object):
         output = ('%-25s: %s') % ('Total Sample Size', len(self.data))
         print(output)
 
-        # Calculate values for each category in data
-        for category in self.data_lists:
-            sample_stdev = stdev(self.data_lists[category])
-            sample_mean = mean(self.data_lists[category])
+        # Calculate values for each class in data
+        for cls in self.data_lists:
+            sample_stdev = stdev(self.data_lists[cls])
+            sample_mean = mean(self.data_lists[cls])
 
-            # Print information about the category:
+            # Print information about the class:
             output = ('%-25s [%s]: %-2.6f') % (
-                'Standard Deviation for ', category, sample_stdev)
+                'Standard Deviation for ', cls, sample_stdev)
             print(output)
             output = ('%-25s [%s]: %-2.6f') % (
-                'Mean Deviation for ', category, sample_mean)
+                'Mean Deviation for ', cls, sample_mean)
             print(output)
 
-    def _bayesian(self, category, height):
+    def _bayesian(self, cls, feature):
         """Create bayesian multiplier.
 
         Args:
-            category: Category of data
-            height: Height to process
+            cls: Category of data
+            feature: Height to process
 
         Returns:
             value: Multiplier value
 
         """
         # Initialize key variables
-        sample_stdev = stdev(self.data_lists[category])
-        sample_mean = mean(self.data_lists[category])
+        sample_stdev = stdev(self.data_lists[cls])
+        sample_mean = mean(self.data_lists[cls])
 
-        total = len(self.data_lists[category])
+        total = len(self.data_lists[cls])
         multiplier = 1 / (math.sqrt(2 * math.pi) * sample_stdev)
-        power = math.pow((height - sample_mean) / sample_stdev, 2)
+        power = math.pow((feature - sample_mean) / sample_stdev, 2)
         exponent = math.exp(-0.5 * power)
 
         # Return
         value = total * multiplier * exponent
         return value
 
-    def _buckets(self, category):
+    def _buckets(self, cls):
         """Get number of buckets in data.
 
         Args:
-            category: Category of data
+            cls: Category of data
 
         Returns:
             bins: number of buckets
@@ -487,9 +486,9 @@ class Histogram1D(object):
         # Initialize key variables
         interval = 1
 
-        # Get min / max for category
-        minimum = int(self.meta[category]['min'])
-        maximum = int(self.meta[category]['max'])
+        # Get min / max for class
+        minimum = int(self.meta[cls]['min'])
+        maximum = int(self.meta[cls]['max'])
 
         # Calculate bins
         bins = len(range(minimum, maximum, interval))
@@ -504,7 +503,7 @@ class Histogram1D(object):
             None
 
         Returns:
-            counts: Dict of counts of height keyed by category and height
+            counts: Dict of counts of feature keyed by class and feature
 
         """
         # Initialize key variables
@@ -512,25 +511,25 @@ class Histogram1D(object):
 
         # Create counts dict for probabilities
         for pair in self.data:
-            height = pair[0]
-            category = pair[1]
+            feature = pair[1]
+            cls = pair[0]
 
             # Calculate bin
-            nbins = self.buckets(category)
-            minx = self.minimum(category)
-            maxx = self.maximum(category)
+            nbins = self.buckets(cls)
+            minx = self.minimum(cls)
+            maxx = self.maximum(cls)
             bucket = int(1 + (nbins - 1) * (
-                height - minx) / (maxx - minx)) + minx
+                feature - minx) / (maxx - minx)) + minx
 
             # Assign values to bins
-            if category in counts:
-                if bucket in counts[category]:
-                    counts[category][bucket] = counts[
-                        category][bucket] + 1
+            if cls in counts:
+                if bucket in counts[cls]:
+                    counts[cls][bucket] = counts[
+                        cls][bucket] + 1
                 else:
-                    counts[category][bucket] = 1
+                    counts[cls][bucket] = 1
             else:
-                counts[category][bucket] = 1
+                counts[cls][bucket] = 1
 
         # Return
         return counts
@@ -542,7 +541,7 @@ class Histogram1D(object):
             None
 
         Returns:
-            data: Dict of histogram data keyed by category (gender)
+            data: Dict of histogram data keyed by class (gender)
 
         """
         # Initialize key variables
@@ -550,12 +549,12 @@ class Histogram1D(object):
 
         # Create counts dict for probabilities
         for pair in self.data:
-            height = pair[0]
-            category = pair[1]
-            if category in data:
-                data[category].append(height)
+            feature = pair[0]
+            cls = pair[1]
+            if cls in data:
+                data[cls].append(feature)
             else:
-                data[category] = [height]
+                data[cls] = [feature]
 
         # Return
         return data
@@ -564,11 +563,10 @@ class Histogram1D(object):
         """Calculate probabilities.
 
         Args:
-            category: Category of data
-            height: Height to calculate probaility for
+            feature: Height to calculate probaility for
 
         Returns:
-            probability: Probabilities dict keyed by category and height
+            probability: Probabilities dict keyed by class and feature
 
         """
         # Initialize key variables
@@ -577,17 +575,17 @@ class Histogram1D(object):
         probability = defaultdict(lambda: defaultdict(dict))
         icount = defaultdict(lambda: defaultdict(dict))
 
-        # Cycle through data to get gender totals
-        for gender in counts.keys():
-            for height in counts[gender].keys():
+        # Cycle through data to get class totals
+        for cls in counts.keys():
+            for feature in counts[cls].keys():
                 # Calculate count
-                count = counts[gender][height]
+                count = counts[cls][feature]
 
                 # Get total counts for gender
-                if gender in total:
-                    total[gender] = total[gender] + count
+                if cls in total:
+                    total[cls] = total[cls] + count
                 else:
-                    total[gender] = count
+                    total[cls] = count
 
                 # Get total counts independent of gender
                 if None in total:
@@ -596,26 +594,26 @@ class Histogram1D(object):
                     total[None] = count
 
                 # Get counts independent of gender
-                if height in icount:
-                    icount[height] = icount[height] + count
+                if feature in icount:
+                    icount[feature] = icount[feature] + count
                 else:
-                    icount[height] = count
+                    icount[feature] = count
 
         # Cycle through data to get gender probabilities
-        for gender in counts.keys():
-            for height in counts[gender].keys():
-                # Do probabilities (category)
-                probability[gender][height] = counts[
-                    gender][height] / total[gender]
+        for cls in counts.keys():
+            for feature in counts[cls].keys():
+                # Do probabilities (class)
+                probability[cls][feature] = counts[
+                    cls][feature] / total[cls]
 
                 # Do probabilities (independent)
-                probability[None][height] = icount[height] / total[None]
+                probability[None][feature] = icount[feature] / total[None]
 
         # Return
         return probability
 
 
-def _get_gender(male_probability):
+def _get_class(male_probability):
     """Determine the gender based on probability.
 
     Args:
@@ -627,11 +625,11 @@ def _get_gender(male_probability):
     """
     # Get likely gender
     if male_probability < 0.5:
-        gender = 'Female'
+        cls = 'Female'
     elif male_probability == 0.5:
-        gender = 'N/A'
+        cls = 'N/A'
     else:
-        gender = 'Male'
+        cls = 'Male'
 
     # Return
-    return gender
+    return cls

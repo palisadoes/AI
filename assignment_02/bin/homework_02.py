@@ -10,7 +10,7 @@ from collections import defaultdict
 import xlrd
 
 # Custom libraries
-from machine.histogram import Histogram1D
+from machine.histogram2d import Histogram2D
 
 
 def ingest(filename):
@@ -24,8 +24,9 @@ def ingest(filename):
 
     """
     # Initialize key variables
-    data = defaultdict(lambda: defaultdict(dict))
-    labels = None
+    # data = defaultdict(lambda: defaultdict(dict))
+    data = []
+    labels = ()
 
     # Read spreadsheet
     workbook = xlrd.open_workbook(filename)
@@ -37,23 +38,19 @@ def ingest(filename):
         height = worksheet.row(row)[1].value
         handspan = worksheet.row(row)[2].value
 
-        # Populate data
-        if 'height' not in data:
-            data['height'] = []
-            data['handspan'] = []
-
         # Skip header, append data
         if 'sex' not in sex.lower():
             # Update data with heights
-            data['height'].append(
-                (height, sex.lower())
+            data.append(
+                (sex.lower(), height, handspan)
             )
-            data['handspan'].append(
-                (handspan, sex.lower())
-            )
+        else:
+            labels = (
+                height.replace('\'', ''),
+                handspan.replace('\'', ''))
 
     # Return
-    return data
+    return (data, labels)
 
 
 def cli():
@@ -97,16 +94,11 @@ def main():
     """
     # Ingest data
     args = cli()
-    data = ingest(args.filename)
+    (data, labels) = ingest(args.filename)
 
     # View histogram data
-    for dimension in sorted(data.keys()):
-        histogram = Histogram1D(data[dimension], dimension)
-        histogram.graph()
-        histogram.table()
-        histogram.parameters()
-        print('\n')
-
+    histogram = Histogram2D(data, labels)
+    histogram.graph3d()
 
 
 if __name__ == "__main__":

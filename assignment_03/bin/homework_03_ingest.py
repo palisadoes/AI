@@ -2,13 +2,10 @@
 """Program Ingests data for a 2D histogram."""
 
 # Standard python imports
-import sys
 import argparse
-import time
 from pprint import pprint
 from collections import defaultdict
 from random import randint
-import operator
 
 # Non standard python imports
 import numpy as np
@@ -76,17 +73,8 @@ def main():
             )
 
     # Instantiate PCA
-    pca_object = pca.PCA2d(data)
-    maximages = 10
-
-    """
-    for image in range(0, maximages):
-        pca_object.image(test_key, image)
-        time.sleep(2)
-    """
-
-    print('Covariance')
-    matrix = pca_object.covariance(test_key)
+    pca_object = pca.PCA(data)
+    maximages = 5
 
     print('Eigen')
     eigenvectors = pca_object.eigenvectors(test_key)
@@ -100,7 +88,7 @@ def main():
         # pprint(real_vector)
         pca.image_by_list(eigenvector)
         count += 1
-        if count == 5:
+        if count == maximages:
             break
 
     # Try recreating images
@@ -129,7 +117,7 @@ def main():
     pprint(data)
 
     # Initialize again
-    pca_object = pca.PCA2d(data)
+    pca_object = pca.PCA(data)
 
     print('\nX Values')
     pprint(pca_object.xvalues(test_key))

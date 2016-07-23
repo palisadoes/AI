@@ -14,7 +14,7 @@ from pprint import pprint
 import numpy as np
 
 
-class PCA2d(object):
+class PCA(object):
     """Class for 2 dimensional histogram.
 
     Args:
