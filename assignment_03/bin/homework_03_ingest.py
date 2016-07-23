@@ -129,10 +129,12 @@ def main():
     number_of_components = 2
     for cls in digits:
         principal_components = pca_object.principal_components(cls)
+        # principal_components[:, 0],
+        # principal_components[:, 1])
         data.append(
             (cls,
-             principal_components[:, 0],
-             principal_components[:, 1])
+             principal_components[0],
+             principal_components[1])
         )
     graph = chart.Chart(data)
     graph.graph()
