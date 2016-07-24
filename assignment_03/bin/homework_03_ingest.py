@@ -4,7 +4,6 @@
 # Standard python imports
 import argparse
 from pprint import pprint
-from random import randint
 import time
 
 # Non standard python imports
@@ -57,10 +56,14 @@ def main():
     """
     # Initialize key variables
     digits = [5, 6]
-    test_key = digits[0]
+    maximages = 5
+    components = 2
     data = []
 
+    #########################################################################
     # Ingest data
+    #########################################################################
+    print('Ingesting Data')
     args = cli()
     mnist_data_directory = args.mnist_data_directory
     minst_data = mnist.MNIST(mnist_data_directory)
@@ -75,116 +78,80 @@ def main():
 
     # Instantiate PCA
     pca_object = pca.PCA(data)
-    maximages = 5
-
-    print('Eigen')
-    eigenvectors = pca_object.eigenvectors(test_key)
-
-    """
-    # Visually confirm that the list is correctly
-    # sorted by decreasing eigenvalues
-    print('Eigenvalues in descending order:')
-    count = 0
-    for eigenvector in eigenvectors:
-        # real_vector = np.real(eigenvector)
-        # pprint(real_vector)
-        pca.image_by_list(eigenvector)
-        count += 1
-        time.sleep(0.5)
-        if count == maximages:
-            break
-
-    # Try recreating images
-    number_of_components = 2
-    principal_components = pca_object.principal_components(test_key)
-    print(principal_components.shape)
-    p1p2 = principal_components[: 1:][:, : 2]
-    v1v2 = eigenvectors[: 2:, ]
-    image_vectors = np.dot(p1p2, v1v2)
-    # print(image_vectors.shape)
-    # pprint(image_vectors)
-    time.sleep(0.5)
-    pca.image_by_list(image_vectors)
-
-    """
 
     #########################################################################
-    # Do reconstruction
+    # View eigenvectors as images
     #########################################################################
-    data = []
-    number_of_components = 2
+    print('Creating Covariance Matrix Image')
     for cls in digits:
-        principal_components = pca_object.principal_components(cls)
-        eigenvectors = pca_object.eigenvectors(cls)
-        p1p2 = principal_components[: 1:][:, : 2]
-        v1v2 = eigenvectors[: 2:, ]
-        image_vectors = np.dot(p1p2, v1v2)
-        time.sleep(0.5)
-        pca.image_by_list(image_vectors)
+        # Create image
+        covariance = pca_object.covariance(cls)
+        pca.image_by_list(covariance, ('%s-covariance') % (cls))
+
+    #########################################################################
+    # View eigenvectors as images
+    #########################################################################
+    print('Creating Eigenvector Based Images')
+    for cls in digits:
+        eigenvectors = pca_object.eigenvectors(cls, sort=True)
+
+        count = 0
+        for eigenvector in eigenvectors:
+            # Sleep the image files get a chance to be written to disk OK
+            time.sleep(1)
+
+            # Create image from eigenvector
+            pca.image_by_list(eigenvector, ('%s-%s-eigen') % (cls, count))
+            count += 1
+            if count == maximages:
+                break
 
     #########################################################################
     # Do scatter plot
     #########################################################################
+    print('Creating Scatter Plot')
     data = []
-    number_of_components = 2
     for cls in digits:
-        principal_components = pca_object.principal_components(cls)
-        # principal_components[:, 0],
-        # principal_components[:, 1])
+        """
+        principal_components = pca_object.principal_components(
+            cls, components=components)
         data.append(
             (cls,
-             principal_components[0],
-             principal_components[1])
+             principal_components[:, 0],
+             principal_components[:, 1])
+            # principal_components[0],
+            # principal_components[1])
+        )
+        """
+        eigens = pca_object.eigenvectors(cls, components=components)
+        data.append(
+            (cls,
+             eigens[0],
+             eigens[1])
         )
     graph = chart.Chart(data)
     graph.graph()
 
-    # Test
-    data = []
-    for digit in digits:
-        for row in range(1, 6):
-            data.append(
-                (digit, (
-                    row,
-                    randint(0, 30),
-                    randint(0, 30),
-                    randint(0, 30),
-                    randint(0, 30)))
-            )
-    pprint(data)
+    #########################################################################
+    # Reconstruct first five images from principal components
+    #########################################################################
+    print('Recreating Images')
+    for cls in digits:
+        # Stage required variables
+        xvalues = pca_object.xvalues(cls)
 
-    # Initialize again
-    pca_object = pca.PCA(data)
+        # Create 2 x N eigen vector array
+        for count in range(0, maximages):
+            # Sleep so image files get a chance to be written to disk OK
+            time.sleep(1)
 
-    print('\nX Values')
-    pprint(pca_object.xvalues(test_key))
+            # Reconstruct image from principal component
+            imagery = pca.PCAx(xvalues[count], components, cls, pca_object)
+            image = imagery.reconstruct()
 
-    print('\nMean Vector')
-    pprint(pca_object.meanvector(test_key))
-
-    print('\nZ Values')
-    pprint(pca_object.zvalues(test_key))
-
-    print('\nCovariance Manual')
-    pprint(pca_object.covariance_manual(test_key))
-
-    print('\nCovariance Builtin')
-    covariance = pca_object.covariance(test_key)
-    pprint(covariance)
-
-    print('\nEigen Values & Vectors')
-    pprint(pca_object._eigen_values_vectors(test_key))
-
-    print('\nEigen Vectors')
-    eigen = pca_object.eigenvectors(test_key)
-    pprint(eigen)
-    total = 0
-    for column in range(0, len(eigen[0])):
-        total = eigen[0, column] * eigen[4, column]
-    print(total)
-
-    print('\nEigen Vector Check')
-    pprint(pca_object.eigen_vector_check(test_key))
+            # Create image from principal component
+            pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))
+            pca.image_by_list(image, ('%s-%s-reconstruct') % (cls, count))
 
 
 if __name__ == "__main__":

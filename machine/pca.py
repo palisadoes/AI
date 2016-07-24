@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Program creates histograms."""
+"""Class for principal component analysis."""
 
 # Standard python imports
 import sys
@@ -15,7 +14,7 @@ import numpy as np
 
 
 class PCA(object):
-    """Class for 2 dimensional histogram.
+    """Class for principal component analysis.
 
     Args:
         None
@@ -64,7 +63,10 @@ class PCA(object):
             self.pca['meanvector'][cls] = self._meanvector(cls)
             self.pca['zvalues'][cls] = self._zvalues(cls)
             self.pca['covariance'][cls] = self._covariance(cls)
-            self.pca['eigenvectors'][cls] = self._eigenvectors(cls)
+            self.pca['eigenvectors'][cls] = self._eigenvectors(
+                cls, sort=False)
+            self.pca['eigenvectors_sorted'][cls] = self._eigenvectors(
+                cls, sort=True)
             self.pca['principal_components'][
                 cls] = self._principal_components(cls)
 
@@ -139,31 +141,50 @@ class PCA(object):
         # Get covariance
         return self.pca['covariance'][cls]
 
-    def eigenvectors(self, cls):
+    def eigenvectors(self, cls, sort=False, components=None):
         """Get reverse sorted numpy array of eigenvectors for a given class.
 
         Args:
             cls: Class of data
+            components: Number of components to process
 
         Returns:
-            z_values: Normalized values
+            result: Result
 
         """
         # Get eigenvectors
-        return self.pca['eigenvectors'][cls]
+        if sort is False:
+            eigens = self.pca['eigenvectors'][cls]
+        else:
+            eigens = self.pca['eigenvectors_sorted'][cls]
 
-    def principal_components(self, cls):
+        # Return first 'components' number of rows
+        if components is not None:
+            result = eigens[: components:, ]
+        else:
+            result = eigens
+        return result
+
+    def principal_components(self, cls, components=None):
         """Get principal components of input data array for a given class.
 
         Args:
             cls: Class of data
+            components: Number of components to process
 
         Returns:
-            z_values: Normalized values
+            result: principal components
 
         """
         # Get principal_components
-        return self.pca['principal_components'][cls]
+        pcomps = self.pca['principal_components'][cls]
+
+        # Return first 'components' number of rows
+        if components is not None:
+            result = pcomps[:, :components]
+        else:
+            result = pcomps
+        return result
 
     def meanofz(self, cls):
         """Get mean vector of Z. This is a test, result must be all zeros.
@@ -273,11 +294,12 @@ class PCA(object):
         # Return
         return result
 
-    def _eigen_tuples(self, cls):
+    def _eigen_tuples(self, cls, sort=False):
         """Get eigens of input data array for a given class.
 
         Args:
             cls: Class of data
+            sort: Sort by eigenvalue if True
 
         Returns:
             eig_pairs: Tuples of lists of eigenvalues and eigenvectors.
@@ -294,18 +316,20 @@ class PCA(object):
             eigenvalues[i]), eigenvectors[:, i]) for i in range(
                 len(eigenvalues))]
 
-        # Sort the (eigenvalue, eigenvector) tuples from high to low
-        eig_pairs.sort(key=operator.itemgetter(0))
-        eig_pairs.reverse()
+        if sort is True:
+            # Sort the (eigenvalue, eigenvector) tuples from high to low
+            eig_pairs.sort(key=operator.itemgetter(0))
+            eig_pairs.reverse()
 
         # Return
         return eig_pairs
 
-    def _eigenvectors(self, cls):
+    def _eigenvectors(self, cls, sort=False):
         """Get reverse sorted numpy array of eigenvectors for a given class.
 
         Args:
             cls: Class of data
+            sort: Sort by eigenvalue if True
 
         Returns:
             values: nparray of real eigenvectors
@@ -315,7 +339,7 @@ class PCA(object):
         vector_list = []
 
         # Proecess data
-        eig_pairs = self._eigen_tuples(cls)
+        eig_pairs = self._eigen_tuples(cls, sort=sort)
         for (_, eigenvector) in eig_pairs:
             vector_list.append(eigenvector)
         values = np.asarray(vector_list)
@@ -335,7 +359,7 @@ class PCA(object):
         """
         # Initialize key variables
         z_values = self.zvalues(cls)
-        eigenvectors = self.eigenvectors(cls)
+        eigenvectors = self.eigenvectors(cls, sort=True)
         result = np.dot(z_values, eigenvectors.T)
         return result
 
@@ -369,7 +393,79 @@ class PCA(object):
         return matrix
 
 
-def image_by_list(body):
+class PCAx(object):
+    """Class for principal component analysis.
+
+    Args:
+        None
+
+    Returns:
+        None
+
+    Functions:
+        __init__:
+        get_cli:
+    """
+
+    def __init__(self, xvalue, components, cls, pca_object):
+        """Function for intializing the class.
+
+        Args:
+            xvalue: Value of X to reconstruct
+            components: Number of principal components to process
+            cls: Class to which X belongs in the data
+            pca_object: Object of the PCA class
+
+        """
+        # Initialize key variables
+        self.xvalue = xvalue
+        self.cls = cls
+        self.components = components
+        self.pca_object = pca_object
+
+    def pc_of_x(self):
+        """Create a principal component from a single x value.
+
+        Args:
+            None
+
+        Returns:
+            p1p2: Principal component of a single value of X
+
+        """
+        # Initialize key variables
+        meanvector = self.pca_object.meanvector(self.cls)
+        eigenvectors = self.pca_object.eigenvectors(
+            self.cls, sort=True, components=self.components)
+
+        # Create principal component from next X value
+        zvalue = np.subtract(self.xvalue, meanvector)
+        p1p2 = np.dot(zvalue, eigenvectors.T)
+
+        # Return principal components
+        return p1p2
+
+    def reconstruct(self):
+        """Reconstruct X based on the principal components generated for it.
+
+        Args:
+            None
+
+        Returns:
+            result: Reconstructed principal components
+
+        """
+        # Initialize key variables
+        meanvector = self.pca_object.meanvector(self.cls)
+        eigenvectors = self.pca_object.eigenvectors(
+            self.cls, sort=True, components=self.components)
+
+        # Return
+        result = np.dot(self.pc_of_x(), eigenvectors) + meanvector
+        return result
+
+
+def image_by_list(body, prefix=''):
     """Create a representative image from ingested data arrays.
 
     Args:
@@ -380,7 +476,8 @@ def image_by_list(body):
 
     """
     # Initialize key variables
-    filename = ('/home/peter/Downloads/UCSC/test-%s.pgm') % (time.time())
+    filename = (
+        '/home/peter/Downloads/UCSC/%s-test-%s.pgm') % (prefix, time.time())
     final_image = []
     maxshade = int(255)
     body_as_list = body.astype(float).flatten().tolist()
@@ -409,17 +506,18 @@ def image_by_list(body):
 
 
 def _shade(value, minimum, maximum):
-    """Get the row or column for 2D histogram.
+    """Return the color for value.
 
     Args:
         value: Value to classify
         minmax: Dict of minimum / maximum to use
 
     Returns:
-        hbin: Row / Column for histogram
+        shade: Row / Column for histogram
 
     """
     # Return
-    multiplier = 254
-    hbin = int(multiplier * (value - minimum) / (maximum - minimum))
-    return hbin
+    multiplier = 255
+    reverse = int(multiplier * (value - minimum) / (maximum - minimum))
+    shade = abs(reverse - multiplier)
+    return shade
