@@ -6,7 +6,6 @@ import argparse
 from pprint import pprint
 import time
 
-# Non standard python imports
 import numpy as np
 
 # Import AI library
@@ -55,7 +54,7 @@ def main():
 
     """
     # Initialize key variables
-    digits = [5, 6]
+    digits = [1, 2]
     maximages = 5
     components = 2
     data = []
@@ -112,7 +111,6 @@ def main():
     print('Creating Scatter Plot')
     data = []
     for cls in digits:
-        """
         principal_components = pca_object.principal_components(
             cls, components=components)
         data.append(
@@ -121,13 +119,6 @@ def main():
              principal_components[:, 1])
             # principal_components[0],
             # principal_components[1])
-        )
-        """
-        eigens = pca_object.eigenvectors(cls, components=components)
-        data.append(
-            (cls,
-             eigens[0],
-             eigens[1])
         )
     graph = chart.Chart(data)
     graph.graph()
@@ -146,8 +137,7 @@ def main():
             time.sleep(1)
 
             # Reconstruct image from principal component
-            imagery = pca.PCAx(xvalues[count], components, cls, pca_object)
-            image = imagery.reconstruct()
+            image = pca_object.reconstruct(xvalues[count], cls, components)
 
             # Create image from principal component
             pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))

@@ -2,7 +2,6 @@
 """Program creates histograms."""
 
 # Standard python imports
-import sys
 import math
 from collections import defaultdict
 from pprint import pprint
@@ -35,16 +34,15 @@ class Histogram2D(object):
 
         Args:
             data: List of tuples of format
-                (class, dimension1, dimension2 ...)
+                (class, feature_01, feature_02)
             labels: Labels for data columns
 
         """
         # Initialize key variables
-        self.data = data
         self.labels = labels
 
         self.hgram = {}
-        minmax = defaultdict(lambda: defaultdict(dict))
+        self.minmax = defaultdict(lambda: defaultdict(dict))
         values_by_class = defaultdict(lambda: defaultdict(dict))
         self.x_y = defaultdict(lambda: defaultdict(dict))
 
@@ -66,12 +64,14 @@ class Histogram2D(object):
             # Get min / max values
             for column in range(0, len(values)):
                 value = values[column]
-                if bool(minmax[column]) is False:
-                    minmax[column]['min'] = value
-                    minmax[column]['max'] = value
+                if bool(self.minmax[column]) is False:
+                    self.minmax[column]['min'] = value
+                    self.minmax[column]['max'] = value
                 else:
-                    minmax[column]['min'] = min(value, minmax[column]['min'])
-                    minmax[column]['max'] = max(value, minmax[column]['max'])
+                    self.minmax[column]['min'] = min(
+                        value, self.minmax[column]['min'])
+                    self.minmax[column]['max'] = max(
+                        value, self.minmax[column]['max'])
 
                 if bool(self.x_y[cls][column]) is False:
                     self.x_y[cls][column] = [value]
@@ -86,37 +86,73 @@ class Histogram2D(object):
         # Get bins data should be placed in
         for cls, tuple_list in values_by_class.items():
             for values in tuple_list:
-                row = self._placement(values[0], minmax[0])
-                col = self._placement(values[1], minmax[1])
+                (row, col) = self.row_col(values)
 
                 # Update histogram
                 self.hgram[cls][row][col] += 1
 
-        # Assign global variables
-        self.minmax = minmax
+        # Create a list of classes found
+        self.classes = sorted(values_by_class.keys())
 
-    def _placement(self, value, minmax):
-        """Get the row or column for 2D histogram.
+    def row_col(self, dimensions):
+        """Get the row and column for 2D histogram.
 
         Args:
-            value: Value to classify
-            minmax: Dict of minimum / maximum to use
+            dimensions: Dimensions for histogram row / column allocation
 
         Returns:
-            hbin: Row / Column for histogram
+            (row, col): Tuple of Row / Column for histogram
 
         """
         # Initialize key variables
         multiplier = self.bin_count - 1
+        row_col = []
 
-        # Calculate
-        maximum = minmax['max']
-        minimum = minmax['min']
-        ratio = (value - minimum) / (maximum - minimum)
-        hbin = int(round(multiplier * ratio))
+        # Calculate the row and column
+        for idx, value in enumerate(dimensions):
+            numerator = value - self.minmax[idx]['min']
+            delta = self.minmax[idx]['max'] - self.minmax[idx]['min']
+            ratio = numerator / delta
+            row_col.append(
+                int(round(multiplier * ratio))
+            )
 
         # Return
-        return hbin
+        (row, col) = tuple(row_col)
+        return (row, col)
+
+    def classifier(self, dimensions):
+        """Get the number of bins to use.
+
+        Args:
+            dimensions: Tuple of dimensions
+
+        Returns:
+            selection: Class classifier chooses
+
+        """
+        # Initialize key variables
+        probability = {}
+
+        # Get row / column for histogram for dimensions
+        row, col = self.row_col(dimensions)
+        denominator = self.hgram[self.classes[0]][row][col] + self.hgram[
+            self.classes[1]][row][col]
+
+        # Get probability of each class
+        for cls in self.classes:
+            probability[cls] = self.hgram[cls][row][col] / denominator
+
+        # Get selection
+        if probability[self.classes[0]] > probability[self.classes[1]]:
+            selection = self.classes[0]
+        elif probability[self.classes[0]] < probability[self.classes[1]]:
+            selection = self.classes[1]
+        else:
+            selection = None
+
+        # Return
+        return selection
 
     def bins(self):
         """Get the number of bins to use.
@@ -216,7 +252,6 @@ class Histogram2D(object):
         """
         # Initialize key variables
         directory = '/home/peter/Downloads'
-        bins = self.bins()
         handles = []
         labels = []
 

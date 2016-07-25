@@ -12,6 +12,8 @@ from pprint import pprint
 # Non-standard python imports
 import numpy as np
 
+from machine import histogram2d
+
 
 class PCA(object):
     """Class for principal component analysis.
@@ -32,7 +34,7 @@ class PCA(object):
 
         Args:
             data: List of tuples of format
-                (class, dimension1, dimension2 ...)
+                (class, feature_vector)
 
         """
         # Initialize key variables
@@ -70,6 +72,9 @@ class PCA(object):
             self.pca['principal_components'][
                 cls] = self._principal_components(cls)
 
+        # Note the available classes
+        self.available_classes = sorted(class_rows.keys())
+
     def image(self, cls, pointer):
         """Create a representative image from ingested data arrays.
 
@@ -86,6 +91,20 @@ class PCA(object):
 
         # Create final image
         image_by_list(body)
+
+    def classes(self):
+        """Return a list of classes in the PCA.
+
+        Args:
+            None
+
+        Returns:
+            data: List of classes
+
+        """
+        # Get xvalues
+        data = self.available_classes
+        return data
 
     def xvalues(self, cls):
         """Return the input vector array for the input class.
@@ -179,7 +198,7 @@ class PCA(object):
         # Get principal_components
         pcomps = self.pca['principal_components'][cls]
 
-        # Return first 'components' number of rows
+        # Return first 'components' number of columns
         if components is not None:
             result = pcomps[:, :components]
         else:
@@ -200,6 +219,104 @@ class PCA(object):
         data = self.zvalues(cls)
         mean_v = data.mean(axis=0)
         return mean_v
+
+    def pc_of_x(self, xvalue, cls, components):
+        """Create a principal component from a single x value.
+
+        Args:
+            xvalue: Specific feature vector of X
+            cls: Class to which xvalue belongs
+            components: Number of components to process
+
+        Returns:
+            p1p2: Principal component of a single value of X
+
+        """
+        # Initialize key variables
+        meanvector = self.meanvector(cls)
+        eigenvectors = self.eigenvectors(
+            cls, sort=True, components=components)
+
+        # Create principal component from next X value
+        zvalue = np.subtract(xvalue, meanvector)
+        p1p2 = np.dot(zvalue, eigenvectors.T)
+
+        # Return principal components
+        return p1p2
+
+    def reconstruct(self, xvalue, cls, components):
+        """Reconstruct X based on the principal components generated for it.
+
+        Args:
+            xvalue: Specific feature vector of X
+            cls: Class to which xvalue belongs
+            components: Number of components to process
+
+        Returns:
+            result: Reconstructed principal components
+
+        """
+        # Initialize key variables
+        meanvector = self.meanvector(cls)
+        eigenvectors = self.eigenvectors(
+            cls, sort=True, components=components)
+
+        # Return
+        result = np.dot(self.pc_of_x(
+            xvalue, cls, components), eigenvectors) + meanvector
+        return result
+
+    def classifier2d(self, xvalue):
+        """Bayesian classifer for any value of X.
+
+        Args:
+            xvalue: Specific feature vector of X
+
+        Returns:
+            selection: Class classifier chooses
+
+        """
+        # Initialize key variables
+        probability = {}
+        bayesian = {}
+        classes = self.classes()
+
+        # Get probability of each class
+        for cls in classes:
+            # Initialize values for the loop
+            sample_count = len(self.xvalues(cls))
+            x_mu = xvalue - self.meanvector(cls)
+            covariance = self.covariance(cls)
+            inverse_cov = np.linalg.inv(covariance)
+            determinant_cov = np.linalg.det(covariance)
+            dimensions = len(xvalue)
+
+            # Work on the exponent part of the bayesian classifer
+            power = -0.5 * np.dot(np.dot(x_mu, inverse_cov), x_mu.T)
+            exponent = math.pow(math.e, power)
+
+            # Determine the constant value
+            pipart = math.pow(2 * math.pi, dimensions / 2)
+            constant = pipart * determinant_cov
+
+            # Determine final bayesian
+            bayesian[cls] = (sample_count * exponent) / constant
+
+        # Calculate bayesian probability
+        denominator = bayesian[classes[0]] + bayesian[classes[1]]
+        for cls in classes:
+            probability[cls] = bayesian[cls] / denominator
+
+        # Get selection
+        if probability[classes[0]] > probability[classes[1]]:
+            selection = classes[0]
+        elif probability[classes[0]] < probability[classes[1]]:
+            selection = classes[1]
+        else:
+            selection = None
+
+        # Return
+        return selection
 
     def _zvalues(self, cls):
         """Get the normalized values of ingested data arrays.
@@ -393,8 +510,8 @@ class PCA(object):
         return matrix
 
 
-class PCAx(object):
-    """Class for principal component analysis.
+class Probability2D(object):
+    """Class for principal component analysis probabilities.
 
     Args:
         None
@@ -407,62 +524,150 @@ class PCAx(object):
         get_cli:
     """
 
-    def __init__(self, xvalue, components, cls, pca_object):
-        """Function for intializing the class.
+    def __init__(self, pca_object):
+        """Method for intializing the class.
 
         Args:
-            xvalue: Value of X to reconstruct
-            components: Number of principal components to process
-            cls: Class to which X belongs in the data
-            pca_object: Object of the PCA class
+            classes: List of classes to process
+            pca_object: PCA class object
+
+        Returns:
+            None
 
         """
         # Initialize key variables
-        self.xvalue = xvalue
-        self.cls = cls
-        self.components = components
+        self.components = 2
         self.pca_object = pca_object
+        self.data = []
 
-    def pc_of_x(self):
-        """Create a principal component from a single x value.
+        # Get classes
+        self.classes = self.pca_object.classes()
 
-        Args:
-            None
+        # Convert pca_object data to data acceptable by the Histogram2D class
+        for cls in self.classes:
+            principal_components = self.pca_object.principal_components(
+                cls, components=self.components)
+            for dimension in principal_components:
+                self.data.append(
+                    (cls, dimension[0], dimension[1])
+                )
 
-        Returns:
-            p1p2: Principal component of a single value of X
+        # Get histogram
+        self.hist_object = histogram2d.Histogram2D(self.data, self.classes)
 
-        """
-        # Initialize key variables
-        meanvector = self.pca_object.meanvector(self.cls)
-        eigenvectors = self.pca_object.eigenvectors(
-            self.cls, sort=True, components=self.components)
-
-        # Create principal component from next X value
-        zvalue = np.subtract(self.xvalue, meanvector)
-        p1p2 = np.dot(zvalue, eigenvectors.T)
-
-        # Return principal components
-        return p1p2
-
-    def reconstruct(self):
-        """Reconstruct X based on the principal components generated for it.
+    def histogram_accuracy(self):
+        """Calulate the accuracy of the training data using histograms.
 
         Args:
             None
 
         Returns:
-            result: Reconstructed principal components
+            accuracy: Prediction accuracy
 
         """
         # Initialize key variables
-        meanvector = self.pca_object.meanvector(self.cls)
-        eigenvectors = self.pca_object.eigenvectors(
-            self.cls, sort=True, components=self.components)
+        correct = 0
+
+        # Analyze all the data
+        for item in self.data:
+            item_class = item[0]
+            dim0 = item[1]
+            dim1 = item[2]
+
+            # Get the prediction
+            values = (dim0, dim1)
+            prediction = self.histogram_prediction(values, item_class)
+
+            # Count the number of correct predictions
+            if prediction == item_class:
+                correct += 1
 
         # Return
-        result = np.dot(self.pc_of_x(), eigenvectors) + meanvector
-        return result
+        accuracy = correct / len(self.data)
+        return accuracy
+
+    def histogram_prediction(self, values, cls):
+        """Calulate the accuracy of the training data using histograms.
+
+        Args:
+            values: Tuple from which to create the principal components
+            cls: Class of data to which data belongs
+
+        Returns:
+            prediction: Class of prediction
+
+        """
+        # Initialize key variables
+        pc_values = []
+
+        # Calculate each principal component
+        for value in values:
+            # Get the principal components for data
+            pc_values.append(
+                self.pca_object.pc_of_x(value, cls, self.components))
+
+        # Get row / column for histogram for principal component
+        prediction = self.hist_object.classifier(pc_values)
+
+        # Return
+        return prediction
+
+    def gaussian_accuracy(self):
+        """Calulate the accuracy of the training data using gaussian models.
+
+        Args:
+            None
+
+        Returns:
+            accuracy: Prediction accuracy
+
+        """
+        # Initialize key variables
+        correct = 0
+
+        # Analyze all the data
+        for item in self.data:
+            item_class = item[0]
+            dim0 = item[1]
+            dim1 = item[2]
+
+            # Get the prediction
+            values = (dim0, dim1)
+            prediction = self.gaussian_prediction(values, item_class)
+
+            # Count the number of correct predictions
+            if prediction == item_class:
+                correct += 1
+
+        # Return
+        accuracy = correct / len(self.data)
+        return accuracy
+
+    def gaussian_prediction(self, values, cls):
+        """Predict class using gaussians models.
+
+        Args:
+            values: Tuple from which to create the principal components
+            cls: Class of data to which data belongs
+
+        Returns:
+            prediction: Class of prediction
+
+        """
+        # Initialize key variables
+        pc_values = []
+
+        # Calculate each principal component
+        for value in values:
+            # Get the principal components for data
+            pc_values.append(
+                self.pca_object.pc_of_x(value, cls, self.components))
+
+        # Get row / column for histogram for principal component
+        prediction = self.pca_object.classifier(pc_values)
+
+        # Return
+        return prediction
 
 
 def image_by_list(body, prefix=''):
