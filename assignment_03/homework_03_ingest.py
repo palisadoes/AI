@@ -5,6 +5,9 @@
 import argparse
 from pprint import pprint
 import time
+import sys
+
+from sklearn.decomposition import PCA as PCX
 
 import numpy as np
 
@@ -54,15 +57,53 @@ def main():
 
     """
     # Initialize key variables
-    digits = [7, 8]
+    digits = [6, 1]
     maximages = 5
     components = 2
     data = []
+
+    """
+    #########################################################################
+    # Test
+    #########################################################################
+
+    data = []
+    testclasses = ['1_class', '2_class']
+    tcls = testclasses[0]
+    xarray = np.array(
+        [[-3, 5, 0],
+         [-3, 4, -1],
+         [-4, 0, -1],
+         [-1, -3, -3]])
+    xarray_list = np.ndarray.tolist(xarray)
+    for cls in sorted(testclasses):
+        for row in xarray_list:
+            data.append(
+                (cls, row)
+            )
+
+    # Instantiate PCA
+    pct = pca.PCA(data)
+
+    print('X')
+    pprint(pct.xvalues(tcls))
+    print('Z')
+    pprint(pct.zvalues(tcls))
+    print('C')
+    pprint(pct.covariance(tcls))
+    print('V')
+    pprint(pct.eigenvectors(tcls))
+    print('P')
+    pprint(pct.principal_components(tcls))
+    print('R')
+    pprint(pct.reconstruct(xarray_list, tcls, 3))
+    """
 
     #########################################################################
     # Ingest data
     #########################################################################
     print('Ingesting Data')
+    data = []
     args = cli()
     mnist_data_directory = args.mnist_data_directory
     minst_data = mnist.MNIST(mnist_data_directory)
@@ -75,8 +116,49 @@ def main():
                 (cls, minst_images[pointer])
             )
 
+    #########################################################################
     # Instantiate PCA
+    #########################################################################
+    print('Analyzing Data')
     pca_object = pca.PCA(data)
+
+    """
+    values = {}
+    testdata = []
+    pcx_r = {}
+    pcx = PCX(n_components=2)
+    for cls in digits:
+        values[cls] = pca_object.xvalues(cls)
+        pcx_r[cls] = pcx.fit_transform(values[cls])
+        print(type(pcx_r[cls]))
+        print(pcx_r[cls].shape)
+        testdata.append(
+            (cls,
+             pcx_r[cls][:, 0],
+             pcx_r[cls][:, 1])
+        )
+    graph = chart.Chart(testdata)
+    graph.graph()
+    sys.exit()
+    """
+
+    #########################################################################
+    # Do scatter plot
+    #########################################################################
+    print('Creating Scatter Plot')
+    data = []
+    for cls in digits:
+        principal_components = pca_object.principal_components(
+            cls, components=components)
+        data.append(
+            (cls,
+             principal_components[:, 0],
+             principal_components[:, 1])
+            # principal_components[:, 0],
+            # principal_components[:, 1])
+        )
+    graph = chart.Chart(data)
+    graph.graph()
 
     #########################################################################
     # View eigenvectors as images
@@ -106,24 +188,6 @@ def main():
                 break
 
     #########################################################################
-    # Do scatter plot
-    #########################################################################
-    print('Creating Scatter Plot')
-    data = []
-    for cls in digits:
-        principal_components = pca_object.principal_components(
-            cls, components=components)
-        data.append(
-            (cls,
-             principal_components[:, 0],
-             principal_components[:, 1])
-            # principal_components[0],
-            # principal_components[1])
-        )
-    graph = chart.Chart(data)
-    graph.graph()
-
-    #########################################################################
     # Reconstruct first five images from principal components
     #########################################################################
     print('Recreating Images')
@@ -142,6 +206,11 @@ def main():
             # Create image from principal component
             pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))
             pca.image_by_list(image, ('%s-%s-reconstruct') % (cls, count))
+
+    #########################################################################
+    # Calculate training accuracy
+    #########################################################################
+    probability = pca.Probability2D(pca_object)
 
 
 if __name__ == "__main__":

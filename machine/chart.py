@@ -29,7 +29,7 @@ class Chart(object):
         """Function for intializing the class.
 
         Args:
-            data: List tuples [(class, value)]
+            data: List tuples [(class, dimension, dimension)]
 
         """
         # Initialize key variables

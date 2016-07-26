@@ -297,7 +297,7 @@ class PCA(object):
 
             # Determine the constant value
             pipart = math.pow(2 * math.pi, dimensions / 2)
-            constant = pipart * determinant_cov
+            constant = pipart * math.sqrt(determinant_cov)
 
             # Determine final bayesian
             bayesian[cls] = (sample_count * exponent) / constant
@@ -411,7 +411,7 @@ class PCA(object):
         # Return
         return result
 
-    def _eigen_tuples(self, cls, sort=False):
+    def _eigen_tuples(self, cls, sort=True):
         """Get eigens of input data array for a given class.
 
         Args:
@@ -441,7 +441,7 @@ class PCA(object):
         # Return
         return eig_pairs
 
-    def _eigenvectors(self, cls, sort=False):
+    def _eigenvectors(self, cls, sort=True):
         """Get reverse sorted numpy array of eigenvectors for a given class.
 
         Args:
