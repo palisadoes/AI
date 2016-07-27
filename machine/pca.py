@@ -566,24 +566,37 @@ class Probability2D(object):
 
         """
         # Initialize key variables
-        correct = 0
+        correct = {}
+        prediction = 0
+        cls_count = {}
+        accuracy = {}
 
         # Analyze all the data
         for item in self.data:
-            item_class = item[0]
+            cls = item[0]
             dim0 = item[1]
             dim1 = item[2]
 
             # Get the prediction
             values = (dim0, dim1)
-            prediction = self.histogram_prediction(values, item_class)
+            prediction = self.histogram_prediction(values, cls)
 
             # Count the number of correct predictions
-            if prediction == item_class:
-                correct += 1
+            if prediction == cls:
+                if cls in correct:
+                    correct[cls] += 1
+                else:
+                    correct[cls] = 1
+
+            # Increment the count
+            if cls in cls_count:
+                cls_count[cls] += 1
+            else:
+                cls_count[cls] = 1
 
         # Return
-        accuracy = correct / len(self.data)
+        for cls in sorted(cls_count.keys()):
+            accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
         return accuracy
 
     def histogram_prediction(self, values, cls):
@@ -623,24 +636,37 @@ class Probability2D(object):
 
         """
         # Initialize key variables
-        correct = 0
+        correct = {}
+        prediction = 0
+        cls_count = {}
+        accuracy = {}
 
         # Analyze all the data
         for item in self.data:
-            item_class = item[0]
+            cls = item[0]
             dim0 = item[1]
             dim1 = item[2]
 
             # Get the prediction
             values = (dim0, dim1)
-            prediction = self.gaussian_prediction(values, item_class)
+            prediction = self.gaussian_prediction(values, cls)
 
             # Count the number of correct predictions
-            if prediction == item_class:
-                correct += 1
+            if prediction == cls:
+                if cls in correct:
+                    correct[cls] += 1
+                else:
+                    correct[cls] = 1
+
+            # Increment the count
+            if cls in cls_count:
+                cls_count[cls] += 1
+            else:
+                cls_count[cls] = 1
 
         # Return
-        accuracy = correct / len(self.data)
+        for cls in sorted(cls_count.keys()):
+            accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
         return accuracy
 
     def gaussian_prediction(self, values, cls):
@@ -664,7 +690,7 @@ class Probability2D(object):
                 self.pca_object.pc_of_x(value, cls, self.components))
 
         # Get row / column for histogram for principal component
-        prediction = self.pca_object.classifier(pc_values)
+        prediction = self.pca_object.classifier2d(pc_values)
 
         # Return
         return prediction

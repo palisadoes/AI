@@ -211,6 +211,21 @@ def main():
     # Calculate training accuracy
     #########################################################################
     probability = pca.Probability2D(pca_object)
+    g_accuracy = probability.gaussian_accuracy()
+    h_accuracy = probability.histogram_accuracy()
+
+    # Print accuracy
+    for cls in digits:
+        print('Histogram Accuracy')
+        print(
+            ('Class %s: %s%%') % (cls, h_accuracy[cls])
+        )
+
+    for cls in digits:
+        print('Gaussian Accuracy')
+        print(
+            ('Class %s: %s%%') % (cls, g_accuracy[cls])
+        )
 
 
 if __name__ == "__main__":
