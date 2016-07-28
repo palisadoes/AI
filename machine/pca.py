@@ -8,6 +8,7 @@ from collections import defaultdict
 import math
 import operator
 from pprint import pprint
+import time
 
 # Non-standard python imports
 import numpy as np
@@ -293,6 +294,13 @@ class PCA(object):
 
             # Work on the exponent part of the bayesian classifer
             power = -0.5 * np.dot(np.dot(x_mu, inverse_cov), x_mu.T)
+            """
+            print('x', xvalue, type(xvalue), xvalue.shape)
+            print('x_mu', x_mu, type(x_mu), x_mu.shape)
+            print('inverse_cov', inverse_cov, type(inverse_cov), inverse_cov.shape)
+            print('x_mu.T', x_mu.T, type(x_mu.T), x_mu.T.shape)
+            print(power, type(power))
+            """
             exponent = math.pow(math.e, power)
 
             # Determine the constant value
@@ -610,14 +618,9 @@ class Probability2D(object):
             prediction: Class of prediction
 
         """
-        # Initialize key variables
-        pc_values = []
-
-        # Calculate each principal component
-        for value in values:
-            # Get the principal components for data
-            pc_values.append(
-                self.pca_object.pc_of_x(value, cls, self.components))
+        # Get the principal components for data
+        pc_values = self.pca_object.pc_of_x(values, cls, self.components)
+        # print('ppppp', values, pc_values, type(pc_values))
 
         # Get row / column for histogram for principal component
         prediction = self.hist_object.classifier(pc_values)
@@ -683,14 +686,12 @@ class Probability2D(object):
         # Initialize key variables
         pc_values = []
 
-        # Calculate each principal component
-        for value in values:
-            # Get the principal components for data
-            pc_values.append(
-                self.pca_object.pc_of_x(value, cls, self.components))
+        # Get the principal components for data
+        pc_values.append(
+            self.pca_object.pc_of_x(values, cls, self.components))
 
         # Get row / column for histogram for principal component
-        prediction = self.pca_object.classifier2d(pc_values)
+        prediction = self.pca_object.classifier2d(np.asarray(pc_values))
 
         # Return
         return prediction

@@ -142,6 +142,7 @@ def main():
     sys.exit()
     """
 
+    """
     #########################################################################
     # Do scatter plot
     #########################################################################
@@ -206,11 +207,27 @@ def main():
             # Create image from principal component
             pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))
             pca.image_by_list(image, ('%s-%s-reconstruct') % (cls, count))
+    """
 
     #########################################################################
     # Calculate training accuracy
     #########################################################################
-    probability = pca.Probability2D(pca_object)
+    print('Training Accuracy')
+    newdata = []
+    for cls in digits:
+        p_comp = pca_object.principal_components(
+            cls, components=components)
+        for item in p_comp:
+            newdata.append(
+                (cls, item)
+            )
+
+    # Instantiate the object
+    for cls in digits:
+        pca_new = pca.PCA(newdata)
+
+    # Calculate probabilities
+    probability = pca.Probability2D(pca_new)
     g_accuracy = probability.gaussian_accuracy()
     h_accuracy = probability.histogram_accuracy()
 
