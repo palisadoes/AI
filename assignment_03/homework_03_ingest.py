@@ -6,6 +6,7 @@ import argparse
 from pprint import pprint
 import time
 import sys
+import csv
 
 from sklearn.decomposition import PCA as PCX
 
@@ -57,7 +58,7 @@ def main():
 
     """
     # Initialize key variables
-    digits = [5, 7]
+    digits = [1, 9]
     maximages = 5
     components = 2
     data = []
@@ -142,9 +143,9 @@ def main():
     sys.exit()
     """
 
-    """
     #########################################################################
     # Do scatter plot
+    # http://peekaboo-vision.blogspot.com/2012/12/another-look-at-mnist.html
     #########################################################################
     print('Creating Scatter Plot')
     data = []
@@ -207,7 +208,21 @@ def main():
             # Create image from principal component
             pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))
             pca.image_by_list(image, ('%s-%s-reconstruct') % (cls, count))
-    """
+
+    #########################################################################
+    # Output metadata for whole dataset
+    #########################################################################
+    tcls = digits[0]
+    xvalue = pca_object.xvalues(tcls)[0]
+    output('featurevector', xvalue)
+    output('zvalue', pca_object.zvalues(tcls))
+    output('meanvector', pca_object.meanvector(tcls))
+    output('eigenvector_1', pca_object.eigenvectors(tcls)[0])
+    output('eigenvector_2', pca_object.eigenvectors(tcls)[1])
+    output('principal_components', pca_object.principal_components(tcls))
+    output('reconstructed', pca_object.reconstruct(xvalue, tcls, components))
+    output(('covariance_%s') % (digits[0]), pca_object.covariance(digits[0]))
+    output(('covariance_%s') % (digits[1]), pca_object.covariance(digits[1]))
 
     #########################################################################
     # Calculate training accuracy
@@ -232,17 +247,40 @@ def main():
     h_accuracy = probability.histogram_accuracy()
 
     # Print accuracy
+    print('\nHistogram Accuracy')
     for cls in digits:
-        print('Histogram Accuracy')
         print(
             ('Class %s: %s%%') % (cls, h_accuracy[cls])
         )
 
+    print('\nGaussian Accuracy')
     for cls in digits:
-        print('Gaussian Accuracy')
         print(
             ('Class %s: %s%%') % (cls, g_accuracy[cls])
         )
+
+
+def output(label, value):
+    """Output values to files.
+
+    Args:
+        None:
+
+    Returns:
+        None:
+
+    """
+    # Initialize key variables
+    output_directory = '/home/peter/Downloads/UCSC/csv'
+    row = [label].extend(value)
+
+    # Write file
+    filename = ('%s/%s.csv') % (output_directory, label)
+    with open(filename, 'w', newline='') as csvfile:
+        spamwriter = csv.writer(
+            csvfile, delimiter='\t',
+            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        spamwriter.writerow(row)
 
 
 if __name__ == "__main__":

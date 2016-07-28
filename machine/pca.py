@@ -8,7 +8,6 @@ from collections import defaultdict
 import math
 import operator
 from pprint import pprint
-import time
 
 # Non-standard python imports
 import numpy as np
@@ -294,13 +293,6 @@ class PCA(object):
 
             # Work on the exponent part of the bayesian classifer
             power = -0.5 * np.dot(np.dot(x_mu, inverse_cov), x_mu.T)
-            """
-            print('x', xvalue, type(xvalue), xvalue.shape)
-            print('x_mu', x_mu, type(x_mu), x_mu.shape)
-            print('inverse_cov', inverse_cov, type(inverse_cov), inverse_cov.shape)
-            print('x_mu.T', x_mu.T, type(x_mu.T), x_mu.T.shape)
-            print(power, type(power))
-            """
             exponent = math.pow(math.e, power)
 
             # Determine the constant value
