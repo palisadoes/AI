@@ -54,13 +54,18 @@ class PCA(object):
         for cls in class_rows.keys():
             self.x_values[cls] = np.asarray(class_rows[cls])
 
+        # Note the available classes
+        self.available_classes = sorted(class_rows.keys())
+
         # Create a numpy array for the class
         if len(self.x_values.keys()) != 2:
             print('PCA2d class works best with two keys')
             sys.exit(0)
 
         # Precalculate values
-        for cls in class_rows.keys():
+        tmp_classes = sorted(self.available_classes)
+        tmp_classes.append(None)
+        for cls in tmp_classes:
             self.pca['xvalues'][cls] = self.xvalues(cls)
             self.pca['meanvector'][cls] = self._meanvector(cls)
             self.pca['zvalues'][cls] = self._zvalues(cls)
@@ -71,9 +76,6 @@ class PCA(object):
                 cls, sort=True)
             self.pca['principal_components'][
                 cls] = self._principal_components(cls)
-
-        # Note the available classes
-        self.available_classes = sorted(class_rows.keys())
 
     def image(self, cls, pointer):
         """Create a representative image from ingested data arrays.
@@ -106,7 +108,7 @@ class PCA(object):
         data = self.available_classes
         return data
 
-    def xvalues(self, cls):
+    def xvalues(self, cls=None):
         """Return the input vector array for the input class.
 
         Args:
@@ -117,10 +119,33 @@ class PCA(object):
 
         """
         # Get xvalues
-        data = self.x_values[cls]
+        if cls is None:
+            data = np.hstack(
+                (self.x_values[self.classes()[0]],
+                 self.x_values[self.classes()[1]])
+                )
+        else:
+            data = self.x_values[cls]
         return data
 
-    def zvalues(self, cls):
+    def principal_classes(self):
+        """Return the input vector array for the input class.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            data: X values for the class
+
+        """
+        rows = []
+        for cls in self.classes():
+            nextx = self.xvalues(cls)
+            rows.extend([cls] * nextx.shaper[0])
+
+        return rows
+
+    def zvalues(self, cls=None):
         """Get the normalized values of ingested data arrays.
 
         Args:
@@ -134,7 +159,7 @@ class PCA(object):
         # Get zvalues
         return self.pca['zvalues'][cls]
 
-    def meanvector(self, cls):
+    def meanvector(self, cls=None):
         """Calculate the mean vector of the X array.
 
         Args:
@@ -147,7 +172,7 @@ class PCA(object):
         # Get meanvector
         return self.pca['meanvector'][cls]
 
-    def covariance(self, cls):
+    def covariance(self, cls=None):
         """Get covariance of input data array for a given class.
 
         Args:
@@ -160,7 +185,7 @@ class PCA(object):
         # Get covariance
         return self.pca['covariance'][cls]
 
-    def eigenvectors(self, cls, sort=False, components=None):
+    def eigenvectors(self, cls=None, sort=False, components=None):
         """Get reverse sorted numpy array of eigenvectors for a given class.
 
         Args:
@@ -184,7 +209,7 @@ class PCA(object):
             result = eigens
         return result
 
-    def principal_components(self, cls, components=None):
+    def principal_components(self, cls=None, components=None):
         """Get principal components of input data array for a given class.
 
         Args:
@@ -205,7 +230,7 @@ class PCA(object):
             result = pcomps
         return result
 
-    def meanofz(self, cls):
+    def meanofz(self, cls=None):
         """Get mean vector of Z. This is a test, result must be all zeros.
 
         Args:

@@ -148,17 +148,16 @@ def main():
     # http://peekaboo-vision.blogspot.com/2012/12/another-look-at-mnist.html
     #########################################################################
     print('Creating Scatter Plot')
-    data = []
-    for cls in digits:
-        principal_components = pca_object.principal_components(
-            cls, components=components)
-        data.append(
-            (cls,
-             principal_components[:, 0],
-             principal_components[:, 1])
-            # principal_components[:, 0],
-            # principal_components[:, 1])
-        )
+    principal_components = pca_object.principal_components(
+        cls, components=components)
+    principal_classes = pca_object.principal_classes()
+    data.append(
+        (digits,
+         principal_components[:, 0],
+         principal_components[:, 1])
+        # principal_components[:, 0],
+        # principal_components[:, 1])
+    )
     graph = chart.Chart(data)
     graph.graph()
 
