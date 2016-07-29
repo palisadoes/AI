@@ -151,6 +151,9 @@ def main():
     principal_components = pca_object.principal_components(
         cls, components=components)
     principal_classes = pca_object.principal_classes()
+    for cls in digits:
+        pc_values[cls] = []
+    (_, cols) = principal_classes.shape
     data.append(
         (digits,
          principal_components[:, 0],
@@ -160,6 +163,7 @@ def main():
     )
     graph = chart.Chart(data)
     graph.graph()
+    sys.exit(0)
 
     #########################################################################
     # View eigenvectors as images
