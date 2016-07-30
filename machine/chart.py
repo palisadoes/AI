@@ -25,14 +25,15 @@ class Chart(object):
         get_cli:
     """
 
-    def __init__(self, data):
+    def __init__(self, classes, data):
         """Function for intializing the class.
 
         Args:
-            data: List tuples [(class, dimension, dimension)]
+            data: Tuple (class, dimension, dimension)
 
         """
         # Initialize key variables
+        self.classes = classes
         self.data = data
 
     def graph(self):
@@ -47,6 +48,12 @@ class Chart(object):
         """
         # Initialize key variables
         directory = '/home/peter/Downloads'
+        display_data = defaultdict(lambda: defaultdict(dict))
+
+        # Prepopulate lists of data to display
+        for cls in self.classes:
+            display_data[cls][0] = []
+            display_data[cls][1] = []
 
         # Create the histogram plot
         fig, axes = plt.subplots(figsize=(7, 7))
@@ -54,17 +61,25 @@ class Chart(object):
         # Random colors for each plot
         prop_iter = iter(plt.rcParams['axes.prop_cycle'])
 
-        # Loop through data
-        for item in sorted(self.data):
-            cls = item[0]
-            p1_values = item[1]
-            p2_values = item[2]
+        # Loop through data to create chartable lists by class
+        class_array = self.data[0]
+        p1_values = self.data[1]
+        p2_values = self.data[2]
+        for (col, ), cls in np.ndenumerate(class_array):
+            display_data[cls][0].append(p1_values[col])
+            display_data[cls][1].append(p2_values[col])
+
+        # Start plotting data
+        for cls in self.classes:
 
             # Get color of plot
             color = next(prop_iter)['color']
 
             # Create plot
-            plt.scatter(p1_values, p2_values, c=color, alpha=0.5)
+            plt.scatter(
+                display_data[cls][0],
+                display_data[cls][1],
+                c=color, alpha=0.5)
 
         # Create image
         graph_filename = ('%s/homework-scatter.png') % (directory)

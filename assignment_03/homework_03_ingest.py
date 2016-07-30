@@ -148,22 +148,20 @@ def main():
     # http://peekaboo-vision.blogspot.com/2012/12/another-look-at-mnist.html
     #########################################################################
     print('Creating Scatter Plot')
-    principal_components = pca_object.principal_components(
-        cls, components=components)
-    principal_classes = pca_object.principal_classes()
-    for cls in digits:
-        pc_values[cls] = []
-    (_, cols) = principal_classes.shape
-    data.append(
-        (digits,
-         principal_components[:, 0],
-         principal_components[:, 1])
-        # principal_components[:, 0],
-        # principal_components[:, 1])
+
+    # Retrieve principal components and their associated classes
+    (principal_classes,
+     principal_components) = pca_object.principal_components(
+         components=components)
+
+    # Feed the chart
+    chart_data = (
+        principal_classes,
+        principal_components[:, 0],
+        principal_components[:, 1]
     )
-    graph = chart.Chart(data)
+    graph = chart.Chart(digits, chart_data)
     graph.graph()
-    sys.exit(0)
 
     #########################################################################
     # View eigenvectors as images
@@ -222,7 +220,7 @@ def main():
     output('meanvector', pca_object.meanvector(tcls))
     output('eigenvector_1', pca_object.eigenvectors(tcls)[0])
     output('eigenvector_2', pca_object.eigenvectors(tcls)[1])
-    output('principal_components', pca_object.principal_components(tcls))
+    output('principal_components', pca_object.principal_components(tcls)[1])
     output('reconstructed', pca_object.reconstruct(xvalue, tcls, components))
     output(('covariance_%s') % (digits[0]), pca_object.covariance(digits[0]))
     output(('covariance_%s') % (digits[1]), pca_object.covariance(digits[1]))

@@ -120,30 +120,12 @@ class PCA(object):
         """
         # Get xvalues
         if cls is None:
-            data = np.hstack(
+            data = np.concatenate(
                 (self.x_values[self.classes()[0]],
-                 self.x_values[self.classes()[1]])
-                )
+                 self.x_values[self.classes()[1]]))
         else:
             data = self.x_values[cls]
         return data
-
-    def principal_classes(self):
-        """Return the input vector array for the input class.
-
-        Args:
-            cls: Class of data
-
-        Returns:
-            data: X values for the class
-
-        """
-        rows = []
-        for cls in self.classes():
-            nextx = self.xvalues(cls)
-            rows.extend([cls] * nextx.shaper[0])
-
-        return rows
 
     def zvalues(self, cls=None):
         """Get the normalized values of ingested data arrays.
@@ -221,14 +203,19 @@ class PCA(object):
 
         """
         # Get principal_components
-        pcomps = self.pca['principal_components'][cls]
+        pcomps = self.pca['principal_components'][cls][1]
 
         # Return first 'components' number of columns
         if components is not None:
             result = pcomps[:, :components]
         else:
             result = pcomps
-        return result
+
+        # Get classes
+        classes = self.pca['principal_components'][cls][0]
+
+        # Get first "component" number of columns and return
+        return (classes, result)
 
     def meanofz(self, cls=None):
         """Get mean vector of Z. This is a test, result must be all zeros.
@@ -500,10 +487,27 @@ class PCA(object):
 
         """
         # Initialize key variables
+        classes = []
+
+        # Start calculations
         z_values = self.zvalues(cls)
         eigenvectors = self.eigenvectors(cls, sort=True)
         result = np.dot(z_values, eigenvectors.T)
-        return result
+
+        # Get classes represented by each row of X values
+        if cls is None:
+            for next_class in self.available_classes:
+                next_z = self.zvalues(next_class)
+                rows = next_z.shape[0]
+                classes.extend([next_class] * rows)
+        else:
+            # Assign classes to each row
+            rows = result.shape[0]
+            classes = [cls] * rows
+
+        # Return
+        np_classes = np.asarray(classes)
+        return (np_classes, result)
 
     def eigen_vector_check(self, cls):
         """Verify that the eigen vectors are calcualted OK.
@@ -571,7 +575,7 @@ class Probability2D(object):
         # Convert pca_object data to data acceptable by the Histogram2D class
         for cls in self.classes:
             principal_components = self.pca_object.principal_components(
-                cls, components=self.components)
+                cls, components=self.components)[1]
             for dimension in principal_components:
                 self.data.append(
                     (cls, dimension[0], dimension[1])
