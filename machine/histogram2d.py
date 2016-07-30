@@ -29,7 +29,7 @@ class Histogram2D(object):
         get_cli:
     """
 
-    def __init__(self, data, labels):
+    def __init__(self, data, labels, bins=25):
         """Function for intializing the class.
 
         Args:
@@ -47,8 +47,8 @@ class Histogram2D(object):
         self.x_y = defaultdict(lambda: defaultdict(dict))
 
         # Calculate the number of bins using sturges
-        self.bin_count = int(math.log2(len(data)) + 1)
-        self.bin_count = 15
+        # self.bin_count = int(math.log2(len(data)) + 1)
+        self.bin_count = bins
 
         # Create a row for each column of data for each class (Transpose)
         for item in data:

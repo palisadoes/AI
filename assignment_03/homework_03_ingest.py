@@ -8,8 +8,6 @@ import time
 import sys
 import csv
 
-from sklearn.decomposition import PCA as PCX
-
 import numpy as np
 
 # Import AI library
@@ -63,43 +61,6 @@ def main():
     components = 2
     data = []
 
-    """
-    #########################################################################
-    # Test
-    #########################################################################
-
-    data = []
-    testclasses = ['1_class', '2_class']
-    tcls = testclasses[0]
-    xarray = np.array(
-        [[-3, 5, 0],
-         [-3, 4, -1],
-         [-4, 0, -1],
-         [-1, -3, -3]])
-    xarray_list = np.ndarray.tolist(xarray)
-    for cls in sorted(testclasses):
-        for row in xarray_list:
-            data.append(
-                (cls, row)
-            )
-
-    # Instantiate PCA
-    pct = pca.PCA(data)
-
-    print('X')
-    pprint(pct.xvalues(tcls))
-    print('Z')
-    pprint(pct.zvalues(tcls))
-    print('C')
-    pprint(pct.covariance(tcls))
-    print('V')
-    pprint(pct.eigenvectors(tcls))
-    print('P')
-    pprint(pct.principal_components(tcls))
-    print('R')
-    pprint(pct.reconstruct(xarray_list, tcls, 3))
-    """
-
     #########################################################################
     # Ingest data
     #########################################################################
@@ -123,26 +84,6 @@ def main():
     print('Analyzing Data')
     pca_object = pca.PCA(data)
 
-    """
-    values = {}
-    testdata = []
-    pcx_r = {}
-    pcx = PCX(n_components=2)
-    for cls in digits:
-        values[cls] = pca_object.xvalues(cls)
-        pcx_r[cls] = pcx.fit_transform(values[cls])
-        print(type(pcx_r[cls]))
-        print(pcx_r[cls].shape)
-        testdata.append(
-            (cls,
-             pcx_r[cls][:, 0],
-             pcx_r[cls][:, 1])
-        )
-    graph = chart.Chart(testdata)
-    graph.graph()
-    sys.exit()
-    """
-
     #########################################################################
     # Do scatter plot
     # http://peekaboo-vision.blogspot.com/2012/12/another-look-at-mnist.html
@@ -154,12 +95,12 @@ def main():
      principal_components) = pca_object.principal_components(
          components=components)
 
+    # Save principal components for later use
+    pc_1 = principal_components[:, 0]
+    pc_2 = principal_components[:, 0]
+
     # Feed the chart
-    chart_data = (
-        principal_classes,
-        principal_components[:, 0],
-        principal_components[:, 1]
-    )
+    chart_data = (principal_classes, pc_1, pc_2)
     graph = chart.Chart(digits, chart_data)
     graph.graph()
 
@@ -172,12 +113,16 @@ def main():
         covariance = pca_object.covariance(cls)
         pca.image_by_list(covariance, ('%s-covariance') % (cls))
 
+    # Create image for all classes
+    covariance = pca_object.covariance(None)
+    pca.image_by_list(covariance, ('%s-covariance') % (None))
+
     #########################################################################
     # View eigenvectors as images
     #########################################################################
     print('Creating Eigenvector Based Images')
     for cls in digits:
-        eigenvectors = pca_object.eigenvectors(cls, sort=True)
+        eigenvectors = pca_object.eigenvectors(cls=None, sort=True)
 
         count = 0
         for eigenvector in eigenvectors:
@@ -204,7 +149,8 @@ def main():
             time.sleep(1)
 
             # Reconstruct image from principal component
-            image = pca_object.reconstruct(xvalues[count], cls, components)
+            image = pca_object.reconstruct(
+                xvalues[count], None, components)
 
             # Create image from principal component
             pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))
@@ -213,37 +159,63 @@ def main():
     #########################################################################
     # Output metadata for whole dataset
     #########################################################################
+    print('Data output - All Classes')
+    output('meanvector', pca_object.meanvector())
+    output('eigenvector_1', pca_object.eigenvectors()[0])
+    output('eigenvector_2', pca_object.eigenvectors()[1])
+
     tcls = digits[0]
+    print(('Data output - Class Digit [%s]') % (tcls))
+
+    # XZCVPR values
     xvalue = pca_object.xvalues(tcls)[0]
     output('featurevector', xvalue)
     output('zvalue', pca_object.zvalues(tcls))
-    output('meanvector', pca_object.meanvector(tcls))
-    output('eigenvector_1', pca_object.eigenvectors(tcls)[0])
-    output('eigenvector_2', pca_object.eigenvectors(tcls)[1])
     output('principal_components', pca_object.principal_components(tcls)[1])
-    output('reconstructed', pca_object.reconstruct(xvalue, tcls, components))
-    output(('covariance_%s') % (digits[0]), pca_object.covariance(digits[0]))
-    output(('covariance_%s') % (digits[1]), pca_object.covariance(digits[1]))
+    output(
+        'reconstructed_z',
+        pca_object.reconstruct(
+            xvalue, tcls, components) - pca_object.zvalues(tcls)
+    )
+    output('reconstructed_x', pca_object.reconstruct(xvalue, tcls, components))
+
+    # Principal components for Gaussian calculations
+    minima = np.asarray([min(pc_1), min(pc_2)])
+    maxima = np.asarray([max(pc_1), max(pc_2)])
+    output('minima', minima)
+    output('maxima', maxima)
 
     #########################################################################
     # Calculate training accuracy
     #########################################################################
     print('Training Accuracy')
-    newdata = []
-    for cls in digits:
-        p_comp = pca_object.principal_components(
-            cls, components=components)
-        for item in p_comp:
-            newdata.append(
-                (cls, item)
-            )
+
+    # Loop through data to create chartable lists by class
+    new_data = []
+    for (col, ), cls in np.ndenumerate(principal_classes):
+        new_data.append(
+            (cls, pc_1[col])
+        )
+        new_data.append(
+            (cls, pc_2[col])
+        )
 
     # Instantiate the object
+    pca_new = pca.PCA(new_data)
+
+    # Output class based means and covariances
     for cls in digits:
-        pca_new = pca.PCA(newdata)
+        output(('mu_%s') % (cls), pca_new.meanvector(cls=cls))
+        output(('covariance_%s') % (cls), pca_new.covariance(cls=cls))
 
     # Calculate probabilities
     probability = pca.Probability2D(pca_new)
+
+    # Output Histogram data
+    for cls in digits:
+        output(('histogram_%s') % (cls), probability.histogram()[cls])
+
+    # Get accuracy values
     g_accuracy = probability.gaussian_accuracy()
     h_accuracy = probability.histogram_accuracy()
 
@@ -274,6 +246,7 @@ def output(label, value):
     # Initialize key variables
     output_directory = '/home/peter/Downloads/UCSC/csv'
     row = [label].extend(value)
+    print(row)
 
     # Write file
     filename = ('%s/%s.csv') % (output_directory, label)

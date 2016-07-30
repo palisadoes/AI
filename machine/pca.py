@@ -584,6 +584,20 @@ class Probability2D(object):
         # Get histogram
         self.hist_object = histogram2d.Histogram2D(self.data, self.classes)
 
+    def histogram(self):
+        """Get the histogram.
+
+        Args:
+            None
+
+        Returns:
+            value: 2D histogram
+
+        """
+        # Return
+        value = self.hist_object.histogram()
+        return value
+
     def histogram_accuracy(self):
         """Calulate the accuracy of the training data using histograms.
 
