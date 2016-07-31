@@ -41,7 +41,6 @@ class PCA(object):
         self.data = data
         self.x_values = {}
         self.pca = defaultdict(lambda: defaultdict(dict))
-        vector_length = 0
         class_rows = {}
 
         # Determine the number of dimensions in vector

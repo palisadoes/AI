@@ -193,13 +193,10 @@ def main():
     # Loop through data to create chartable lists by class
     new_data = []
     for (col, ), cls in np.ndenumerate(principal_classes):
+        new_stack = np.array(np.hstack((pc_1[col], pc_2[col])))
         new_data.append(
-            (cls, np.array(np.hstack((pc_1[col], pc_2[col]))))
+            (cls, new_stack)
         )
-
-    print(pc_1.shape)
-    print(pc_2.shape)
-    # pprint(new_data)
 
     # Instantiate the object
     pca_new = pca.PCA(new_data)
@@ -215,9 +212,17 @@ def main():
     # Output Histogram data
     for cls in digits:
         output(('histogram_%s') % (cls), probability.histogram()[cls])
+        print('histogram', probability.histogram()[cls].shape)
 
     # Get accuracy values
     g_accuracy = probability.gaussian_accuracy()
+
+    print('\nGaussian Accuracy')
+    for cls in digits:
+        print(
+            ('Class %s: %s%%') % (cls, g_accuracy[cls])
+        )
+
     h_accuracy = probability.histogram_accuracy()
 
     # Print accuracy
@@ -225,12 +230,6 @@ def main():
     for cls in digits:
         print(
             ('Class %s: %s%%') % (cls, h_accuracy[cls])
-        )
-
-    print('\nGaussian Accuracy')
-    for cls in digits:
-        print(
-            ('Class %s: %s%%') % (cls, g_accuracy[cls])
         )
 
 

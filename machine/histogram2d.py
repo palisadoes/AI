@@ -2,6 +2,7 @@
 """Program creates histograms."""
 
 # Standard python imports
+import sys
 import math
 from collections import defaultdict
 from pprint import pprint
@@ -29,18 +30,15 @@ class Histogram2D(object):
         get_cli:
     """
 
-    def __init__(self, data, labels, bins=25):
+    def __init__(self, data, bins=25):
         """Function for intializing the class.
 
         Args:
             data: List of tuples of format
                 (class, feature_01, feature_02)
-            labels: Labels for data columns
 
         """
         # Initialize key variables
-        self.labels = labels
-
         self.hgram = {}
         self.minmax = defaultdict(lambda: defaultdict(dict))
         values_by_class = defaultdict(lambda: defaultdict(dict))
@@ -84,7 +82,7 @@ class Histogram2D(object):
                 (self.bin_count, self.bin_count))
 
         # Get bins data should be placed in
-        for cls, tuple_list in values_by_class.items():
+        for cls, tuple_list in sorted(values_by_class.items()):
             for values in tuple_list:
                 (row, col) = self.row_col(values, cls)
 
@@ -121,10 +119,16 @@ class Histogram2D(object):
 
         # Return
         (row, col) = tuple(row_col)
-        print(row, col)
+
+        if row >= self.bin_count or col >= self.bin_count:
+            print('value', value)
+            print('row', row, 'max', self.minmax[cls][0]['max'], 'min', self.minmax[cls][0]['min'])
+            print('col', row, 'max', self.minmax[cls][1]['max'], 'min', self.minmax[cls][1]['min'])
+            print('\n')
+
         return (row, col)
 
-    def classifier(self, dimensions, cls):
+    def classifier(self, dimensions):
         """Get the number of bins to use.
 
         Args:
@@ -138,7 +142,15 @@ class Histogram2D(object):
         probability = {}
 
         # Get row / column for histogram for dimensions
-        row, col = self.row_col(dimensions, cls)
+        row, _ = self.row_col(dimensions, self.classes[0])
+        _, col = self.row_col(dimensions, self.classes[1])
+
+        """
+        if row >= self.bin_count or col >= self.bin_count:
+            print(row, col)
+        return self.classes[0]
+        """
+
         denominator = self.hgram[self.classes[0]][row][col] + self.hgram[
             self.classes[1]][row][col]
 
@@ -313,9 +325,9 @@ class Histogram2D(object):
 
         # Add Main Title
         fig.suptitle(
-            ('%s and %s Histogram (%s Bins)') % (
-                self.labels[0].capitalize(),
-                self.labels[1].capitalize(),
+            ('Class %s and Class %s Histogram (%s Bins)') % (
+                self.classes[0].capitalize(),
+                self.classes[1].capitalize(),
                 self.bins()),
             horizontalalignment='center',
             fontsize=10)
