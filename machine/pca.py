@@ -39,9 +39,10 @@ class PCA(object):
         """
         # Initialize key variables
         self.data = data
-        class_rows = {}
         self.x_values = {}
         self.pca = defaultdict(lambda: defaultdict(dict))
+        vector_length = 0
+        class_rows = {}
 
         # Determine the number of dimensions in vector
         for cls, vector in data:
@@ -49,6 +50,12 @@ class PCA(object):
                 class_rows[cls].append(vector)
             else:
                 class_rows[cls] = [vector]
+                if isinstance(vector, list) is True:
+                    vector_length = len(vector)
+                else:
+                    pass
+                    # vector_length = vector.size
+        # print('vector', vector_length)
 
         # Create a numpy array for the class
         for cls in class_rows.keys():
@@ -66,6 +73,8 @@ class PCA(object):
         tmp_classes = sorted(self.available_classes)
         tmp_classes.append(None)
         for cls in tmp_classes:
+            # Skip if there are less than two dimensions
+            # if (vector_length < 2 and cls is None) or (vector_length >= 2):
             self.pca['xvalues'][cls] = self.xvalues(cls)
             self.pca['meanvector'][cls] = self._meanvector(cls)
             self.pca['zvalues'][cls] = self._zvalues(cls)
@@ -398,6 +407,8 @@ class PCA(object):
             matrix: Covariance matrix
 
         """
+        print('zvalues', cls)
+        print(self.zvalues(cls).shape)
         # Initialize key variables
         zmatrix = self.zvalues(cls).T
         matrix = np.cov(zmatrix)

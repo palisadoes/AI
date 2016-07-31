@@ -56,7 +56,7 @@ def main():
 
     """
     # Initialize key variables
-    digits = [1, 9]
+    digits = [1, 7]
     maximages = 5
     components = 2
     data = []
@@ -97,7 +97,7 @@ def main():
 
     # Save principal components for later use
     pc_1 = principal_components[:, 0]
-    pc_2 = principal_components[:, 0]
+    pc_2 = principal_components[:, 1]
 
     # Feed the chart
     chart_data = (principal_classes, pc_1, pc_2)
@@ -194,11 +194,12 @@ def main():
     new_data = []
     for (col, ), cls in np.ndenumerate(principal_classes):
         new_data.append(
-            (cls, pc_1[col])
+            (cls, np.array(np.hstack((pc_1[col], pc_2[col]))))
         )
-        new_data.append(
-            (cls, pc_2[col])
-        )
+
+    print(pc_1.shape)
+    print(pc_2.shape)
+    # pprint(new_data)
 
     # Instantiate the object
     pca_new = pca.PCA(new_data)
