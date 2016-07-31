@@ -64,14 +64,14 @@ class Histogram2D(object):
             # Get min / max values
             for column in range(0, len(values)):
                 value = values[column]
-                if bool(self.minmax[column]) is False:
-                    self.minmax[column]['min'] = value
-                    self.minmax[column]['max'] = value
+                if bool(self.minmax[cls][column]) is False:
+                    self.minmax[cls][column]['min'] = value
+                    self.minmax[cls][column]['max'] = value
                 else:
-                    self.minmax[column]['min'] = min(
-                        value, self.minmax[column]['min'])
-                    self.minmax[column]['max'] = max(
-                        value, self.minmax[column]['max'])
+                    self.minmax[cls][column]['min'] = min(
+                        value, self.minmax[cls][column]['min'])
+                    self.minmax[cls][column]['max'] = max(
+                        value, self.minmax[cls][column]['max'])
 
                 if bool(self.x_y[cls][column]) is False:
                     self.x_y[cls][column] = [value]
@@ -86,7 +86,7 @@ class Histogram2D(object):
         # Get bins data should be placed in
         for cls, tuple_list in values_by_class.items():
             for values in tuple_list:
-                (row, col) = self.row_col(values)
+                (row, col) = self.row_col(values, cls)
 
                 # Update histogram
                 self.hgram[cls][row][col] += 1
@@ -94,7 +94,7 @@ class Histogram2D(object):
         # Create a list of classes found
         self.classes = sorted(values_by_class.keys())
 
-    def row_col(self, dimensions):
+    def row_col(self, dimensions, cls):
         """Get the row and column for 2D histogram.
 
         Args:
@@ -110,18 +110,21 @@ class Histogram2D(object):
 
         # Calculate the row and column
         for idx, value in enumerate(dimensions):
-            numerator = value - self.minmax[idx]['min']
-            delta = self.minmax[idx]['max'] - self.minmax[idx]['min']
+            numerator = value - self.minmax[cls][idx]['min']
+            delta = self.minmax[cls][idx]['max'] - self.minmax[
+                cls][idx]['min']
             ratio = numerator / delta
             row_col.append(
-                int(round(multiplier * ratio))
+                # int(round(multiplier * ratio))
+                int(multiplier * ratio)
             )
 
         # Return
         (row, col) = tuple(row_col)
+        print(row, col)
         return (row, col)
 
-    def classifier(self, dimensions):
+    def classifier(self, dimensions, cls):
         """Get the number of bins to use.
 
         Args:
@@ -135,7 +138,7 @@ class Histogram2D(object):
         probability = {}
 
         # Get row / column for histogram for dimensions
-        row, col = self.row_col(dimensions)
+        row, col = self.row_col(dimensions, cls)
         denominator = self.hgram[self.classes[0]][row][col] + self.hgram[
             self.classes[1]][row][col]
 
@@ -280,8 +283,8 @@ class Histogram2D(object):
                 if x_pos and y_pos and z_pos:
                     # Get coordinates for the bottom of the
                     # bar chart
-                    x_positions.append(self._fixed_value(x_pos, 0))
-                    y_positions.append(self._fixed_value(y_pos, 1))
+                    x_positions.append(self._fixed_value(x_pos, 0, cls))
+                    y_positions.append(self._fixed_value(y_pos, 1, cls))
                     z_positions.append(0)
 
                     # Keep track of the desired column height
@@ -338,7 +341,7 @@ class Histogram2D(object):
         # Close the plot
         plt.close(fig)
 
-    def _fixed_value(self, value, pointer):
+    def _fixed_value(self, value, pointer, cls):
         """Fix the value plotted on the histogram based on the bin.
 
         Args:
@@ -351,17 +354,18 @@ class Histogram2D(object):
 
         """
         # Initialize key variables
-        minimum = self.minmax[pointer]['min']
-        maximum = self.minmax[pointer]['max']
+        minimum = self.minmax[cls][pointer]['min']
+        maximum = self.minmax[cls][pointer]['max']
         delta = maximum - minimum
 
         # Calculate
-        fixed = (value * delta / self.bins()) + self.minmax[pointer]['min']
+        fixed = (value * delta / self.bins()) + self.minmax[
+            cls][pointer]['min']
 
         # Return
         return fixed
 
-    def _width_value(self, pointer):
+    def _width_value(self, pointer, cls):
         """Fix the width of the value plotted on the histogram based on the bin.
 
         Args:
@@ -374,8 +378,8 @@ class Histogram2D(object):
 
         """
         # Initialize key variables
-        minimum = self.minmax[pointer]['min']
-        maximum = self.minmax[pointer]['max']
+        minimum = self.minmax[cls][pointer]['min']
+        maximum = self.minmax[cls][pointer]['max']
         delta = maximum - minimum
 
         # Calculate

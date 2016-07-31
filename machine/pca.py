@@ -50,12 +50,6 @@ class PCA(object):
                 class_rows[cls].append(vector)
             else:
                 class_rows[cls] = [vector]
-                if isinstance(vector, list) is True:
-                    vector_length = len(vector)
-                else:
-                    pass
-                    # vector_length = vector.size
-        # print('vector', vector_length)
 
         # Create a numpy array for the class
         for cls in class_rows.keys():
@@ -276,6 +270,10 @@ class PCA(object):
         Returns:
             result: Reconstructed principal components
 
+        Notes:
+            Thanks to: http://glowingpython.blogspot.com/2011/07/
+                pca-and-image-compression-with-numpy.html
+
         """
         # Initialize key variables
         meanvector = self.meanvector(cls)
@@ -407,8 +405,6 @@ class PCA(object):
             matrix: Covariance matrix
 
         """
-        print('zvalues', cls)
-        print(self.zvalues(cls).shape)
         # Initialize key variables
         zmatrix = self.zvalues(cls).T
         matrix = np.cov(zmatrix)
