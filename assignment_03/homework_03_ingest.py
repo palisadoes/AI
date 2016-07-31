@@ -245,16 +245,22 @@ def output(label, value):
     """
     # Initialize key variables
     output_directory = '/home/peter/Downloads/UCSC/csv'
-    row = [label].extend(value)
-    print(row)
+    rows = value.tolist()
+    list_of_lists = any(isinstance(element, list) for element in rows)
 
     # Write file
     filename = ('%s/%s.csv') % (output_directory, label)
     with open(filename, 'w', newline='') as csvfile:
+        """
         spamwriter = csv.writer(
             csvfile, delimiter='\t',
             quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        spamwriter.writerow(row)
+        """
+        spamwriter = csv.writer(csvfile, delimiter='\t')
+        if list_of_lists is True:
+            spamwriter.writerows(rows)
+        else:
+            spamwriter.writerow(rows)
 
 
 if __name__ == "__main__":
