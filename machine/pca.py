@@ -249,7 +249,7 @@ class PCA(object):
         # Initialize key variables
         meanvector = self.meanvector(cls)
         eigenvectors = self.eigenvectors(
-            cls, sort=True, components=components)
+            None, sort=True, components=components)
 
         # Create principal component from next X value
         zvalue = np.subtract(xvalue, meanvector)
