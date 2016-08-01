@@ -11,7 +11,7 @@ from matplotlib import style
 style.use("ggplot")
 
 
-class Chart(object):
+class ChartPC(object):
     """Class gathers all CLI information.
 
     Args:
@@ -29,7 +29,12 @@ class Chart(object):
         """Function for intializing the class.
 
         Args:
-            data: Tuple (class, dimension, dimension)
+            classes: list of classes
+            data: Tuple (class_list, pc1_array, pc2_array)
+                class_list: list of classes for every
+                    corresponding element in pc1_array and pc2_array
+                pc1_array: Numpy array of first principal components
+                pc2_array: Numpy array of second principal components
 
         """
         # Initialize key variables

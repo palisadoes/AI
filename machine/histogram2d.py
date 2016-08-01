@@ -51,7 +51,7 @@ class Histogram2D(object):
         # Create a row for each column of data for each class (Transpose)
         for item in data:
             cls = item[0]
-            values = (item[1], item[2])
+            values = item[1]
 
             # Track column values
             if bool(values_by_class[cls]) is False:
@@ -119,13 +119,6 @@ class Histogram2D(object):
 
         # Return
         (row, col) = tuple(row_col)
-
-        if row >= self.bin_count or col >= self.bin_count:
-            print('value', value)
-            print('row', row, 'max', self.minmax[cls][0]['max'], 'min', self.minmax[cls][0]['min'])
-            print('col', row, 'max', self.minmax[cls][1]['max'], 'min', self.minmax[cls][1]['min'])
-            print('\n')
-
         return (row, col)
 
     def classifier(self, dimensions):
@@ -145,26 +138,37 @@ class Histogram2D(object):
         row, _ = self.row_col(dimensions, self.classes[0])
         _, col = self.row_col(dimensions, self.classes[1])
 
-        """
-        if row >= self.bin_count or col >= self.bin_count:
-            print(row, col)
-        return self.classes[0]
-        """
-
+        # Get the denominator
         denominator = self.hgram[self.classes[0]][row][col] + self.hgram[
             self.classes[1]][row][col]
 
         # Get probability of each class
         for cls in self.classes:
-            probability[cls] = self.hgram[cls][row][col] / denominator
+            # Do floating point math as numpy somtimes gives
+            # "RuntimeWarning: invalid value encountered in double_scalars"
+            # when dividing by very small numbers
+            nominator = self.hgram[cls][row][col]
+            if denominator == 0:
+                probability[cls] = None
+            else:
+                probability[cls] = float(nominator) / float(denominator)
 
-        # Get selection
-        if probability[self.classes[0]] > probability[self.classes[1]]:
-            selection = self.classes[0]
-        elif probability[self.classes[0]] < probability[self.classes[1]]:
-            selection = self.classes[1]
-        else:
+        # Reassign variables for readability
+        prob_c0 = probability[self.classes[0]]
+        prob_c1 = probability[self.classes[1]]
+
+        # Evaluate probabilities
+        if prob_c0 is None or prob_c1 is None:
             selection = None
+        else:
+            if prob_c0 + prob_c1 == 0:
+                selection = None
+            elif prob_c0 > prob_c1:
+                selection = self.classes[0]
+            elif prob_c0 < prob_c1:
+                selection = self.classes[1]
+            else:
+                selection = None
 
         # Return
         return selection
@@ -195,66 +199,6 @@ class Histogram2D(object):
         """
         value = self.hgram
         return value
-
-    def graph2d(self):
-        """Graph histogram.
-
-        Args:
-            histogram_list: List for histogram
-            cls: Category (label) for data in list
-            bins: Number of bins to use
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        directory = '/home/peter/Downloads'
-        nbins = self.bins()
-
-        # Loop through data
-        for cls in sorted(self.x_y.keys()):
-            # Get key data for creating histogram
-            x_array = np.array(self.x_y[cls][0])
-            y_array = np.array(self.x_y[cls][1])
-
-            # Estimate the 2D histogram
-            hgram, xedges, yedges = np.histogram2d(
-                x_array, y_array, bins=nbins)
-
-            # hgram needs to be rotated and flipped
-            hgram = np.rot90(hgram)
-            hgram = np.flipud(hgram)
-
-            # Mask zeros
-            # Mask pixels with a value of zero
-            hgram_masked = np.ma.masked_where(hgram == 0, hgram)
-
-            # Plot 2D histogram using pcolor
-            fig = plt.figure()
-            plt.pcolormesh(xedges, yedges, hgram_masked)
-            plt.xlabel('Height')
-            plt.ylabel('Handspan')
-            cbar = plt.colorbar()
-            cbar.ax.set_ylabel('Counts')
-
-            # Add Main Title
-            fig.suptitle(
-                ('Height and Handspan Histogram (%ss, %s Bins)') % (
-                    cls.capitalize(), nbins),
-                horizontalalignment='center',
-                fontsize=10)
-
-            # Create image
-            graph_filename = (
-                '%s/homework-2-2D-%s-bins-%s.png'
-                '') % (directory, cls, nbins)
-
-            # Save chart
-            fig.savefig(graph_filename)
-
-            # Close the plot
-            plt.close(fig)
 
     def graph3d(self):
         """Graph histogram.
@@ -304,8 +248,8 @@ class Histogram2D(object):
 
             # Create elements defining the sides of each column
             num_elements = len(x_positions)
-            x_col_width = np.ones(num_elements)
-            y_col_depth = np.ones(num_elements)
+            x_col_width = np.ones(num_elements) * int(self.width(0, cls))
+            y_col_depth = np.ones(num_elements) * int(self.width(1, cls))
             z_col_height = np.asarray(z_height)
 
             # Get color of plot
@@ -321,13 +265,13 @@ class Histogram2D(object):
 
             # Prepare values for legend
             handles.append(plt.Rectangle((0, 0), 1, 1, fc=color))
-            labels.append(cls.capitalize())
+            labels.append(str(cls).capitalize())
 
         # Add Main Title
         fig.suptitle(
             ('Class %s and Class %s Histogram (%s Bins)') % (
-                self.classes[0].capitalize(),
-                self.classes[1].capitalize(),
+                str(self.classes[0]).capitalize(),
+                str(self.classes[1]).capitalize(),
                 self.bins()),
             horizontalalignment='center',
             fontsize=10)
@@ -337,15 +281,15 @@ class Histogram2D(object):
 
         # Add grid, axis labels
         axes.grid(True)
-        axes.set_ylabel('Handspans')
-        axes.set_xlabel('Heights')
+        axes.set_ylabel('Y Label')
+        axes.set_xlabel('X Label')
         axes.set_zlabel('Count')
 
         # Adjust bottom
         fig.subplots_adjust(left=0.2, bottom=0.2)
 
         # Create image
-        graph_filename = ('%s/homework-2-3D.png') % (directory)
+        graph_filename = ('%s/homework-3-3D.png') % (directory)
 
         # Save chart
         fig.savefig(graph_filename)
@@ -368,17 +312,17 @@ class Histogram2D(object):
         # Initialize key variables
         minimum = self.minmax[cls][pointer]['min']
         maximum = self.minmax[cls][pointer]['max']
-        delta = maximum - minimum
+        width = self.width(pointer, cls)
 
         # Calculate
-        fixed = (value * delta / self.bins()) + self.minmax[
+        fixed = (value * width) + self.minmax[
             cls][pointer]['min']
 
         # Return
         return fixed
 
-    def _width_value(self, pointer, cls):
-        """Fix the width of the value plotted on the histogram based on the bin.
+    def width(self, pointer, cls):
+        """Fix the value plotted on the histogram based on the bin.
 
         Args:
             value: Bin value
@@ -386,7 +330,7 @@ class Histogram2D(object):
 
         Returns:
 
-            fixed: Fixed value
+            width: Fixed value
 
         """
         # Initialize key variables
@@ -395,7 +339,7 @@ class Histogram2D(object):
         delta = maximum - minimum
 
         # Calculate
-        fixed = self.bins() / delta
+        width = delta / self.bins()
 
         # Return
-        return fixed
+        return width

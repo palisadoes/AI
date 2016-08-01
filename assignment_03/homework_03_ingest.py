@@ -14,6 +14,8 @@ import numpy as np
 from machine import mnist
 from machine import pca
 from machine import chart
+from machine import histogram2d
+from machine import histogram1d
 
 
 def cli():
@@ -56,7 +58,7 @@ def main():
 
     """
     # Initialize key variables
-    digits = [1, 7]
+    digits = [5, 6]
     maximages = 5
     components = 2
     data = []
@@ -77,6 +79,10 @@ def main():
             data.append(
                 (cls, minst_images[pointer])
             )
+
+    # Print the data shape
+    print('Digits = ', digits)
+    print('Data Elements = ', len(data))
 
     #########################################################################
     # Instantiate PCA
@@ -101,7 +107,7 @@ def main():
 
     # Feed the chart
     chart_data = (principal_classes, pc_1, pc_2)
-    graph = chart.Chart(digits, chart_data)
+    graph = chart.ChartPC(digits, chart_data)
     graph.graph()
 
     #########################################################################
@@ -117,6 +123,7 @@ def main():
     covariance = pca_object.covariance(None)
     pca.image_by_list(covariance, ('%s-covariance') % (None))
 
+    """
     #########################################################################
     # View eigenvectors as images
     #########################################################################
@@ -155,6 +162,7 @@ def main():
             # Create image from principal component
             pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))
             pca.image_by_list(image, ('%s-%s-reconstruct') % (cls, count))
+    """
 
     #########################################################################
     # Output metadata for whole dataset
@@ -190,29 +198,17 @@ def main():
     #########################################################################
     print('Training Accuracy')
 
-    # Loop through data to create chartable lists by class
-    new_data = []
-    for (col, ), cls in np.ndenumerate(principal_classes):
-        new_stack = np.array(np.hstack((pc_1[col], pc_2[col])))
-        new_data.append(
-            (cls, new_stack)
-        )
-
-    # Instantiate the object
-    pca_new = pca.PCA(new_data)
+    # Calculate probabilities
+    probability = pca.Probability2D(pca_object)
 
     # Output class based means and covariances
     for cls in digits:
-        output(('mu_%s') % (cls), pca_new.meanvector(cls=cls))
-        output(('covariance_%s') % (cls), pca_new.covariance(cls=cls))
-
-    # Calculate probabilities
-    probability = pca.Probability2D(pca_new)
+        output(('mu_%s') % (cls), probability.meanvector(cls=cls))
+        output(('covariance_%s') % (cls), probability.covariance(cls=cls))
 
     # Output Histogram data
     for cls in digits:
         output(('histogram_%s') % (cls), probability.histogram()[cls])
-        print('histogram', probability.histogram()[cls].shape)
 
     # Get accuracy values
     g_accuracy = probability.gaussian_accuracy()
@@ -231,6 +227,65 @@ def main():
         print(
             ('Class %s: %s%%') % (cls, h_accuracy[cls])
         )
+
+    #########################################################################
+    # Create 3D Histogram for first 2 principal components for both classes
+    #########################################################################
+    print('\nCreating 3D Histogram Chart')
+
+    data = []
+
+    # Convert pca_object data to data acceptable by the Histogram2D class
+    for cls in digits:
+        (_, principal_components) = pca_object.principal_components(
+            cls, components=components)
+        for dimension in principal_components:
+            data.append(
+                (cls, (dimension[0], dimension[1]))
+            )
+
+    hist_object = histogram2d.Histogram2D(data)
+    hist_object.graph3d()
+
+    """
+    #########################################################################
+    # Create 2D Histogram for first for principal component of each class
+    #########################################################################
+    print('Creating 2D Histogram Charts')
+
+    p1_data = []
+    p2_data = []
+    pc_save = {}
+
+    # Convert pca_object data to data acceptable by the Histogram2D class
+    for cls in digits:
+        (_, pc_save[cls]) = pca_object.principal_components(
+            cls, components=components)
+
+    # Get list of tuples [(class, p1_value)]
+    p1_data = []
+    for pointer in range(0, 2):
+        cls = digits[pointer]
+        for value in pc_save[cls][:, [0]]:
+            p1_data.append(
+                (digits[pointer], value)
+            )
+
+    hist_object = histogram1d.Histogram1D(p1_data, bins=25)
+    hist_object.graph('First Principal Components')
+
+    # Get list of tuples [(class, p2_value)]
+    p2_data = []
+    for pointer in range(0, 2):
+        cls = digits[pointer]
+        for value in pc_save[cls][:, [1]]:
+            p1_data.append(
+                (digits[pointer], value)
+            )
+
+    hist_object = histogram1d.Histogram1D(p2_data, bins=25)
+    hist_object.graph('Second Principal Components')
+    """
 
 
 def output(label, value):

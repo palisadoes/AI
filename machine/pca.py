@@ -234,7 +234,7 @@ class PCA(object):
         mean_v = data.mean(axis=0)
         return mean_v
 
-    def pc_of_x(self, xvalue, cls, components):
+    def pc_of_x(self, xvalue, cls, components=2):
         """Create a principal component from a single x value.
 
         Args:
@@ -283,58 +283,6 @@ class PCA(object):
         result = np.dot(self.pc_of_x(
             xvalue, cls, components), eigenvectors) + meanvector
         return result
-
-    def classifier2d(self, xvalue):
-        """Bayesian classifer for any value of X.
-
-        Args:
-            xvalue: Specific feature vector of X
-
-        Returns:
-            selection: Class classifier chooses
-
-        """
-        # Initialize key variables
-        probability = {}
-        bayesian = {}
-        classes = self.classes()
-
-        # Get probability of each class
-        for cls in classes:
-            # Initialize values for the loop
-            sample_count = len(self.xvalues(cls))
-            x_mu = xvalue - self.meanvector(cls)
-            covariance = self.covariance(cls)
-            inverse_cov = np.linalg.inv(covariance)
-            determinant_cov = np.linalg.det(covariance)
-            dimensions = len(xvalue)
-
-            # Work on the exponent part of the bayesian classifer
-            power = -0.5 * np.dot(np.dot(x_mu, inverse_cov), x_mu.T)
-            exponent = math.pow(math.e, power)
-
-            # Determine the constant value
-            pipart = math.pow(2 * math.pi, dimensions / 2)
-            constant = pipart * math.sqrt(determinant_cov)
-
-            # Determine final bayesian
-            bayesian[cls] = (sample_count * exponent) / constant
-
-        # Calculate bayesian probability
-        denominator = bayesian[classes[0]] + bayesian[classes[1]]
-        for cls in classes:
-            probability[cls] = bayesian[cls] / denominator
-
-        # Get selection
-        if probability[classes[0]] > probability[classes[1]]:
-            selection = classes[0]
-        elif probability[classes[0]] < probability[classes[1]]:
-            selection = classes[1]
-        else:
-            selection = None
-
-        # Return
-        return selection
 
     def _zvalues(self, cls):
         """Get the normalized values of ingested data arrays.
@@ -575,20 +523,36 @@ class Probability2D(object):
         self.pca_object = pca_object
         self.data = []
 
-        # Get classes
-        self.classes = self.pca_object.classes()
+        self.class_list = self.pca_object.classes()
 
         # Convert pca_object data to data acceptable by the Histogram2D class
-        for cls in self.classes:
-            principal_components = self.pca_object.principal_components(
-                cls, components=self.components)[1]
+        for cls in self.class_list:
+            (_, principal_components) = self.pca_object.principal_components(
+                cls, components=self.components)
             for dimension in principal_components:
                 self.data.append(
-                    (cls, dimension[0], dimension[1])
+                    (cls, (dimension[0], dimension[1]))
                 )
 
+        # Get new PCA object for principal components
+        self.pca_new = PCA(self.data)
+
         # Get histogram
-        self.hist_object = histogram2d.Histogram2D(self.data, self.classes)
+        self.hist_object = histogram2d.Histogram2D(self.data)
+
+    def classes(self):
+        """Get the classes.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            value: classes
+
+        """
+        # Return
+        value = self.class_list
+        return value
 
     def histogram(self):
         """Get the histogram.
@@ -602,6 +566,34 @@ class Probability2D(object):
         """
         # Return
         value = self.hist_object.histogram()
+        return value
+
+    def meanvector(self, cls):
+        """Get the meanvector.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            value: meanvector
+
+        """
+        # Return
+        value = self.pca_new.meanvector(cls=cls)
+        return value
+
+    def covariance(self, cls):
+        """Get the covariance.
+
+        Args:
+            cls: Class of data
+
+        Returns:
+            value: covariance
+
+        """
+        # Return
+        value = self.pca_new.covariance(cls=cls)
         return value
 
     def histogram_accuracy(self):
@@ -621,53 +613,36 @@ class Probability2D(object):
         accuracy = {}
 
         # Analyze all the data
-        for item in self.data:
-            cls = item[0]
-            dim0 = item[1]
-            dim1 = item[2]
+        for cls in self.pca_object.classes():
+            # Get list of x values to test
+            vectors = self.pca_object.xvalues(cls)
 
-            # Get the prediction
-            values = (dim0, dim1)
-            prediction = self.histogram_prediction(values, cls)
+            # Process each vector
+            for vector in vectors:
+                # Calculate the principal components of the individual xvalue
+                p1p2 = self.pca_object.pc_of_x(vector, cls)
 
-            # Count the number of correct predictions
-            if prediction == cls:
-                if cls in correct:
-                    correct[cls] += 1
-                else:
-                    correct[cls] = 1
+                # Get prediction
+                prediction = self.hist_object.classifier(p1p2)
 
-            # Increment the count
-            if cls in cls_count:
-                cls_count[cls] += 1
-            else:
-                cls_count[cls] = 1
+                if prediction is not None:
+                    # Count the number of correct predictions
+                    if prediction == cls:
+                        if cls in correct:
+                            correct[cls] += 1
+                        else:
+                            correct[cls] = 1
+
+                    # Increment the count
+                    if cls in cls_count:
+                        cls_count[cls] += 1
+                    else:
+                        cls_count[cls] = 1
 
         # Return
         for cls in sorted(cls_count.keys()):
             accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
         return accuracy
-
-    def histogram_prediction(self, values, cls):
-        """Calulate the accuracy of the training data using histograms.
-
-        Args:
-            values: Tuple from which to create the principal components
-            cls: Class of data to which data belongs
-
-        Returns:
-            prediction: Class of prediction
-
-        """
-        # Get the principal components for data
-        pc_values = self.pca_object.pc_of_x(values, cls, self.components)
-        # print('ppppp', values, pc_values, type(pc_values))
-
-        # Get row / column for histogram for principal component
-        prediction = self.hist_object.classifier(pc_values)
-
-        # Return
-        return prediction
 
     def gaussian_accuracy(self):
         """Calulate the accuracy of the training data using gaussian models.
@@ -686,56 +661,98 @@ class Probability2D(object):
         accuracy = {}
 
         # Analyze all the data
-        for item in self.data:
-            cls = item[0]
-            dim0 = item[1]
-            dim1 = item[2]
+        for cls in self.pca_object.classes():
+            # Get list of x values to test
+            vectors = self.pca_object.xvalues(cls)
 
-            # Get the prediction
-            values = (dim0, dim1)
-            prediction = self.gaussian_prediction(values, cls)
+            # Process each vector
+            for vector in vectors:
+                # Get the prediction
+                prediction = self.classifier_gaussian(vector)
 
-            # Count the number of correct predictions
-            if prediction == cls:
-                if cls in correct:
-                    correct[cls] += 1
-                else:
-                    correct[cls] = 1
+                # Only count definitive predictions
+                if prediction is not None:
+                    # Count the number of correct predictions
+                    if prediction == cls:
+                        if cls in correct:
+                            correct[cls] += 1
+                        else:
+                            correct[cls] = 1
 
-            # Increment the count
-            if cls in cls_count:
-                cls_count[cls] += 1
-            else:
-                cls_count[cls] = 1
+                    # Increment the count
+                    if cls in cls_count:
+                        cls_count[cls] += 1
+                    else:
+                        cls_count[cls] = 1
 
         # Return
         for cls in sorted(cls_count.keys()):
             accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
         return accuracy
 
-    def gaussian_prediction(self, values, cls):
-        """Predict class using gaussians models.
+    def classifier_gaussian(self, xvalue):
+        """Bayesian classifer for any value of X.
 
         Args:
-            values: Tuple from which to create the principal components
-            cls: Class of data to which data belongs
+            xvalue: Specific feature vector of X
 
         Returns:
-            prediction: Class of prediction
+            selection: Class classifier chooses
 
         """
         # Initialize key variables
-        pc_values = []
+        probability = {}
+        bayesian = {}
+        classes = self.classes()
 
-        # Get the principal components for data
-        pc_values.append(
-            self.pca_object.pc_of_x(values, cls, self.components))
+        # Get probability of each class
+        for cls in classes:
+            # Initialize values for the loop
+            sample_count = len(self.pca_object.xvalues(cls))
 
-        # Get row / column for histogram for principal component
-        prediction = self.pca_object.classifier2d(np.asarray(pc_values))
+            # Calculate the principal components of the individual xvalue
+            p1p2 = self.pca_object.pc_of_x(xvalue, cls)
+
+            # Get values for calculating gaussian parameters
+            dimensions = len(p1p2)
+            x_mu = p1p2 - self.meanvector(cls)
+            covariance = self.covariance(cls)
+            inverse_cov = np.linalg.inv(covariance)
+            determinant_cov = np.linalg.det(covariance)
+
+            # Work on the exponent part of the bayesian classifer
+            power = -0.5 * np.dot(np.dot(x_mu, inverse_cov), x_mu.T)
+            exponent = math.pow(math.e, power)
+
+            # Determine the constant value
+            pipart = math.pow(2 * math.pi, dimensions / 2)
+            constant = pipart * math.sqrt(determinant_cov)
+
+            # Determine final bayesian
+            bayesian[cls] = (sample_count * exponent) / constant
+
+        # Calculate bayesian probability
+        denominator = bayesian[classes[0]] + bayesian[classes[1]]
+        for cls in classes:
+            probability[cls] = bayesian[cls] / denominator
+
+        # Reassign variables for readability
+        prob_c0 = probability[classes[0]]
+        prob_c1 = probability[classes[1]]
+
+        # Evaluate probabilities
+        if prob_c0 + prob_c1 == 0:
+            selection = None
+        else:
+            if prob_c0 > prob_c1:
+                selection = classes[0]
+            elif prob_c0 < prob_c1:
+                selection = classes[1]
+            else:
+                selection = None
 
         # Return
-        return prediction
+        return selection
 
 
 def image_by_list(body, prefix=''):
