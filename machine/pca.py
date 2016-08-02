@@ -44,11 +44,13 @@ class PCA(object):
         class_rows = {}
 
         # Determine the number of dimensions in vector
+        # Create a list of lists
         for cls, vector in data:
             if cls in class_rows:
                 class_rows[cls].append(vector)
             else:
-                class_rows[cls] = [vector]
+                class_rows[cls] = []
+                class_rows[cls].append(vector)
 
         # Create a numpy array for the class
         for cls in class_rows.keys():
@@ -78,6 +80,14 @@ class PCA(object):
                 cls, sort=True)
             self.pca['principal_components'][
                 cls] = self._principal_components(cls)
+
+        data = self.pca['xvalues'][None]
+        pc_1 = data[:, 0]
+        pc_2 = data[:, 1]
+        print('xvalues')
+        print('P1', min(pc_1), max(pc_1))
+        print('P2', min(pc_2), max(pc_2))
+        print('\n')
 
     def image(self, cls, pointer):
         """Create a representative image from ingested data arrays.
@@ -193,7 +203,7 @@ class PCA(object):
             result = eigens
         return result
 
-    def principal_components(self, cls=None, components=None):
+    def principal_components(self, cls=None, components=2):
         """Get principal components of input data array for a given class.
 
         Args:
@@ -234,7 +244,7 @@ class PCA(object):
         mean_v = data.mean(axis=0)
         return mean_v
 
-    def pc_of_x(self, xvalue, cls, components=2):
+    def pc_of_x(self, xvalue, cls=None, components=2):
         """Create a principal component from a single x value.
 
         Args:
@@ -249,7 +259,7 @@ class PCA(object):
         # Initialize key variables
         meanvector = self.meanvector(cls)
         eigenvectors = self.eigenvectors(
-            None, sort=True, components=components)
+            cls, sort=True, components=components)
 
         # Create principal component from next X value
         zvalue = np.subtract(xvalue, meanvector)
@@ -525,13 +535,18 @@ class Probability2D(object):
 
         self.class_list = self.pca_object.classes()
 
+        p1_sum = 0
+        p2_sum = 0
+
         # Convert pca_object data to data acceptable by the Histogram2D class
-        for cls in self.class_list:
-            (_, principal_components) = self.pca_object.principal_components(
-                cls, components=self.components)
-            for dimension in principal_components:
+        (principal_classes,
+         principal_components) = self.pca_object.principal_components(
+             components=self.components)
+
+        for idx, cls in enumerate(principal_classes):
+                dimensions = principal_components[idx, :]
                 self.data.append(
-                    (cls, (dimension[0], dimension[1]))
+                    (cls, dimensions.tolist())
                 )
 
         # Get new PCA object for principal components
@@ -620,7 +635,7 @@ class Probability2D(object):
             # Process each vector
             for vector in vectors:
                 # Calculate the principal components of the individual xvalue
-                p1p2 = self.pca_object.pc_of_x(vector, cls)
+                p1p2 = self.pca_object.pc_of_x(vector, None)
 
                 # Get prediction
                 prediction = self.hist_object.classifier(p1p2)
@@ -711,7 +726,7 @@ class Probability2D(object):
             sample_count = len(self.pca_object.xvalues(cls))
 
             # Calculate the principal components of the individual xvalue
-            p1p2 = self.pca_object.pc_of_x(xvalue, cls)
+            p1p2 = self.pca_object.pc_of_x(xvalue, None)
 
             # Get values for calculating gaussian parameters
             dimensions = len(p1p2)

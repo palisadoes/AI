@@ -76,8 +76,9 @@ def main():
     # Get data for digits
     for pointer, cls in enumerate(minst_labels):
         if cls in digits:
+            minst_array = np.asarray(minst_images[pointer]) / 256
             data.append(
-                (cls, minst_images[pointer])
+                (cls, minst_array.tolist())
             )
 
     # Print the data shape
@@ -104,6 +105,11 @@ def main():
     # Save principal components for later use
     pc_1 = principal_components[:, 0]
     pc_2 = principal_components[:, 1]
+
+    print('nooo')
+    print('P1', min(pc_1), max(pc_1))
+    print('P2', min(pc_2), max(pc_2))
+    print('\n')
 
     # Feed the chart
     chart_data = (principal_classes, pc_1, pc_2)
@@ -236,12 +242,14 @@ def main():
     data = []
 
     # Convert pca_object data to data acceptable by the Histogram2D class
-    for cls in digits:
-        (_, principal_components) = pca_object.principal_components(
-            cls, components=components)
-        for dimension in principal_components:
+    (principal_classes,
+     principal_components) = pca_object.principal_components(
+         components=components)
+
+    for idx, cls in enumerate(principal_classes):
+            dimensions = principal_components[idx, :]
             data.append(
-                (cls, (dimension[0], dimension[1]))
+                (cls, dimensions.tolist())
             )
 
     hist_object = histogram2d.Histogram2D(data)
