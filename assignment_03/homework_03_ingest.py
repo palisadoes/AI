@@ -57,7 +57,7 @@ def main():
 
     """
     # Initialize key variables
-    digits = [1, 0]
+    digits = [1, 2]
     maximages = 5
     components = 2
     data = []
@@ -176,8 +176,8 @@ def main():
     # XZCVPR values
     xvalue = pca_object.xvalues(tcls)[0]
     output('featurevector', xvalue)
-    output('zvalue', pca_object.zvalues())
-    output('principal_components', pca_object.principal_components()[1])
+    output('zvalue', xvalue - pca_object.meanvector())
+    output('principal_components', pca_object.pc_of_x(xvalue))
     output(
         'reconstructed_z',
         pca_object.reconstruct(xvalue, components) - pca_object.zvalues()
