@@ -57,7 +57,7 @@ def main():
 
     """
     # Initialize key variables
-    digits = [5, 6]
+    digits = [1, 0]
     maximages = 5
     components = 2
     data = []
