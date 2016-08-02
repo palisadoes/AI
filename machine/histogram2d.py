@@ -76,12 +76,6 @@ class Histogram2D(object):
                 else:
                     self.x_y[cls][column].append(value)
 
-        print('Histogram')
-        for column in range(0, len(values)):
-            print(
-                ('P%s') % (column + 1),
-                self.minmax[column]['min'], self.minmax[column]['max'])
-
         # Create empty 2D array
         for cls in values_by_class.keys():
             self.hgram[cls] = np.zeros(

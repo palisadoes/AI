@@ -15,7 +15,6 @@ from machine import mnist
 from machine import pca
 from machine import chart
 from machine import histogram2d
-from machine import histogram1d
 
 
 def cli():
@@ -106,11 +105,6 @@ def main():
     pc_1 = principal_components[:, 0]
     pc_2 = principal_components[:, 1]
 
-    print('nooo')
-    print('P1', min(pc_1), max(pc_1))
-    print('P2', min(pc_2), max(pc_2))
-    print('\n')
-
     # Feed the chart
     chart_data = (principal_classes, pc_1, pc_2)
     graph = chart.ChartPC(digits, chart_data)
@@ -129,13 +123,12 @@ def main():
     covariance = pca_object.covariance(None)
     pca.image_by_list(covariance, ('%s-covariance') % (None))
 
-    """
     #########################################################################
     # View eigenvectors as images
     #########################################################################
     print('Creating Eigenvector Based Images')
     for cls in digits:
-        eigenvectors = pca_object.eigenvectors(cls=None, sort=True)
+        eigenvectors = pca_object.eigenvectors()
 
         count = 0
         for eigenvector in eigenvectors:
@@ -163,12 +156,11 @@ def main():
 
             # Reconstruct image from principal component
             image = pca_object.reconstruct(
-                xvalues[count], None, components)
+                xvalues[count], components)
 
             # Create image from principal component
             pca.image_by_list(xvalues[count], ('%s-%s-orig') % (cls, count))
             pca.image_by_list(image, ('%s-%s-reconstruct') % (cls, count))
-    """
 
     #########################################################################
     # Output metadata for whole dataset
@@ -184,20 +176,21 @@ def main():
     # XZCVPR values
     xvalue = pca_object.xvalues(tcls)[0]
     output('featurevector', xvalue)
-    output('zvalue', pca_object.zvalues(tcls))
-    output('principal_components', pca_object.principal_components(tcls)[1])
+    output('zvalue', pca_object.zvalues())
+    output('principal_components', pca_object.principal_components()[1])
     output(
         'reconstructed_z',
-        pca_object.reconstruct(
-            xvalue, tcls, components) - pca_object.zvalues(tcls)
+        pca_object.reconstruct(xvalue, components) - pca_object.zvalues()
     )
-    output('reconstructed_x', pca_object.reconstruct(xvalue, tcls, components))
+    output('reconstructed_x', pca_object.reconstruct(xvalue, components))
 
     # Principal components for Gaussian calculations
     minima = np.asarray([min(pc_1), min(pc_2)])
     maxima = np.asarray([max(pc_1), max(pc_2)])
     output('minima', minima)
     output('maxima', maxima)
+    print('PC 1 Min / Max', min(pc_1), max(pc_1))
+    print('PC 2 Min / Max', min(pc_2), max(pc_2))
 
     #########################################################################
     # Calculate training accuracy
@@ -208,9 +201,19 @@ def main():
     probability = pca.Probability2D(pca_object)
 
     # Output class based means and covariances
+    print('\nMean Vectors')
     for cls in digits:
-        output(('mu_%s') % (cls), probability.meanvector(cls=cls))
-        output(('covariance_%s') % (cls), probability.covariance(cls=cls))
+        value = probability.meanvector(cls=cls)
+        output(('mu_%s') % (cls), value)
+        print(('Class %s:') % (cls))
+        pprint(value)
+
+    print('\nCovariance')
+    for cls in digits:
+        value = probability.covariance(cls=cls)
+        output(('covariance_%s') % (cls), value)
+        print(('Class %s:') % (cls))
+        pprint(value)
 
     # Output Histogram data
     for cls in digits:
@@ -222,7 +225,7 @@ def main():
     print('\nGaussian Accuracy')
     for cls in digits:
         print(
-            ('Class %s: %s%%') % (cls, g_accuracy[cls])
+            ('Class %s: %.2f%%') % (cls, g_accuracy[cls])
         )
 
     h_accuracy = probability.histogram_accuracy()
@@ -231,7 +234,7 @@ def main():
     print('\nHistogram Accuracy')
     for cls in digits:
         print(
-            ('Class %s: %s%%') % (cls, h_accuracy[cls])
+            ('Class %s: %.2f%%') % (cls, h_accuracy[cls])
         )
 
     #########################################################################
@@ -247,10 +250,10 @@ def main():
          components=components)
 
     for idx, cls in enumerate(principal_classes):
-            dimensions = principal_components[idx, :]
-            data.append(
-                (cls, dimensions.tolist())
-            )
+        dimensions = principal_components[idx, :]
+        data.append(
+            (cls, dimensions.tolist())
+        )
 
     hist_object = histogram2d.Histogram2D(data)
     hist_object.graph3d()

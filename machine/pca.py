@@ -65,29 +65,18 @@ class PCA(object):
             sys.exit(0)
 
         # Precalculate values
-        tmp_classes = sorted(self.available_classes)
-        tmp_classes.append(None)
-        for cls in tmp_classes:
+        cls_none = sorted(self.available_classes)
+        cls_none.append(None)
+        for cls in cls_none:
             # Skip if there are less than two dimensions
-            # if (vector_length < 2 and cls is None) or (vector_length >= 2):
             self.pca['xvalues'][cls] = self.xvalues(cls)
             self.pca['meanvector'][cls] = self._meanvector(cls)
             self.pca['zvalues'][cls] = self._zvalues(cls)
             self.pca['covariance'][cls] = self._covariance(cls)
-            self.pca['eigenvectors'][cls] = self._eigenvectors(
-                cls, sort=False)
-            self.pca['eigenvectors_sorted'][cls] = self._eigenvectors(
-                cls, sort=True)
-            self.pca['principal_components'][
-                cls] = self._principal_components(cls)
 
-        data = self.pca['xvalues'][None]
-        pc_1 = data[:, 0]
-        pc_2 = data[:, 1]
-        print('xvalues')
-        print('P1', min(pc_1), max(pc_1))
-        print('P2', min(pc_2), max(pc_2))
-        print('\n')
+        # Calculate non class specific values
+        self.pca['eigenvectors'] = self._eigenvectors()
+        self.pca['principal_components'] = self._principal_components()
 
     def image(self, cls, pointer):
         """Create a representative image from ingested data arrays.
@@ -179,7 +168,7 @@ class PCA(object):
         # Get covariance
         return self.pca['covariance'][cls]
 
-    def eigenvectors(self, cls=None, sort=False, components=None):
+    def eigenvectors(self, components=None):
         """Get reverse sorted numpy array of eigenvectors for a given class.
 
         Args:
@@ -191,10 +180,7 @@ class PCA(object):
 
         """
         # Get eigenvectors
-        if sort is False:
-            eigens = self.pca['eigenvectors'][cls]
-        else:
-            eigens = self.pca['eigenvectors_sorted'][cls]
+        eigens = self.pca['eigenvectors']
 
         # Return first 'components' number of rows
         if components is not None:
@@ -203,7 +189,7 @@ class PCA(object):
             result = eigens
         return result
 
-    def principal_components(self, cls=None, components=2):
+    def principal_components(self, components=2):
         """Get principal components of input data array for a given class.
 
         Args:
@@ -215,7 +201,7 @@ class PCA(object):
 
         """
         # Get principal_components
-        pcomps = self.pca['principal_components'][cls][1]
+        pcomps = self.pca['principal_components'][1]
 
         # Return first 'components' number of columns
         if components is not None:
@@ -224,7 +210,7 @@ class PCA(object):
             result = pcomps
 
         # Get classes
-        classes = self.pca['principal_components'][cls][0]
+        classes = self.pca['principal_components'][0]
 
         # Get first "component" number of columns and return
         return (classes, result)
@@ -244,7 +230,7 @@ class PCA(object):
         mean_v = data.mean(axis=0)
         return mean_v
 
-    def pc_of_x(self, xvalue, cls=None, components=2):
+    def pc_of_x(self, xvalue, components=2):
         """Create a principal component from a single x value.
 
         Args:
@@ -257,9 +243,8 @@ class PCA(object):
 
         """
         # Initialize key variables
-        meanvector = self.meanvector(cls)
-        eigenvectors = self.eigenvectors(
-            cls, sort=True, components=components)
+        meanvector = self.meanvector(None)
+        eigenvectors = self.eigenvectors(components=components)
 
         # Create principal component from next X value
         zvalue = np.subtract(xvalue, meanvector)
@@ -268,7 +253,7 @@ class PCA(object):
         # Return principal components
         return p1p2
 
-    def reconstruct(self, xvalue, cls, components):
+    def reconstruct(self, xvalue, components):
         """Reconstruct X based on the principal components generated for it.
 
         Args:
@@ -285,13 +270,12 @@ class PCA(object):
 
         """
         # Initialize key variables
-        meanvector = self.meanvector(cls)
-        eigenvectors = self.eigenvectors(
-            cls, sort=True, components=components)
+        meanvector = self.meanvector(None)
+        eigenvectors = self.eigenvectors(components=components)
 
         # Return
         result = np.dot(self.pc_of_x(
-            xvalue, cls, components), eigenvectors) + meanvector
+            xvalue, components), eigenvectors) + meanvector
         return result
 
     def _zvalues(self, cls):
@@ -367,7 +351,7 @@ class PCA(object):
         matrix = np.cov(zmatrix)
         return matrix
 
-    def _eigen_values_vectors(self, cls):
+    def _eigen_values_vectors(self):
         """Get eigen of input data array for a given class.
 
         Args:
@@ -379,7 +363,7 @@ class PCA(object):
 
         """
         # Initialize key variables
-        values = np.linalg.eig(self.covariance(cls))
+        values = np.linalg.eig(self.covariance(None))
         (eigenvalues, eigenvectors) = values
         real_vectors = np.real(eigenvectors)
         result = (eigenvalues, real_vectors)
@@ -387,11 +371,10 @@ class PCA(object):
         # Return
         return result
 
-    def _eigen_tuples(self, cls, sort=True):
+    def _eigen_tuples(self):
         """Get eigens of input data array for a given class.
 
         Args:
-            cls: Class of data
             sort: Sort by eigenvalue if True
 
         Returns:
@@ -401,7 +384,7 @@ class PCA(object):
 
         """
         # Initialize key variables
-        (eigenvalues, eigenvectors) = self._eigen_values_vectors(cls)
+        (eigenvalues, eigenvectors) = self._eigen_values_vectors()
 
         # Convert numpy arrays of [eigenvalue], [eigenvector] to
         # a list of pairs of tuples
@@ -409,19 +392,17 @@ class PCA(object):
             eigenvalues[i]), eigenvectors[:, i]) for i in range(
                 len(eigenvalues))]
 
-        if sort is True:
-            # Sort the (eigenvalue, eigenvector) tuples from high to low
-            eig_pairs.sort(key=operator.itemgetter(0))
-            eig_pairs.reverse()
+        # Sort the (eigenvalue, eigenvector) tuples from high to low
+        eig_pairs.sort(key=operator.itemgetter(0))
+        eig_pairs.reverse()
 
         # Return
         return eig_pairs
 
-    def _eigenvectors(self, cls, sort=True):
+    def _eigenvectors(self):
         """Get reverse sorted numpy array of eigenvectors for a given class.
 
         Args:
-            cls: Class of data
             sort: Sort by eigenvalue if True
 
         Returns:
@@ -432,7 +413,7 @@ class PCA(object):
         vector_list = []
 
         # Proecess data
-        eig_pairs = self._eigen_tuples(cls, sort=sort)
+        eig_pairs = self._eigen_tuples()
         for (_, eigenvector) in eig_pairs:
             vector_list.append(eigenvector)
         values = np.asarray(vector_list)
@@ -440,11 +421,11 @@ class PCA(object):
         # Return
         return values
 
-    def _principal_components(self, cls):
+    def _principal_components(self):
         """Get principal components of input data array for a given class.
 
         Args:
-            cls: Class of data
+            None
 
         Returns:
             result: nparray of real eigenvectors
@@ -454,37 +435,32 @@ class PCA(object):
         classes = []
 
         # Start calculations
-        z_values = self.zvalues(cls)
-        eigenvectors = self.eigenvectors(cls, sort=True)
+        z_values = self.zvalues(None)
+        eigenvectors = self.eigenvectors()
         result = np.dot(z_values, eigenvectors.T)
 
         # Get classes represented by each row of X values
-        if cls is None:
-            for next_class in self.available_classes:
-                next_z = self.zvalues(next_class)
-                rows = next_z.shape[0]
-                classes.extend([next_class] * rows)
-        else:
-            # Assign classes to each row
-            rows = result.shape[0]
-            classes = [cls] * rows
+        for next_class in self.available_classes:
+            next_z = self.zvalues(next_class)
+            rows = next_z.shape[0]
+            classes.extend([next_class] * rows)
 
         # Return
         np_classes = np.asarray(classes)
         return (np_classes, result)
 
-    def eigen_vector_check(self, cls):
+    def eigen_vector_check(self):
         """Verify that the eigen vectors are calcualted OK.
 
         Args:
-            cls: Class of data
+            None
 
         Returns:
             matrix: Numpy array of all ones
 
         """
         # Initialize key variables
-        vectors = self.eigenvectors(cls)
+        vectors = self.eigenvectors()
         (_, columns) = vectors.shape
         matrix = np.zeros(shape=(1, columns))
 
@@ -532,11 +508,7 @@ class Probability2D(object):
         self.components = 2
         self.pca_object = pca_object
         self.data = []
-
         self.class_list = self.pca_object.classes()
-
-        p1_sum = 0
-        p2_sum = 0
 
         # Convert pca_object data to data acceptable by the Histogram2D class
         (principal_classes,
@@ -544,10 +516,10 @@ class Probability2D(object):
              components=self.components)
 
         for idx, cls in enumerate(principal_classes):
-                dimensions = principal_components[idx, :]
-                self.data.append(
-                    (cls, dimensions.tolist())
-                )
+            dimensions = principal_components[idx, :]
+            self.data.append(
+                (cls, dimensions.tolist())
+            )
 
         # Get new PCA object for principal components
         self.pca_new = PCA(self.data)
@@ -635,7 +607,7 @@ class Probability2D(object):
             # Process each vector
             for vector in vectors:
                 # Calculate the principal components of the individual xvalue
-                p1p2 = self.pca_object.pc_of_x(vector, None)
+                p1p2 = self.pca_object.pc_of_x(vector)
 
                 # Get prediction
                 prediction = self.hist_object.classifier(p1p2)
@@ -726,7 +698,7 @@ class Probability2D(object):
             sample_count = len(self.pca_object.xvalues(cls))
 
             # Calculate the principal components of the individual xvalue
-            p1p2 = self.pca_object.pc_of_x(xvalue, None)
+            p1p2 = self.pca_object.pc_of_x(xvalue)
 
             # Get values for calculating gaussian parameters
             dimensions = len(p1p2)
