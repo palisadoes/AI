@@ -654,13 +654,21 @@ class Probability2D(object):
                     else:
                         cls_count[cls] = 1
 
-        # Return
+        # Calculate per class accuracy
         correct[None] = 0
         cls_count[None] = 0
-        for cls in sorted(cls_count.keys()):
-            accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
+        for cls in cls_count.keys():
+            if cls_count[cls] != 0:
+                accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
+
+            # Keep a tally for all successes
             correct[None] = correct[None] + correct[cls]
             cls_count[None] = cls_count[None] + cls_count[cls]
+
+        # Calulate overall accuracy
+        accuracy[None] = 100 * (correct[None] / cls_count[None])
+
+        # Return
         return accuracy
 
     def accuracy_bayesian(self):
@@ -704,13 +712,22 @@ class Probability2D(object):
                     else:
                         cls_count[cls] = 1
 
-        # Return
+        # Calculate per class accuracy
         correct[None] = 0
         cls_count[None] = 0
-        for cls in sorted(cls_count.keys()):
-            accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
+        for cls in cls_count.keys():
+            if cls_count[cls] != 0:
+                accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
+
+            # Keep a tally for all successes
             correct[None] = correct[None] + correct[cls]
             cls_count[None] = cls_count[None] + cls_count[cls]
+
+        # Calulate overall accuracy
+        print('help', correct[None], cls_count[None])
+        accuracy[None] = 100 * (correct[None] / cls_count[None])
+
+        # Return
         return accuracy
 
     def classifier_bayesian(self, xvalue):

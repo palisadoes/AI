@@ -58,6 +58,8 @@ def main():
     """
     # Initialize key variables
     digits = [1, 2]
+    none_digits = digits[:]
+    none_digits.append(None)
     maximages = 5
     components = 2
     data = []
@@ -175,9 +177,10 @@ def main():
 
     # XZCVPR values
     xvalue = pca_object.xvalues(tcls)[0]
+    pc_of_x = pca_object.pc_of_x(xvalue)
     output('featurevector', xvalue)
     output('zvalue', xvalue - pca_object.meanvector())
-    output('principal_components', pca_object.pc_of_x(xvalue))
+    output('principal_components', pc_of_x)
     output(
         'reconstructed_z',
         pca_object.reconstruct(xvalue, components) - pca_object.zvalues()
@@ -223,7 +226,7 @@ def main():
     g_accuracy = probability.accuracy_bayesian()
 
     print('\nGaussian Accuracy')
-    for cls in digits:
+    for cls in none_digits:
         print(
             ('Class %s: %.2f%%') % (cls, g_accuracy[cls])
         )
@@ -232,7 +235,7 @@ def main():
 
     # Print accuracy
     print('\nHistogram Accuracy')
-    for cls in digits:
+    for cls in none_digits:
         print(
             ('Class %s: %.2f%%') % (cls, h_accuracy[cls])
         )
@@ -244,16 +247,18 @@ def main():
     # Print accuracy
     print('\nGaussian Probability')
     print('Classified Value', g_digit_class)
-    print('Classified Probability', g_digit_probability[digit_class])
+    print(('Classified Probability: %.2f%%') % (
+        g_digit_probability[g_digit_class] * 100))
 
     # Calculate probabilities
-    g_digit_class = probability.classifier_histogram(xvalue)
-    g_digit_probability = probability.probability_histogram(xvalue)
+    h_digit_class = probability.classifier_histogram(pc_of_x)
+    h_digit_probability = probability.probability_histogram(pc_of_x)
 
     # Print accuracy
-    print('\nGaussian Probability')
-    print('Classified Value', g_digit_class)
-    print('Classified Probability', g_digit_probability[digit_class])
+    print('\nHistogram Probability')
+    print('Classified Value', h_digit_class)
+    print(('Classified Probability: %.2f%%') % (
+        h_digit_probability[h_digit_class] * 100))
 
     #########################################################################
     # Create 3D Histogram for first 2 principal components for both classes

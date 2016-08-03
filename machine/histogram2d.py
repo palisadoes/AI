@@ -136,10 +136,6 @@ class Histogram2D(object):
         # Get row / column for histogram for dimensions
         row, col = self.row_col(dimensions)
 
-        if row >= self.bin_count or col >= self.bin_count:
-            print(row, col)
-            return None
-
         # Get the denominator
         denominator = self.hgram[self.classes[0]][row][col] + self.hgram[
             self.classes[1]][row][col]
