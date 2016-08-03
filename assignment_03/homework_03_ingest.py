@@ -14,7 +14,7 @@ import numpy as np
 from machine import mnist
 from machine import pca
 from machine import chart
-from machine import histogram2d
+from machine import classifier2d
 
 
 def cli():
@@ -201,29 +201,30 @@ def main():
     print('Training Accuracy')
 
     # Calculate probabilities
-    probability = pca.Probability2D(pca_object)
+    bayes_classifier = classifier2d.Bayesian(pca_object)
+    histo_classifier = classifier2d.Histogram(pca_object)
 
     # Output class based means and covariances
     print('\nMean Vectors')
     for cls in digits:
-        value = probability.meanvector(cls=cls)
+        value = bayes_classifier.meanvector(cls=cls)
         output(('mu_%s') % (cls), value)
         print(('Class %s:') % (cls))
         pprint(value)
 
     print('\nCovariance')
     for cls in digits:
-        value = probability.covariance(cls=cls)
+        value = bayes_classifier.covariance(cls=cls)
         output(('covariance_%s') % (cls), value)
         print(('Class %s:') % (cls))
         pprint(value)
 
     # Output Histogram data
     for cls in digits:
-        output(('histogram_%s') % (cls), probability.histogram()[cls])
+        output(('histogram_%s') % (cls), histo_classifier.histogram()[cls])
 
     # Get accuracy values
-    g_accuracy = probability.accuracy_bayesian()
+    g_accuracy = bayes_classifier.accuracy()
 
     print('\nGaussian Accuracy')
     for cls in none_digits:
@@ -231,7 +232,7 @@ def main():
             ('Class %s: %.2f%%') % (cls, g_accuracy[cls])
         )
 
-    h_accuracy = probability.accuracy_histogram()
+    h_accuracy = histo_classifier.accuracy()
 
     # Print accuracy
     print('\nHistogram Accuracy')
@@ -241,8 +242,8 @@ def main():
         )
 
     # Calculate probabilities
-    g_digit_class = probability.classifier_bayesian(xvalue)
-    g_digit_probability = probability.probability_bayesian(xvalue)
+    g_digit_class = bayes_classifier.classifier(xvalue)
+    g_digit_probability = bayes_classifier.probability(xvalue)
 
     # Print accuracy
     print('\nGaussian Probability')
@@ -251,8 +252,8 @@ def main():
         g_digit_probability[g_digit_class] * 100))
 
     # Calculate probabilities
-    h_digit_class = probability.classifier_histogram(pc_of_x)
-    h_digit_probability = probability.probability_histogram(pc_of_x)
+    h_digit_class = histo_classifier.classifier(xvalue)
+    h_digit_probability = histo_classifier.probability(xvalue)
 
     # Print accuracy
     print('\nHistogram Probability')
@@ -264,62 +265,7 @@ def main():
     # Create 3D Histogram for first 2 principal components for both classes
     #########################################################################
     print('\nCreating 3D Histogram Chart')
-
-    data = []
-
-    # Convert pca_object data to data acceptable by the Histogram2D class
-    (principal_classes,
-     principal_components) = pca_object.principal_components(
-         components=components)
-
-    for idx, cls in enumerate(principal_classes):
-        dimensions = principal_components[idx, :]
-        data.append(
-            (cls, dimensions.tolist())
-        )
-
-    hist_object = histogram2d.Histogram2D(data)
-    hist_object.graph3d()
-
-    """
-    #########################################################################
-    # Create 2D Histogram for first for principal component of each class
-    #########################################################################
-    print('Creating 2D Histogram Charts')
-
-    p1_data = []
-    p2_data = []
-    pc_save = {}
-
-    # Convert pca_object data to data acceptable by the Histogram2D class
-    for cls in digits:
-        (_, pc_save[cls]) = pca_object.principal_components(
-            cls, components=components)
-
-    # Get list of tuples [(class, p1_value)]
-    p1_data = []
-    for pointer in range(0, 2):
-        cls = digits[pointer]
-        for value in pc_save[cls][:, [0]]:
-            p1_data.append(
-                (digits[pointer], value)
-            )
-
-    hist_object = histogram1d.Histogram1D(p1_data, bins=25)
-    hist_object.graph('First Principal Components')
-
-    # Get list of tuples [(class, p2_value)]
-    p2_data = []
-    for pointer in range(0, 2):
-        cls = digits[pointer]
-        for value in pc_save[cls][:, [1]]:
-            p1_data.append(
-                (digits[pointer], value)
-            )
-
-    hist_object = histogram1d.Histogram1D(p2_data, bins=25)
-    hist_object.graph('Second Principal Components')
-    """
+    histo_classifier.graph3d()
 
 
 def output(label, value):
@@ -340,11 +286,6 @@ def output(label, value):
     # Write file
     filename = ('%s/%s.csv') % (output_directory, label)
     with open(filename, 'w', newline='') as csvfile:
-        """
-        spamwriter = csv.writer(
-            csvfile, delimiter='\t',
-            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        """
         spamwriter = csv.writer(csvfile, delimiter='\t')
         if list_of_lists is True:
             spamwriter.writerows(rows)

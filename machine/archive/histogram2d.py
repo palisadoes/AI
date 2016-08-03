@@ -262,8 +262,8 @@ class Histogram2D(object):
 
             # Create elements defining the sides of each column
             num_elements = len(x_positions)
-            x_col_width = np.ones(num_elements) * int(self.width(0))
-            y_col_depth = np.ones(num_elements) * int(self.width(1))
+            x_col_width = np.ones(num_elements) * self.width(0)
+            y_col_depth = np.ones(num_elements) * self.width(1)
             z_col_height = np.asarray(z_height)
 
             # Get color of plot
