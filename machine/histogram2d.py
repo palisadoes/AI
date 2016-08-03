@@ -120,7 +120,7 @@ class Histogram2D(object):
         (row, col) = tuple(row_col)
         return (row, col)
 
-    def classifier(self, dimensions):
+    def probability_histogram(self, dimensions):
         """Get the number of bins to use.
 
         Args:
@@ -154,6 +154,22 @@ class Histogram2D(object):
                 probability[cls] = None
             else:
                 probability[cls] = float(nominator) / float(denominator)
+
+        # Return
+        return probability
+
+    def classifier_histogram(self, dimensions):
+        """Get the number of bins to use.
+
+        Args:
+            dimensions: Tuple of dimensions
+
+        Returns:
+            selection: Class classifier chooses
+
+        """
+        # Initialize key variables
+        probability = self.probability_histogram(dimensions)
 
         # Reassign variables for readability
         prob_c0 = probability[self.classes[0]]

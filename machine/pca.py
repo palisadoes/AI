@@ -583,7 +583,35 @@ class Probability2D(object):
         value = self.pca_new.covariance(cls=cls)
         return value
 
-    def histogram_accuracy(self):
+    def classifier_histogram(self, p1p2):
+        """Get the classifier_histogram.
+
+        Args:
+            p1p2: Principal components
+
+        Returns:
+            value: classifier_histogram
+
+        """
+        # Return
+        value = self.hist_object.classifier_histogram(p1p2)
+        return value
+
+    def probability_histogram(self, p1p2):
+        """Get the probability_histogram.
+
+        Args:
+            p1p2: Principal components
+
+        Returns:
+            value: probability_histogram
+
+        """
+        # Return
+        value = self.hist_object.probability_histogram(p1p2)
+        return value
+
+    def accuracy_histogram(self):
         """Calulate the accuracy of the training data using histograms.
 
         Args:
@@ -610,7 +638,7 @@ class Probability2D(object):
                 p1p2 = self.pca_object.pc_of_x(vector)
 
                 # Get prediction
-                prediction = self.hist_object.classifier(p1p2)
+                prediction = self.classifier_histogram(p1p2)
 
                 if prediction is not None:
                     # Count the number of correct predictions
@@ -627,11 +655,15 @@ class Probability2D(object):
                         cls_count[cls] = 1
 
         # Return
+        correct[None] = 0
+        cls_count[None] = 0
         for cls in sorted(cls_count.keys()):
             accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
+            correct[None] = correct[None] + correct[cls]
+            cls_count[None] = cls_count[None] + cls_count[cls]
         return accuracy
 
-    def gaussian_accuracy(self):
+    def accuracy_bayesian(self):
         """Calulate the accuracy of the training data using gaussian models.
 
         Args:
@@ -655,7 +687,7 @@ class Probability2D(object):
             # Process each vector
             for vector in vectors:
                 # Get the prediction
-                prediction = self.classifier_gaussian(vector)
+                prediction = self.classifier_bayesian(vector)
 
                 # Only count definitive predictions
                 if prediction is not None:
@@ -673,12 +705,51 @@ class Probability2D(object):
                         cls_count[cls] = 1
 
         # Return
+        correct[None] = 0
+        cls_count[None] = 0
         for cls in sorted(cls_count.keys()):
             accuracy[cls] = 100 * (correct[cls] / cls_count[cls])
+            correct[None] = correct[None] + correct[cls]
+            cls_count[None] = cls_count[None] + cls_count[cls]
         return accuracy
 
-    def classifier_gaussian(self, xvalue):
+    def classifier_bayesian(self, xvalue):
         """Bayesian classifer for any value of X.
+
+        Args:
+            xvalue: Specific feature vector of X
+
+        Returns:
+            selection: Class classifier chooses
+
+        """
+        # Initialize key variables
+        probability = {}
+        classes = self.classes()
+
+        # Get probability of each class
+        probability = self.probability_bayesian(xvalue)
+
+        # Reassign variables for readability
+        prob_c0 = probability[classes[0]]
+        prob_c1 = probability[classes[1]]
+
+        # Evaluate probabilities
+        if prob_c0 + prob_c1 == 0:
+            selection = None
+        else:
+            if prob_c0 > prob_c1:
+                selection = classes[0]
+            elif prob_c0 < prob_c1:
+                selection = classes[1]
+            else:
+                selection = None
+
+        # Return
+        return selection
+
+    def probability_bayesian(self, xvalue):
+        """Bayesian probability for any value of X.
 
         Args:
             xvalue: Specific feature vector of X
@@ -723,23 +794,8 @@ class Probability2D(object):
         for cls in classes:
             probability[cls] = bayesian[cls] / denominator
 
-        # Reassign variables for readability
-        prob_c0 = probability[classes[0]]
-        prob_c1 = probability[classes[1]]
-
-        # Evaluate probabilities
-        if prob_c0 + prob_c1 == 0:
-            selection = None
-        else:
-            if prob_c0 > prob_c1:
-                selection = classes[0]
-            elif prob_c0 < prob_c1:
-                selection = classes[1]
-            else:
-                selection = None
-
         # Return
-        return selection
+        return probability
 
 
 def image_by_list(body, prefix=''):

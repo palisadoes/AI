@@ -220,7 +220,7 @@ def main():
         output(('histogram_%s') % (cls), probability.histogram()[cls])
 
     # Get accuracy values
-    g_accuracy = probability.gaussian_accuracy()
+    g_accuracy = probability.accuracy_bayesian()
 
     print('\nGaussian Accuracy')
     for cls in digits:
@@ -228,7 +228,7 @@ def main():
             ('Class %s: %.2f%%') % (cls, g_accuracy[cls])
         )
 
-    h_accuracy = probability.histogram_accuracy()
+    h_accuracy = probability.accuracy_histogram()
 
     # Print accuracy
     print('\nHistogram Accuracy')
@@ -236,6 +236,24 @@ def main():
         print(
             ('Class %s: %.2f%%') % (cls, h_accuracy[cls])
         )
+
+    # Calculate probabilities
+    g_digit_class = probability.classifier_bayesian(xvalue)
+    g_digit_probability = probability.probability_bayesian(xvalue)
+
+    # Print accuracy
+    print('\nGaussian Probability')
+    print('Classified Value', g_digit_class)
+    print('Classified Probability', g_digit_probability[digit_class])
+
+    # Calculate probabilities
+    g_digit_class = probability.classifier_histogram(xvalue)
+    g_digit_probability = probability.probability_histogram(xvalue)
+
+    # Print accuracy
+    print('\nGaussian Probability')
+    print('Classified Value', g_digit_class)
+    print('Classified Probability', g_digit_probability[digit_class])
 
     #########################################################################
     # Create 3D Histogram for first 2 principal components for both classes
