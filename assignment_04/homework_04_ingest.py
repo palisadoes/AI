@@ -60,10 +60,23 @@ class Ingest(object):
             None
 
         """
-        (data, _, _) = self.data
+        (data, _, _, _) = self.data
         return np.asarray(data[2])
 
-    def binary(self):
+    def klasses_binary(self):
+        """Method to obtain kesslerized classes.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        (_, data, _, _) = self.data
+        return np.asarray(data)
+
+    def klasses_non_binary(self):
         """Method to obtain training data.
 
         Args:
@@ -73,10 +86,10 @@ class Ingest(object):
             None
 
         """
-        (_, data, _) = self.data
+        (_, _, data, _) = self.data
         return np.asarray(data)
 
-    def non_binary(self):
+    def classes_non_binary(self):
         """Method to obtain training data.
 
         Args:
@@ -86,8 +99,10 @@ class Ingest(object):
             None
 
         """
-        (_, _, data) = self.data
+        (_, _, _, data) = self.data
         return np.asarray(data)
+
+
 
     def _data(self):
         """Method to read data from spreadsheet.
@@ -102,8 +117,9 @@ class Ingest(object):
         data = {}
         features = 14
         sheets = [0, 2]
-        binary = []
-        non_binary = []
+        cls_kslr_bin = []
+        cls_kslr_num = []
+        classes_num = []
 
         #####################################################################
         #####################################################################
@@ -146,8 +162,6 @@ class Ingest(object):
                 pvalues = [1]
                 pvalues.extend(values)
 
-                # print('_data', sheet, pvalues, values, '\n')
-
                 # Append to the list of lists
                 data[sheet].append(pvalues)
 
@@ -160,16 +174,17 @@ class Ingest(object):
                 if sheet == 0:
                     # Append to binary classifier data
                     value = worksheet.row(row)[features + 1].value
-                    binary.append([int(value)])
+                    cls_kslr_bin.append([int(value)])
 
-                    # Get data
+                    # Get data (kessler)
                     values = [-1] * 6
-                    non_binary_column = worksheet.row(row)[features + 2].value
-                    values[int(non_binary_column)] = 1
-                    non_binary.append(values)
+                    cls_numeric = worksheet.row(row)[features + 2].value
+                    values[int(cls_numeric)] = 1
+                    cls_kslr_num.append(values)
+                    classes_numeric.append(cls_numeric)
 
         # Return
-        return (data, binary, non_binary)
+        return (data, cls_kslr_bin, cls_kslr_num, classes_numeric)
 
 
 def _start_processing(value):
@@ -245,8 +260,8 @@ def main():
     # Get training data and kessler classes
     training_data = ingest.training_data()
     data_to_classify = ingest.data_to_classify()
-    binary_classes = ingest.binary()
-    non_binary_classes = ingest.non_binary()
+    binary_classes = ingest.klasses_binary()
+    non_binary_classes = ingest.klasses_non_binary()
 
     #########################################################################
     #########################################################################
@@ -303,6 +318,7 @@ def main():
     for vector in training_data:
         next_class = classify.prediction(vector, non_binary_classes)
         confusion_n.append(next_class)
+
         next_class = classify.prediction(vector, binary_classes)
         confusion_b.append(next_class)
 
