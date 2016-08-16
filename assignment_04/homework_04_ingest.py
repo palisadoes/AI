@@ -2,8 +2,11 @@
 """Program Ingests data for a 2D histogram."""
 
 # Standard python imports
+import sys
 import argparse
 from pprint import pprint
+import numpy as np
+from sklearn.metrics import confusion_matrix
 
 import xlrd
 
@@ -45,7 +48,7 @@ class Ingest(object):
 
         """
         (data, _, _) = self.data
-        return data[0]
+        return np.asarray(data[0])
 
     def data_to_classify(self):
         """Method to obtain training data.
@@ -58,7 +61,7 @@ class Ingest(object):
 
         """
         (data, _, _) = self.data
-        return data[2]
+        return np.asarray(data[2])
 
     def binary(self):
         """Method to obtain training data.
@@ -71,7 +74,7 @@ class Ingest(object):
 
         """
         (_, data, _) = self.data
-        return data
+        return np.asarray(data)
 
     def non_binary(self):
         """Method to obtain training data.
@@ -84,7 +87,7 @@ class Ingest(object):
 
         """
         (_, _, data) = self.data
-        return data
+        return np.asarray(data)
 
     def _data(self):
         """Method to read data from spreadsheet.
@@ -145,6 +148,9 @@ class Ingest(object):
 
                 # print('_data', sheet, pvalues, values, '\n')
 
+                # Append to the list of lists
+                data[sheet].append(pvalues)
+
                 ##############################################################
                 ##############################################################
                 # Read the classes
@@ -162,11 +168,8 @@ class Ingest(object):
                     values[int(non_binary_column)] = 1
                     non_binary.append(values)
 
-                # Append to the list of lists
-                data[sheet].append(pvalues)
-
         # Return
-        return (data, [binary], non_binary)
+        return (data, binary, non_binary)
 
 
 def _start_processing(value):
@@ -229,6 +232,10 @@ def main():
         None:
 
     """
+    # Initialize key values
+    predicted_b = []
+    predicted_n = []
+
     # Get data
     args = cli()
 
@@ -237,13 +244,87 @@ def main():
 
     # Get training data and kessler classes
     training_data = ingest.training_data()
+    data_to_classify = ingest.data_to_classify()
     binary_classes = ingest.binary()
     non_binary_classes = ingest.non_binary()
 
+    #########################################################################
+    #########################################################################
+    # Classifier Creation
+    #########################################################################
+    #########################################################################
+
     # Apply classifer
     classify = Linear(training_data)
-    pprint(classify.classifier(binary_classes))
-    pprint(classify.classifier(non_binary_classes))
+
+    # Classifier for binary data
+    classifier_b = classify.classifier(binary_classes)
+    pprint(classifier_b)
+    print('\n')
+
+    # Classifier for non-binary data
+    classifier_n = classify.classifier(non_binary_classes)
+    pprint(classifier_n)
+    print('\n')
+
+    #########################################################################
+    #########################################################################
+    # Predictions
+    #########################################################################
+    #########################################################################
+
+    # Print predicted binary classes
+    for vector in data_to_classify:
+        next_class = classify.prediction(vector, binary_classes)
+        predicted_b.append(next_class)
+        print(next_class)
+
+    print('\n')
+
+    # Print predicted non-binary classes
+    for vector in data_to_classify:
+        next_class = classify.prediction(vector, non_binary_classes)
+        predicted_n.append(next_class)
+        print(next_class)
+
+    #########################################################################
+    #########################################################################
+    # Confusion matrices
+    #########################################################################
+    #########################################################################
+
+    print('\nConfusion Matrix Classification')
+
+    # Predict classification of the original training data
+    confusion_b = []
+    confusion_n = []
+
+    count = 0
+    for vector in training_data:
+        next_class = classify.prediction(vector, non_binary_classes)
+        confusion_n.append(next_class)
+        next_class = classify.prediction(vector, binary_classes)
+        confusion_b.append(next_class)
+
+        count += 1
+        print(count)
+
+    print('Confusion Matrix Calculation')
+    print(
+        binary_classes.shape, non_binary_classes.shape,
+        np.asarray(confusion_b).shape, np.asarray(confusion_n).shape)
+
+    # Confusion matrix
+    matrix_b = confusion_matrix(
+        binary_classes, np.asarray(confusion_b))
+    pprint(matrix_b)
+
+    print('\n')
+
+    matrix_n = confusion_matrix(
+        non_binary_classes, np.asarray(confusion_n))
+    pprint(matrix_n)
+
 
 if __name__ == "__main__":
     main()
