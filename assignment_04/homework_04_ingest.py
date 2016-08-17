@@ -47,7 +47,7 @@ class Ingest(object):
             None
 
         """
-        (data, _, _) = self.data
+        (data, _, _, _) = self.data
         return np.asarray(data[0])
 
     def data_to_classify(self):
@@ -101,8 +101,6 @@ class Ingest(object):
         """
         (_, _, _, data) = self.data
         return np.asarray(data)
-
-
 
     def _data(self):
         """Method to read data from spreadsheet.
@@ -181,10 +179,10 @@ class Ingest(object):
                     cls_numeric = worksheet.row(row)[features + 2].value
                     values[int(cls_numeric)] = 1
                     cls_kslr_num.append(values)
-                    classes_numeric.append(cls_numeric)
+                    classes_num.append(cls_numeric)
 
         # Return
-        return (data, cls_kslr_bin, cls_kslr_num, classes_numeric)
+        return (data, cls_kslr_bin, cls_kslr_num, classes_num)
 
 
 def _start_processing(value):
@@ -260,8 +258,9 @@ def main():
     # Get training data and kessler classes
     training_data = ingest.training_data()
     data_to_classify = ingest.data_to_classify()
-    binary_classes = ingest.klasses_binary()
-    non_binary_classes = ingest.klasses_non_binary()
+    klasses_b = ingest.klasses_binary()
+    klasses_n = ingest.klasses_non_binary()
+    classes_n = ingest.classes_non_binary()
 
     #########################################################################
     #########################################################################
@@ -273,12 +272,12 @@ def main():
     classify = Linear(training_data)
 
     # Classifier for binary data
-    classifier_b = classify.classifier(binary_classes)
+    classifier_b = classify.classifier(klasses_b)
     pprint(classifier_b)
     print('\n')
 
     # Classifier for non-binary data
-    classifier_n = classify.classifier(non_binary_classes)
+    classifier_n = classify.classifier(klasses_n)
     pprint(classifier_n)
     print('\n')
 
@@ -290,7 +289,7 @@ def main():
 
     # Print predicted binary classes
     for vector in data_to_classify:
-        next_class = classify.prediction(vector, binary_classes)
+        next_class = classify.prediction(vector, klasses_b)
         predicted_b.append(next_class)
         print(next_class)
 
@@ -298,7 +297,7 @@ def main():
 
     # Print predicted non-binary classes
     for vector in data_to_classify:
-        next_class = classify.prediction(vector, non_binary_classes)
+        next_class = classify.prediction(vector, klasses_n)
         predicted_n.append(next_class)
         print(next_class)
 
@@ -311,36 +310,39 @@ def main():
     print('\nConfusion Matrix Classification')
 
     # Predict classification of the original training data
-    confusion_b = []
-    confusion_n = []
+    predictions_b = []
+    predictions_n = []
 
     count = 0
     for vector in training_data:
-        next_class = classify.prediction(vector, non_binary_classes)
-        confusion_n.append(next_class)
+        next_class = classify.prediction(vector, klasses_n)
+        predictions_n.append(next_class)
 
-        next_class = classify.prediction(vector, binary_classes)
-        confusion_b.append(next_class)
-
-        count += 1
-        print(count)
-
-    print('Confusion Matrix Calculation')
-    print(
-        binary_classes.shape, non_binary_classes.shape,
-        np.asarray(confusion_b).shape, np.asarray(confusion_n).shape)
+        next_class = classify.prediction(vector, klasses_b)
+        predictions_b.append(next_class)
 
     # Confusion matrix
+    print('Confusion Matrix Calculation')
+
     matrix_b = confusion_matrix(
-        binary_classes, np.asarray(confusion_b))
+        klasses_b, np.asarray(predictions_b))
     pprint(matrix_b)
 
     print('\n')
 
     matrix_n = confusion_matrix(
-        non_binary_classes, np.asarray(confusion_n))
+        classes_n, np.asarray(predictions_n))
     pprint(matrix_n)
 
+    # Print PPV
+    ppvs = []
+    for count in range(0, 6):
+        column = matrix_n[:, count]
+        ppv = matrix_n[count, count] / np.sum(column)
+        ppvs.append((count, ppv))
+
+    for item in sorted(ppvs, key=lambda x: x[1], reverse=True):
+        print(item)
 
 if __name__ == "__main__":
     main()

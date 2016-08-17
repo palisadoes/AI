@@ -58,19 +58,38 @@ class Linear(object):
         """
         # Initialize key variables
         classification = np.dot(vector, self.classifier(classes))
-        (columns,) = classification.shape
 
-        # Make the prediction
-        if columns == 1:
-            # Binary classifier
-            if classification[0] > 0:
-                result = 1
-            else:
-                result = -1
-        else:
-            # Non-binary classifier
-            values = classification.tolist()
-            maximum = max(values)
-            result = values.index(maximum)
-
+        # Return
+        result = kessler_to_number(classification)
         return result
+
+
+def kessler_to_number(classification):
+    """Predict the class of the vector.
+
+    Args:
+        vector: Vector
+
+    Returns:
+        result: Class of prediction
+
+    """
+    # Initialize key variables
+    (columns,) = classification.shape
+
+    # Make the prediction
+    if columns == 1:
+        # Binary classifier
+        if classification[0] > 0:
+            result = 1
+        else:
+            result = -1
+    else:
+        # Non-binary classifier
+        values = classification.tolist()
+        maximum = max(values)
+        result = values.index(maximum)
+
+    return result
+
+
