@@ -440,7 +440,7 @@ class Bayesian(object):
         get_cli:
     """
 
-    def __init__(self, pca_object):
+    def __init__(self, pca_object, components=2):
         """Method for intializing the class.
 
         Args:
@@ -452,7 +452,7 @@ class Bayesian(object):
 
         """
         # Initialize key variables
-        self.components = 2
+        self.components = components
         self.pca_object = pca_object
 
         # Convert pca_object data to data acceptable by the Histogram2D class
@@ -613,7 +613,7 @@ class Bayesian(object):
         classes = self.classes()
 
         # Calculate the principal components of the individual xvalue
-        p1p2 = self.pca_object.pc_of_x(xvalue)
+        p1p2 = self.pca_object.pc_of_x(xvalue, self.components)
 
         # Get probability of each class
         for cls in classes:

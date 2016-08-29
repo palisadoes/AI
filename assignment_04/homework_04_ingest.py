@@ -287,6 +287,8 @@ def main():
     #########################################################################
     #########################################################################
 
+    print('\nPredictions')
+
     # Print predicted binary classes
     for vector in data_to_classify:
         next_class = classify.prediction(vector, klasses_b)
@@ -300,6 +302,8 @@ def main():
         next_class = classify.prediction(vector, klasses_n)
         predicted_n.append(next_class)
         print(next_class)
+
+    sys.exit(0)
 
     #########################################################################
     #########################################################################
@@ -333,6 +337,8 @@ def main():
     matrix_n = confusion_matrix(
         classes_n, np.asarray(predictions_n))
     pprint(matrix_n)
+
+    print('Confusion PPV')
 
     # Print PPV
     ppvs = []
