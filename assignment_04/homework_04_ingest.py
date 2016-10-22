@@ -303,8 +303,6 @@ def main():
         predicted_n.append(next_class)
         print(next_class)
 
-    sys.exit(0)
-
     #########################################################################
     #########################################################################
     # Confusion matrices
@@ -320,6 +318,7 @@ def main():
     count = 0
     for vector in training_data:
         next_class = classify.prediction(vector, klasses_n)
+        print(type(vector), type(klasses_n))
         predictions_n.append(next_class)
 
         next_class = classify.prediction(vector, klasses_b)
