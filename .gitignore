@@ -12,3 +12,5 @@ __pycache__
 
 # Ignore files in these directories and ALL subdirectories
 data/**
+/data
+data/
