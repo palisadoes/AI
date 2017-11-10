@@ -4,12 +4,14 @@
 # Standard importations
 import math
 import datetime
+import pickle
+import tempfile
+import os
 
 # PIP importations
 import quandl
 import numpy as np
-import pandas as pd
-from sklearn import preprocessing, svm, model_selection
+from sklearn import preprocessing, model_selection
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 from matplotlib import style
@@ -21,8 +23,7 @@ style.use('ggplot')
 def main():
     """Main Function.
 
-    1) Install required packages
-    2) Setup directories and permissions
+    Display data prediction from linear regression model
 
     """
     # Initialize key variables
@@ -40,8 +41,16 @@ def main():
         x_ary, y_ary, test_size=test_size_percent/100)
 
     # Create a linear classifier and add (fit) data to it for training
-    clf = LinearRegression()
-    clf.fit(X_train, y_train)
+    _clf = LinearRegression()
+    _clf.fit(X_train, y_train)
+
+    # Pickle the data and retrieve (illustrative) using a temporary file
+    temp = tempfile.NamedTemporaryFile(delete=False)
+    with open(temp.name,'wb') as pickle_out:
+        pickle.dump(_clf, pickle_out)
+    with open(temp.name,'rb') as pickle_in:
+        clf = pickle.load(pickle_in)
+    os.remove(temp.name)
 
     # Get the accuracy
     accuracy = clf.score(X_test, y_test)
