@@ -2,7 +2,7 @@
 """Script to demonstrate  SVM machine learning."""
 
 import numpy as np
-from sklearn import preprocessing, model_selection, svm
+from sklearn import model_selection, svm
 import pandas as pd
 
 

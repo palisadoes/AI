@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Script to demonstrate  SVM machine learning."""
+"""Script to demonstrate  kmeans machine learning."""
 
 import matplotlib.pyplot as plt
 from matplotlib import style
 import numpy as np
 from sklearn.cluster import KMeans
 style.use('ggplot')
+
 
 def main():
     """Main Function.
@@ -36,12 +37,14 @@ def main():
     centroids = clf.cluster_centers_
     labels = clf.labels_
 
+    print(centroids, labels, len(x_ary))
+
     # Plot the array with its centroids
     colors = ['g.', 'r.', 'c.', 'y.']
     for i in range(len(x_ary)):
         plt.plot(x_ary[i][0], x_ary[i][1], colors[labels[i]], markersize=10)
     plt.scatter(
-        centroids[:, 0],centroids[:, 1],
+        centroids[:, 0], centroids[:, 1],
         marker="x", s=150, linewidths=5, zorder=10)
     plt.show()
 
