@@ -12,6 +12,9 @@ import numpy as np
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
 import tensorflow as tf
+from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
 
 
 class Data(object):
@@ -65,7 +68,6 @@ class Data(object):
         for count in w_counts:
             if 1000 > w_counts[count] > 50:
                 result.append(count)
-        print(len(result))
         return result
 
     def _sample_handling(self, filename, classification):
@@ -121,20 +123,50 @@ class Data(object):
 
         testing_size = int(test_size * len(features))
 
-        train_x = list(features[:, 0][:-testing_size])
-        train_y = list(features[:, 1][:-testing_size])
-        test_x = list(features[:, 0][-testing_size:])
-        test_y = list(features[:, 1][-testing_size:])
+        training_vectors = list(features[:, 0][:-testing_size])
+        training_labels = list(features[:, 1][:-testing_size])
+        test_vectors = list(features[:, 0][-testing_size:])
+        test_labels = list(features[:, 1][-testing_size:])
+
+        '''
+        encoder = LabelEncoder()
+        encoder.fit(y)
+        y = encoder.transform(y)
+        Y = one_hot_encode(y)
+        a, b, c, d = train_test_split(training_vectors, training_labels, test_size=0.2)
+
+        # Save model
+        saver = tf.train.Saver()
+        save_file = saver.save(sess, save_directory)
+        saver.restore(save_directory)
+
+        '''
 
         # Return
-        return train_x, train_y, test_x, test_y
+        return training_vectors, training_labels, test_vectors, test_labels
+
+    def one_hot_encode(self, labels):
+        """One hot encode labels.
+
+        Args:
+            labels: List of labels
+
+        Returns:
+            result: Result
+
+        """
+        n_labels = len(labels)
+        n_unique_labels = len(np.unique(labels))
+        result = np.zeros((n_labels, n_unique_labels))
+        result[np.arange(n_labels), labels] = 1
+        return result
 
 
-def neural_network_model(data, n_classes, vector_length):
+def neural_network_model(vector, n_classes, vector_length):
     """Create the neural network model.
 
     Args:
-        data: Data
+        vector: Vector data
         n_classes: Number of classes
         vector_length: Length of an individual vector
 
@@ -167,7 +199,7 @@ def neural_network_model(data, n_classes, vector_length):
     # Calculate the values at each node
     # (input_data * weights) + biases
     l1_nodes = tf.add(tf.matmul(
-        data, hidden_1_layer['weights']), hidden_1_layer['biases'])
+        vector, hidden_1_layer['weights']), hidden_1_layer['biases'])
 
     # Convert node values using rectified linear units for activation
     l1_nodes = tf.nn.relu(l1_nodes)
@@ -204,28 +236,31 @@ def main():
     pos = 'data/pos.txt'
     neg = 'data/neg.txt'
     data = Data(pos, neg)
-    train_x, train_y, test_x, test_y = data.create_feature_sets_and_labels()
+    (training_vectors,
+     training_labels,
+     test_vectors,
+     test_labels) = data.create_feature_sets_and_labels()
 
     # If you want to save the data
     '''
     with open('/path/to/sentiment_set.pickle','wb') as f:
-            pickle.dump([train_x,train_y,test_x,test_y],f)
+            pickle.dump([training_vectors,training_labels,test_vectors,test_labels],f)
     '''
 
     # Get the vector_length
-    vector_length = len(train_x[0])
+    vector_length = len(training_vectors[0])
 
     # Setup placeholder values. Define the expected shapes of input data
     # x is the mnist image
     # y is the label of the image
-    x = tf.placeholder('float', shape=[None, vector_length])
-    y = tf.placeholder('float')
+    vector = tf.placeholder(tf.float32, shape=[None, vector_length])
+    label = tf.placeholder(tf.float32)
 
     # Opimize the cost of the prediction
-    prediction = neural_network_model(x, n_classes, vector_length)
+    prediction = neural_network_model(vector, n_classes, vector_length)
     cost = tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(
-            logits=prediction, labels=y))
+            logits=prediction, labels=label))
     optimizer = tf.train.AdamOptimizer().minimize(cost)
 
     # Run the learning
@@ -236,24 +271,34 @@ def main():
         for epoch in range(epochs_to_try):
             epoch_loss = 0
             pointer = 0
-            while pointer < len(train_x):
+            while pointer < len(training_vectors):
                 start = pointer
                 end = pointer + batch_size
-                batch_x = np.array(train_x[start:end])
-                batch_y = np.array(train_y[start:end])
-                _, c = sess.run(
-                    [optimizer, cost], feed_dict={x: batch_x, y: batch_y})
-                epoch_loss += c
+                batch_of_vectors = np.array(training_vectors[start:end])
+                batch_of_labels = np.array(training_labels[start:end])
+                _, batch_loss = sess.run(
+                    [optimizer, cost],
+                    feed_dict={
+                        vector: batch_of_vectors, label: batch_of_labels})
+                epoch_loss += batch_loss
                 pointer += batch_size
 
             print(
                 'Epoch', epoch, 'completed out of',
                 epochs_to_try, 'loss:', epoch_loss)
 
-        correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(y, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct, 'float'))
-        print('Accuracy:', accuracy.eval({x: test_x, y: test_y}))
+        correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(label, 1))
+        accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+        print('Accuracy:', accuracy.eval(
+            {vector: test_vectors, label: test_labels}))
 
+        '''
+        # YouTube - https://www.youtube.com/watch?v=yX8KuPZCAMo
+        # How to predict a value
+        new_prediction = sess.run(prediction, feed_dict={vector: vector_value})
+        new_accuracy = sess.run(
+            accuracy, feed_dict={vector: vector_value, label: label_value})
+        '''
 
 
 if __name__ == '__main__':
