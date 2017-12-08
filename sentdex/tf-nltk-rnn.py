@@ -2,16 +2,19 @@
 """Script to demonstrate basic tensorflow machine learning."""
 
 # Standard imports
-import os
 import random
-import pickle
+import sys
+import math
 from collections import Counter
 
 # PIP imports
 import numpy as np
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
+
 import tensorflow as tf
+from tensorflow.python.ops import rnn, rnn_cell
+
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -20,12 +23,14 @@ from sklearn.preprocessing import LabelEncoder
 class Data(object):
     """Process Sentiment Data."""
 
-    def __init__(self, f_positive, f_negative):
+    def __init__(self, f_positive, f_negative, divisible_by=50):
         """Method to instantiate the class.
 
         Args:
             f_positive: File with positive sentiments
             f_negative: File with negative sentiments
+            divisible_by: Make sure the length of the lexicon
+                is divisible by this value
 
         Returns:
             None
@@ -34,10 +39,12 @@ class Data(object):
         self.pos = f_positive
         self.neg = f_negative
         self.max_lines = 100000
+        self.divisible_by = divisible_by
         self.lemmatizer = WordNetLemmatizer()
 
         # Create the lexicon
         self.lexicon = self._create_lexicon()
+        self.vector_lenth = len(self.lexicon)
 
     def _create_lexicon(self):
         """Create the lexicon from files.
@@ -46,29 +53,39 @@ class Data(object):
             None
 
         Returns:
-            result: Output
+            lexicon: Output
 
         """
-        lexicon = []
+        all_words = []
         with open(self.pos, 'r') as f_handle:
             contents = f_handle.readlines()
             for word in contents[:self.max_lines]:
-                all_words = word_tokenize(word)
-                lexicon += list(all_words)
+                file_words = word_tokenize(word)
+                all_words += list(file_words)
 
         with open(self.neg, 'r') as f_handle:
             contents = f_handle.readlines()
             for word in contents[:self.max_lines]:
-                all_words = word_tokenize(word)
-                lexicon += list(all_words)
+                file_words = word_tokenize(word)
+                all_words += list(file_words)
 
-        lexicon = [self.lemmatizer.lemmatize(i) for i in lexicon]
-        w_counts = Counter(lexicon)
-        result = []
+        # Create the lexicon
+        all_words = [self.lemmatizer.lemmatize(i) for i in all_words]
+
+        w_counts = Counter(all_words)
+        lexicon = []
         for count in w_counts:
             if 1000 > w_counts[count] > 50:
-                result.append(count)
-        return result
+                lexicon.append(count)
+
+        # Extend lexicon by unique values that will not be present
+        # (ie. negative values). Extend to the next nearest
+        # self.divisible_by boundary
+        lexicon_length = len(lexicon)
+        desired_lexicon_length = math.ceil(
+            lexicon_length / self.divisible_by) * self.divisible_by
+        lexicon.extend(range(-1, lexicon_length - desired_lexicon_length -1, -1))
+        return lexicon
 
     def _sample_handling(self, filename, classification):
         """Handle samples from file.
@@ -161,60 +178,53 @@ class Data(object):
         result[np.arange(n_labels), labels] = 1
         return result
 
+    def chunker(self):
+        # Set the number of feature sets (numbers) at a time to feed into
+        # the neural network
+        batch_size = 100
+        chunk_size = 25
+        n_chunks = int(self.vector_lenth / chunk_size)
+        # batch_vector_count = self.vector_length * batch_size
+        # n_chunks = int(batch_vector_count / chunk_size)
 
-def neural_network_model(vector, n_classes, vector_length):
+        # print(batch_vector_count, chunk_size, n_chunks, batch_size)
+        #     43200               25          1692
+
+        '''
+        batch_size = 100
+        chunk_size = int(vector_length / 10)
+        n_chunks = int(vector_length / chunk_size)
+        '''
+        return (chunk_size, n_chunks, batch_size)
+
+
+def recurrent_neural_network(vector, n_classes, chunk_size, n_chunks):
     """Create the neural network model.
 
     Args:
         vector: Vector data
         n_classes: Number of classes
-        vector_length: Length of an individual vector
+        vector_length: Length of vector making up the tensor
 
     Returns:
         output: Output
 
     """
-    # Initialize key variables (hidden layer node counts)
-    n_nodes_hl1 = 500
-    n_nodes_hl2 = 500
-    n_nodes_hl3 = 500
+    # Initialize key variables
+    rnn_size = 128
 
-    # Create the nodes in the neural network
-    hidden_1_layer = {
-        'weights': tf.Variable(tf.random_normal([vector_length, n_nodes_hl1])),
-        'biases': tf.Variable(tf.random_normal([n_nodes_hl1]))}
+    layer = {'weights': tf.Variable(tf.random_normal([rnn_size, n_classes])),
+             'biases': tf.Variable(tf.random_normal([n_classes]))}
 
-    hidden_2_layer = {
-        'weights': tf.Variable(tf.random_normal([n_nodes_hl1, n_nodes_hl2])),
-        'biases': tf.Variable(tf.random_normal([n_nodes_hl2]))}
+    vector = tf.transpose(vector, [1, 0, 2])
+    vector = tf.reshape(vector, [-1, chunk_size])
+    vector = tf.split(vector, n_chunks, 0)
 
-    hidden_3_layer = {
-        'weights': tf.Variable(tf.random_normal([n_nodes_hl2, n_nodes_hl3])),
-        'biases': tf.Variable(tf.random_normal([n_nodes_hl3]))}
+    lstm_cell = rnn_cell.BasicLSTMCell(rnn_size, state_is_tuple=True)
+    outputs, states = rnn.static_rnn(lstm_cell, vector, dtype=tf.float32)
+    output = tf.matmul(outputs[-1], layer['weights']) + layer['biases']
 
-    output_layer = {
-        'weights': tf.Variable(tf.random_normal([n_nodes_hl3, n_classes])),
-        'biases': tf.Variable(tf.random_normal([n_classes]))}
-
-    # Calculate the values at each node
-    # (input_data * weights) + biases
-    l1_nodes = tf.add(tf.matmul(
-        vector, hidden_1_layer['weights']), hidden_1_layer['biases'])
-
-    # Convert node values using rectified linear units for activation
-    l1_nodes = tf.nn.relu(l1_nodes)
-
-    # Do the same for other layers
-    l2_nodes = tf.add(tf.matmul(
-        l1_nodes, hidden_2_layer['weights']), hidden_2_layer['biases'])
-    l2_nodes = tf.nn.relu(l2_nodes)
-    l3_nodes = tf.add(tf.matmul(
-        l2_nodes, hidden_3_layer['weights']), hidden_3_layer['biases'])
-    l3_nodes = tf.nn.relu(l3_nodes)
-
-    # Compute the output and return
-    output = tf.matmul(
-        l3_nodes, output_layer['weights']) + output_layer['biases']
+    # Return
     return output
 
 
@@ -227,10 +237,6 @@ def main():
     # Initialize key variables
     epochs_to_try = 10
     n_classes = 2
-
-    # Set the number of feature sets (numbers) at a time to feed into
-    # the neural network
-    batch_size = 100
 
     # Read data
     pos = 'data/pos.txt'
@@ -248,16 +254,20 @@ def main():
     '''
 
     # Get the vector_length
-    vector_length = len(training_vectors[0])
+    vector_length = data.vector_lenth
+    (chunk_size, n_chunks, batch_size) = data.chunker()
+    print(vector_length, chunk_size, n_chunks)
 
     # Setup placeholder values. Define the expected shapes of input data
     # x is the mnist image
     # y is the label of the image
-    vector = tf.placeholder(tf.float32, shape=[None, vector_length])
+    vector = tf.placeholder(tf.float32, shape=[None, n_chunks, chunk_size])
     label = tf.placeholder(tf.float32)
 
     # Opimize the cost of the prediction
-    prediction = neural_network_model(vector, n_classes, vector_length)
+    # prediction = neural_network_model(vector, n_classes)
+    prediction = recurrent_neural_network(
+        vector, n_classes, chunk_size, n_chunks)
     cost = tf.reduce_mean(
         tf.nn.softmax_cross_entropy_with_logits(
             logits=prediction, labels=label))
@@ -274,7 +284,11 @@ def main():
             while pointer < len(training_vectors):
                 start = pointer
                 end = pointer + batch_size
+
                 batch_of_vectors = np.array(training_vectors[start:end])
+                batch_of_vectors = batch_of_vectors.reshape(
+                    (batch_size, n_chunks, chunk_size))
+
                 batch_of_labels = np.array(training_labels[start:end])
                 _, batch_loss = sess.run(
                     [optimizer, cost],
@@ -290,7 +304,8 @@ def main():
         correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(label, 1))
         accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
         print('Accuracy:', accuracy.eval(
-            {vector: test_vectors, label: test_labels}))
+            {vector: test_vectors.reshape((-1, n_chunks, chunk_size)),
+             label: test_labels}))
 
         '''
         # YouTube - https://www.youtube.com/watch?v=yX8KuPZCAMo
