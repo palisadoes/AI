@@ -3,7 +3,6 @@
 
 # Standard imports
 import random
-import sys
 import math
 from collections import Counter
 
@@ -84,7 +83,8 @@ class Data(object):
         lexicon_length = len(lexicon)
         desired_lexicon_length = math.ceil(
             lexicon_length / self.divisible_by) * self.divisible_by
-        lexicon.extend(range(-1, lexicon_length - desired_lexicon_length -1, -1))
+        lexicon.extend(
+            range(-1, lexicon_length - desired_lexicon_length -1, -1))
         return lexicon
 
     def _sample_handling(self, filename, classification):
@@ -284,9 +284,13 @@ def main():
             while pointer < len(training_vectors):
                 start = pointer
                 end = pointer + batch_size
+                _batch_of_vectors = np.array(training_vectors[start:end])
 
-                batch_of_vectors = np.array(training_vectors[start:end])
-                batch_of_vectors = batch_of_vectors.reshape(
+                # Break if we have too few vectors in the batch to do training
+                if len(_batch_of_vectors) < batch_size:
+                    break
+
+                batch_of_vectors = _batch_of_vectors.reshape(
                     (batch_size, n_chunks, chunk_size))
 
                 batch_of_labels = np.array(training_labels[start:end])
@@ -304,7 +308,7 @@ def main():
         correct = tf.equal(tf.argmax(prediction, 1), tf.argmax(label, 1))
         accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
         print('Accuracy:', accuracy.eval(
-            {vector: test_vectors.reshape((-1, n_chunks, chunk_size)),
+            {vector: np.array(test_vectors).reshape((-1, n_chunks, chunk_size)),
              label: test_labels}))
 
         '''
