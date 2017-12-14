@@ -2,8 +2,8 @@
 """Script to demonstrate  basic tensorflow machine learning."""
 
 # Standard imports
-import os
 import sys
+import time
 
 # PIP3 imports
 import numpy as np
@@ -37,7 +37,7 @@ def convolutional_neural_network():
 
     # Create the convolutional network stuff
     convnet = input_data(
-        shape=[None, image_height, image_width, 1], name='input')
+        shape=[None, image_width, image_height, 1], name='input')
 
     convnet = conv_2d(
         convnet, conv1_filter_count, filter_size, activation='relu')
@@ -69,12 +69,8 @@ def main():
 
     """
     # Initialize key variables
-    epochs_to_try = 10
-    n_classes = 10
-    keep_rate = 0.8
-
-    # We sometimes get insufficient memory errors if this is not set low
-    desired_test_sample_size = 1000
+    epochs_to_try = 3
+    start = int(time.time())
 
     # Define the image width and height of images
     width = 28
@@ -83,9 +79,20 @@ def main():
     # Get the data from mnist
     vectors, classes, test_x, test_y = mnist.load_data(one_hot=True)
 
+    # Print useful information
+    print('Vectors Shape / Type', vectors.shape, type(vectors))
+    print('Classes Shape / Type', classes.shape, type(classes))
+    print('First Vector', vectors[0])
+    print('First Class', classes[0])
+
     # Reshape the test and live vectors
     vectors = vectors.reshape([-1, width, height, 1])
     test_x = test_x.reshape([-1, width, height, 1])
+
+    # Print useful information
+    print('Reshaped Vector Shape', vectors.shape)
+    # print('First Reshaped Vector', vectors[0])
+    # sys.exit()
 
     model = tflearn.DNN(convolutional_neural_network())
     model.fit(
@@ -102,6 +109,10 @@ def main():
         model.predict([test_x[1]])
     )
     print(test_y[1])
+
+    #
+    print('Duration:', int(time.time() - start))
+
 
 
 if __name__ == "__main__":
