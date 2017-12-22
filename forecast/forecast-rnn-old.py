@@ -18,14 +18,14 @@ import tensorflow as tf
 class Data(object):
     """Process data for ingestion."""
 
-    def __init__(self, data, periods=288, forecast=1, base=5):
+    def __init__(self, data, periods=288, forecast=1, nearest=5):
         """Method that instantiates the class.
 
         Args:
             data: Dict of values keyed by timestamp
             periods: Number of timestamp data points per vector
             forecast: Forecast horizon
-            base: Round up to the base int(X)
+            nearest: Round up to the nearest int(X)
 
         Returns:
             None
@@ -37,13 +37,14 @@ class Data(object):
         _timestamps = []
         _values = []
 
+        # max_value = roundup(max(list(data.values())), nearest)
+        # classes = nearest * 5 # max_value / nearest
+
         # Create a numpy array for timestamps and values
         for timestamp, value in sorted(data.items()):
-            # Add the timestamp
             _timestamps.append(timestamp)
-
-            # Round up to base X (helps with forecasting accuracy)
-            _values.append(roundup(value, base))
+            # Round up to nearest X (helps with forecasting accuracy)
+            _values.append(roundup(value, nearest))
         self._timestamps = np.asarray(_timestamps)
         self._values = np.asarray(_values)
 
@@ -60,47 +61,13 @@ class Data(object):
             None
 
         """
-        '''# Initialize key variables
-        ts_length = len(self._timestamps) - self._forecast
-
-        # ---------------------
-        # Create training data
-        # ---------------------
-
-        # Get first first X entries of x_train that are a whole number of
-        # self._periods that don't extend beyond the forecast
-        x_train = self._values[:ts_length - (ts_length % self._periods)]
-
-        # Get a set of entries that match the length of x_train offset by the
-        # forecast
-        y_train = self._values[self._forecast:][:len(x_train)]'''
-
         # Initialize key variables
-        offset = self._forecast * self._periods
-        ts_length = len(self._timestamps) - offset
+        ts_length = len(self._timestamps)
 
-        # ---------------------
         # Create training data
-        # ---------------------
-
-        # Get first first X entries of x_train that are a whole number of
-        # self._periods that don't extend beyond the forecast
-        x_train_list = []
-        # x_train = self._values[:ts_length - (ts_length % self._periods)]
-        for index, _ in enumerate(self._values[:ts_length - (ts_length % self._periods)]):
-            values = self._values[index:][:self._periods]
-            x_train_list.append(max(values))
-        x_train = np.asarray(x_train_list)
-
-        # Get a set of entries that match the length of x_train offset by the
-        # forecast
-        y_train_list = []
-        for index, _ in enumerate(self._values[:-offset -1]):
-            # print('-', index, index + offset, ts_length)
-            values = self._values[index + offset:][:self._periods]
-            y_train_list.append(max(values))
-            # print(' ', len(x_train), len(y_train_list), max(values))
-        y_train = np.asarray(y_train_list)
+        x_train = self._values[:ts_length - (ts_length % self._periods)]
+        y_train = self._values[
+            1:ts_length - (ts_length % self._periods) + self._forecast]
 
         # Create batches
         x_batches = x_train.reshape(-1, self._periods, 1)
@@ -179,22 +146,21 @@ def _normalize(timestamp, rrd_step=300):
     return result
 
 
-def roundup(value, base):
-    """Round value to nearest base value.
+def roundup(value, nearest):
+    """Round up value to nearest value.
 
     Args:
         value: Value to round up
-        base: Base to use
+        nearest: Nearest integer to round up to
 
     Returns:
         result
 
     """
     # Initialize key variables
-    _base = int(base)
+    _nearest = int(nearest)
     # Return
-    # _result = int(int(math.ceil(value / _base)) * _base)
-    _result = int(base * round(float(value)/base))
+    _result = int(int(math.ceil(value / _nearest)) * _nearest)
     result = np.float32(_result)
     return result
 
@@ -212,8 +178,10 @@ def main():
                             # Can be changed to improve accuracy
     input_vectors = 1       # Number of input vectors submitted
     learning_rate = 0.001   # Small learning rate to not overshoot the minimum
-    base = 5             # Round up to the base int(X)
+    nearest = 3             # Round up to the nearest int(X)
     epochs_to_try = 1500
+
+    tf.logging.set_verbosity(tf.logging.ERROR)
 
     # Number of output vectors
     output_vectors = 1
@@ -233,7 +201,7 @@ def main():
 
     # Get the training and test data
     data_object = Data(
-        csv_data, forecast=forecast, base=base)
+        csv_data, forecast=forecast, nearest=nearest)
     (x_train, y_train,
      x_test, y_test,
      x_batches, y_batches) = data_object.load()
@@ -273,6 +241,17 @@ def main():
         # Train the result fo the application of the cost function
         training_op = optimizer.minimize(loss)
 
+        '''# Define the metric and update operations
+        tf_metric, tf_metric_update = tf.metrics.accuracy(y_tensor,
+                                                          p_tensor,
+                                                          name="my_metric")
+
+        # Isolate the variables stored behind the scenes by the metric operation
+        running_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metric")
+
+        # Define initializer to initialize/reset running variables
+        running_vars_initializer = tf.variables_initializer(var_list=running_vars)'''
+
     # ---------------------------------
     # Tensor pathway done
     # ---------------------------------
@@ -297,10 +276,7 @@ def main():
         y_predictions = session.run(outputs, feed_dict={x_tensor: x_test})
         y_rounded = deepcopy(y_predictions)
         for x in np.nditer(y_rounded, op_flags=['readwrite']):
-            # print(x)
-            #x[...] = roundup(x, base)
-            #x[...] = round(int(x))
-            x[...] = roundup(round(int(x)), base)
+            x[...] = roundup(x, nearest)
 
         # Calculate accuracy
         n_items = y_test.size
