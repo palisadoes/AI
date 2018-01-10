@@ -88,23 +88,17 @@ class Data(object):
         x_train_list = []
         for index, _ in enumerate(
                 self._values[:ts_length - (ts_length % self._periods)]):
-            _values = self._values[index:][:self._periods]
-            values = []
-            for value in _values:
-                values.append(_normalize(value))
-            x_train_list.append(values)
+            values = self._values[index:][:self._periods]
+            x_train_list.append(max(values))
         x_train = np.asarray(x_train_list)
-        #pprint(x_train)
-        print('Records Trained:', x_train.shape)
-
+        
         # Get a set of entries that match the length of x_train offset by the
         # forecast
         y_train_list = []
-        for index, _ in enumerate(self._values[:-offset]):
+        for index, _ in enumerate(self._values[:-offset - 1]):
             values = self._values[index + offset:][:self._periods]
-            y_train_list.append(_normalize(max(values)))
+            y_train_list.append(max(values))
         y_train = np.asarray(y_train_list)
-        print('Classes:', y_train.shape)
 
         # Create batches
         x_batches = x_train.reshape(-1, self._periods, 1)
@@ -122,7 +116,7 @@ class Data(object):
         return(x_train, y_train, x_test, y_test, x_batches, y_batches)
 
 
-def _ingest(filename, ts_start=None, rrd_step=300, periods=288):
+def _ingest(filename, ts_start=None, rrd_step=300):
     """Read data from file.
 
     Args:
@@ -131,12 +125,11 @@ def _ingest(filename, ts_start=None, rrd_step=300, periods=288):
         rrd_step: Default RRD step time of the CSV file
 
     Returns:
-        data: Dict of values keyed by timestamp
+        None
 
     """
     # Initialize key variables
     data_dict = {}
-    data = {}
     now = _normalize(int(time.time()), rrd_step)
     count = 1
 
@@ -180,15 +173,8 @@ def _ingest(filename, ts_start=None, rrd_step=300, periods=288):
             break
         count += 1
 
-    # Make sure the data is a multiple of period
-    _periods = (len(data_dict.keys()) // periods) * periods
-    _timestamps = sorted(data_dict.keys())
-    for timestamp in _timestamps[:_periods]:
-        data[timestamp] = data_dict[timestamp]
-
     # Return
-    print('Records ingested:', len(data))
-    return data
+    return data_dict
 
 
 def _normalize(timestamp, rrd_step=300):
@@ -235,17 +221,17 @@ def main():
     # Initialize key variables
     periods = 288           # No. of periods per vector for predictions
     forecast = 1            # No. of periods into the future for predictions
-    hidden = 5              # No. of neurons to recursively work through.
+    hidden = 100            # No. of neurons to recursively work through.
                             # Can be changed to improve accuracy
+    input_vectors = 1       # Number of input vectors submitted
     learning_rate = 0.001   # Small learning rate to not overshoot the minimum
     base = 5                # Round up to the base int(X)
-    epochs_to_try = 5
+    epochs_to_try = 600
     rrd_step = 300
     forecast = 5
     count = 1
 
-    # Number of input / output vectors
-    input_vectors = 1
+    # Number of output vectors
     output_vectors = 1
 
     # Get filename
@@ -257,7 +243,7 @@ def main():
     filename = args.filename
 
     # Open file and get data
-    csv_data = _ingest(filename, rrd_step=rrd_step, periods=periods)
+    csv_data = _ingest(filename, rrd_step=rrd_step)
 
     # ---------------------------------
     # Setup the tensor pathway
@@ -320,9 +306,7 @@ def main():
             # session.run(running_vars_initializer)
 
             for epoch in range(epochs_to_try):
-                print('\nboo')
                 session.run(training_op, feed_dict=feed_dict)
-                print('\nhoo')
                 if epoch % 100 == 0:
                     mse = loss.eval(feed_dict=feed_dict)
                     print(epoch, '\tMSE:', mse)

@@ -86,25 +86,20 @@ class Data(object):
         # Get first first X entries of x_train that are a whole number of
         # self._periods that don't extend beyond the forecast
         x_train_list = []
+        # x_train = self._values[:ts_length - (ts_length % self._periods)]
         for index, _ in enumerate(
                 self._values[:ts_length - (ts_length % self._periods)]):
-            _values = self._values[index:][:self._periods]
-            values = []
-            for value in _values:
-                values.append(_normalize(value))
-            x_train_list.append(values)
+            values = self._values[index:][:self._periods]
+            x_train_list.append(max(values))
         x_train = np.asarray(x_train_list)
-        #pprint(x_train)
-        print('Records Trained:', x_train.shape)
 
         # Get a set of entries that match the length of x_train offset by the
         # forecast
         y_train_list = []
-        for index, _ in enumerate(self._values[:-offset]):
+        for index, _ in enumerate(self._values[:-offset - 1]):
             values = self._values[index + offset:][:self._periods]
-            y_train_list.append(_normalize(max(values)))
+            y_train_list.append(max(values))
         y_train = np.asarray(y_train_list)
-        print('Classes:', y_train.shape)
 
         # Create batches
         x_batches = x_train.reshape(-1, self._periods, 1)
@@ -122,23 +117,21 @@ class Data(object):
         return(x_train, y_train, x_test, y_test, x_batches, y_batches)
 
 
-def _ingest(filename, ts_start=None, rrd_step=300, periods=288):
+def _ingest(filename, ts_start=None):
     """Read data from file.
 
     Args:
         filename: Name of CSV file to read
         ts_start: Starting timestamp for which data should be retrieved
-        rrd_step: Default RRD step time of the CSV file
 
     Returns:
-        data: Dict of values keyed by timestamp
+        None
 
     """
     # Initialize key variables
     data_dict = {}
-    data = {}
+    rrd_step = 300
     now = _normalize(int(time.time()), rrd_step)
-    count = 1
 
     # Set the start time to be 2 years by default
     if (ts_start is None) or (ts_start < 0):
@@ -168,27 +161,17 @@ def _ingest(filename, ts_start=None, rrd_step=300, periods=288):
 
     # Back track from the end of the data and delete any zero values until
     # no zeros are found. Sometimes the most recent csv data is zero due to
-    # update delays. Replace the deleted entries with a zero value at the
-    # beginning of the series
+    # update delays.
     _timestamps = sorted(data_dict.keys(), reverse=True)
     for timestamp in _timestamps:
+        print(timestamp)
         if bool(data_dict[timestamp]) is False:
             data_dict.pop(timestamp, None)
-            # Replace the popped item with one at the beginning of the series
-            data_dict[int(ts_min - (count * rrd_step))] = 0
         else:
             break
-        count += 1
-
-    # Make sure the data is a multiple of period
-    _periods = (len(data_dict.keys()) // periods) * periods
-    _timestamps = sorted(data_dict.keys())
-    for timestamp in _timestamps[:_periods]:
-        data[timestamp] = data_dict[timestamp]
 
     # Return
-    print('Records ingested:', len(data))
-    return data
+    return data_dict
 
 
 def _normalize(timestamp, rrd_step=300):
@@ -219,8 +202,8 @@ def roundup(value, base):
     """
     # Initialize key variables
     _base = int(base)
-
     # Return
+    # _result = int(int(math.ceil(value / _base)) * _base)
     _result = int(base * round(float(value)/base))
     result = np.float32(_result)
     return result
@@ -235,18 +218,17 @@ def main():
     # Initialize key variables
     periods = 288           # No. of periods per vector for predictions
     forecast = 1            # No. of periods into the future for predictions
-    hidden = 5              # No. of neurons to recursively work through.
+    hidden = 100            # No. of neurons to recursively work through.
                             # Can be changed to improve accuracy
+    input_vectors = 1       # Number of input vectors submitted
     learning_rate = 0.001   # Small learning rate to not overshoot the minimum
-    base = 5                # Round up to the base int(X)
-    epochs_to_try = 5
-    rrd_step = 300
-    forecast = 5
-    count = 1
+    base = 5             # Round up to the base int(X)
+    epochs_to_try = 1500
 
-    # Number of input / output vectors
-    input_vectors = 1
+    # Number of output vectors
     output_vectors = 1
+
+    start = int(time.time())
 
     # Get filename
     parser = argparse.ArgumentParser()
@@ -257,7 +239,14 @@ def main():
     filename = args.filename
 
     # Open file and get data
-    csv_data = _ingest(filename, rrd_step=rrd_step, periods=periods)
+    csv_data = _ingest(filename)
+
+    # Get the training and test data
+    data_object = Data(
+        csv_data, forecast=forecast, base=base)
+    (x_train, y_train,
+     x_test, y_test,
+     x_batches, y_batches) = data_object.load()
 
     # ---------------------------------
     # Setup the tensor pathway
@@ -294,69 +283,39 @@ def main():
         # Train the result fo the application of the cost function
         training_op = optimizer.minimize(loss)
 
-    # Get a list of future timestamps to use for predictions to be fed back
-    # into the model
-    timestamps = sorted(csv_data.keys())
-    ts_start = timestamps[-1] + rrd_step
-    timestamps.extend(list(range(
-        ts_start, ts_start + (rrd_step * (forecast + 1)), rrd_step)))
+    # ---------------------------------
+    # Tensor pathway done
+    # ---------------------------------
 
-    for timestamp in timestamps:
-        # Get the training and test data
-        data_object = Data(
-            csv_data, forecast=forecast, base=base)
-        (x_train, y_train,
-         x_test, y_test,
-         x_batches, y_batches) = data_object.load()
+    # Create the feed_dict
+    feed_dict = {x_tensor: x_batches, y_tensor: y_batches}
 
-        # Create the feed_dict
-        feed_dict = {x_tensor: x_batches, y_tensor: y_batches}
+    # Do learning
+    with tf.Session(graph=graph) as session:
+        session.run(tf.global_variables_initializer())
 
-        # Do learning
-        with tf.Session(graph=graph) as session:
-            session.run(tf.global_variables_initializer())
+        # Initialize/reset the running variables
+        # session.run(running_vars_initializer)
 
-            # Initialize/reset the running variables
-            # session.run(running_vars_initializer)
+        for epoch in range(epochs_to_try):
+            session.run(training_op, feed_dict=feed_dict)
+            if epoch % 100 == 0:
+                mse = loss.eval(feed_dict=feed_dict)
+                print(epoch, '\tMSE:', mse)
 
-            for epoch in range(epochs_to_try):
-                print('\nboo')
-                session.run(training_op, feed_dict=feed_dict)
-                print('\nhoo')
-                if epoch % 100 == 0:
-                    mse = loss.eval(feed_dict=feed_dict)
-                    print(epoch, '\tMSE:', mse)
+        # Round predictions to nearest integer
+        y_predictions = session.run(outputs, feed_dict={x_tensor: x_test})
+        y_rounded = deepcopy(y_predictions)
+        for x in np.nditer(y_rounded, op_flags=['readwrite']):
+            x[...] = roundup(round(int(x)), base)
 
-            # Round predictions to nearest integer
-            y_predictions = session.run(outputs, feed_dict={x_tensor: x_test})
-            y_rounded = deepcopy(y_predictions)
-            for x in np.nditer(y_rounded, op_flags=['readwrite']):
-                x[...] = roundup(x, base)
+        # Calculate accuracy
+        n_items = y_test.size
+        accuracy = (y_test == y_rounded).sum() / n_items
+        print('Accuracy:', accuracy)
 
-            # Calculate accuracy
-            n_items = y_test.size
-            accuracy = (y_test == y_rounded).sum() / n_items
-            print('\nAccuracy (Round: {}): {}\n'.format(count, accuracy))
-
-            # Get prediction of next time slot
-            csv_timestamps = sorted(csv_data.keys())
-            values = []
-            for next_timestamp in csv_timestamps[-periods:]:
-                values.append(csv_data[next_timestamp])
-            _prediction_values = np.asarray(values)
-            #pprint(_prediction_values)
-            #print(len(_prediction_values))
-            _prediction_values = _prediction_values.reshape(-1, periods, 1)
-
-            next_prediction = session.run(outputs, feed_dict={x_tensor: _prediction_values})
-            pprint(next_prediction)
-            sys.exit(0)
-            print('x-x x-x x-x x-x x-x x-x x-x x-x x-x x-x x-x x-x x-x x-x')
-            #for peter in next_prediction
-            #csv_data[timestamp] = next_prediction
-
-            # Increment the count
-            count += 1
+        # print(y_test)
+        # print(y_rounded)
 
 
 if __name__ == "__main__":
