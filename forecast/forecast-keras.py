@@ -6,6 +6,7 @@ import sys
 import argparse
 import csv
 from pprint import pprint
+from math import sqrt
 import time
 
 # Pip imports
@@ -15,9 +16,10 @@ from keras.layers.core import Dense, Activation, Dropout
 from keras.layers.recurrent import LSTM
 from keras.models import Sequential
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
 
 
-class _Data(object):
+class Data(object):
     """Process data for ingestion.
 
     Based on: https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
@@ -36,12 +38,18 @@ class _Data(object):
 
         """
         # Initialize key variables
-        self._values = []
+        self.values = []
+        self.timestamps = []
         self._lag = lag
 
         # Get list of values
-        for _, value in sorted(data.items()):
-            self._values.append(value)
+        for timestamp, value in sorted(data.items()):
+            self.values.append(value)
+            self.timestamps.append(timestamp)
+
+        # Get data and scaled data
+        self.train, self.test = self._data()
+        self.scaler, self.scaled_train, self.scaled_test = self._scaled_data()
 
     def _timeseries_to_supervised(self):
         """Transform Time Series to Supervised Learning.
@@ -81,11 +89,11 @@ class _Data(object):
 
         # Create series for supervised learning
         dataframe = pandas.DataFrame(diff_values)
-        columns = [dataframe.shift(index) for index in range(1, self._lag + 1)]
+        columns = [dataframe.shift(i) for i in range(1, self._lag + 1)]
         columns.append(dataframe)
         dataframe = pandas.concat(columns, axis=1)
         dataframe.fillna(0, inplace=True)
-        return dataframe.values
+        return dataframe
 
     def _difference(self, interval=1):
         """Create a differenced series.
@@ -123,27 +131,42 @@ class _Data(object):
 
         """
         # Initialize key variables
-        values = self._values
+        values = self.values
 
         # Create the difference and return
         diff = []
         for index in range(interval, len(values)):
             value = values[index] - values[index - interval]
             diff.append(value)
-        return pandas.Series(diff).values
+        return pandas.Series(diff)
 
-    def load(self):
-        """Load data for RNN.
+    def invert_difference(self, inverted_class, interval=1):
+        """Invert difference data.
+
+        Args:
+            inverted_class: Class value whose scale has already been inverted.
+            interval:
+
+        Returns:
+            value: Inverted data
+
+        """
+        value = inverted_class + self.values[-interval]
+        return value
+
+    def _data(self):
+        """Load data.
 
         Args:
             None
 
         Returns:
-            (train, test): Tuple of list of trainint and test data
+            (train, test): Tuple of list of train and test data
 
         """
         # Initialize key variables
-        data = self._timeseries_to_supervised()
+        _data = self._timeseries_to_supervised()
+        data = _data.values
         index = round(0.9 * len(data))
 
         # Return
@@ -151,9 +174,18 @@ class _Data(object):
         test = data[-index:]
         return (train, test)
 
-    def scale(self):
+    def _scaled_data(self):
+        """Load scaled data.
+
+        Args:
+            None
+
+        Returns:
+            (scaler, train, test): Tuple of list of train and test data
+
+        """
         # Initialize key variables
-        (_train, _test) = self.load()
+        (_train, _test) = self._data()
 
         # Fit scaler
         scaler = MinMaxScaler(feature_range=(-1, 1))
@@ -170,74 +202,23 @@ class _Data(object):
         # Return
         return scaler, train_scaled, test_scaled
 
-
-class Data(object):
-    """Process data for ingestion."""
-
-    def __init__(self, data, features=30, forecast=1, base=5):
-        """Method that instantiates the class.
+    def invert_scale(self, x_value, predicted):
+        """Inverse scaling for a forecasted value.
 
         Args:
-            data: Dict of values keyed by timestamp
-            features: Number of features per vector
-            forecast: Forecast horizon
-            base: Round up to the base int(X)
+            x_value: X value
+            predicted: Forecasted value
 
         Returns:
-            None
+            result: Inverted value
 
         """
-        # Initialize key variables
-        self._features = features
-        self._forecast = forecast
-        self._base = base
-        self._values = []
-
-        # Get list of values
-        for _, value in sorted(data.items()):
-            self._values.append(value)
-
-    def load(self):
-        """Load RNN data.
-
-            Based on tutorial at:
-            http://www.jakob-aungiers.com/articles/a/LSTM-Neural-Network-for-Time-Series-Prediction
-
-        Args:
-            None
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        sequence_length = self._features + 1
-        result = []
-
-        # Create an numpy array of values rounded to the nearest
-        # self._base value
-        for index in range(len(self._values) - sequence_length):
-            result.append(self._values[index: index + sequence_length])
-        result = np.array(result)
-        for _ in np.nditer(result, op_flags=['readwrite']):
-            _[...] = roundup(_, self._base)
-
-        # Use the first 90% of result values as training data
-        row = round(0.9 * result.shape[0])
-        train = result[:int(row), :]
-        np.random.shuffle(train)
-        x_train = train[:, :-1]
-        y_train = train[:, -1]
-
-        # Use the last 10% of result values as test data
-        x_test = result[int(row):, :-1]
-        y_test = result[int(row):, -1]
-
-        x_train = np.reshape(x_train, (x_train.shape[0], x_train.shape[1], 1))
-        x_test = np.reshape(x_test, (x_test.shape[0], x_test.shape[1], 1))
-
-        # Return
-        return (x_train, y_train, x_test, y_test)
+        new_row = [_ for _ in x_value] + [predicted]
+        array = np.array(new_row)
+        array = array.reshape(1, len(array))
+        inverted = self.scaler.inverse_transform(array)
+        result = inverted[0, -1]
+        return result
 
 
 def read_file(filename, ts_start=None, rrd_step=300):
@@ -302,41 +283,6 @@ def read_file(filename, ts_start=None, rrd_step=300):
     return data_dict
 
 
-def get_maxes(data, periods=288):
-    """Get maximum values from data.
-
-    Args:
-        data: Dict of values keyed by timestamp
-        periods: Sliding window number periods over
-            which maxes will be calculated
-
-    Returns:
-        maxes: Dict of values keyed by timestamp
-
-    """
-    # Initialize key variables
-    maxes = {}
-    values = []
-    timestamps = []
-
-    # Create easier to use lists of data to work with
-    for timestamp, value in sorted(data.items()):
-        values.append(value)
-        timestamps.append(timestamp)
-
-    # Find the maxes in value every X periods
-    item_count = len(values)
-    for index in range(0, item_count - periods + 1):
-        endpointer = index + periods
-        sample = values[index:endpointer]
-        max_sample = max(sample)
-        _timestamp = timestamps[endpointer - 1]
-        maxes[_timestamp] = max_sample
-
-    # Return
-    return maxes
-
-
 def _normalize(timestamp, rrd_step=300):
     """Normalize the timestamp to nearest rrd_step value.
 
@@ -372,13 +318,17 @@ def roundup(value, base):
     return result
 
 
-def build_model(features, feature_dimensions, hidden_layer_neurons):
+def lstm_model(
+        data, hidden_layer_neurons, epochs, batch_size=1,
+        feature_dimensions=1):
     """Build an LSTM model.
 
     Args:
-        features: Number of features per vector
-        feature_dimensions: Dimension of features (Number of rows per feature)
+        data: Data frame of X, Y values
         hidden_layer_neurons: Number of neurons per layers
+        epochs: Number of iterations for learning
+        batch_size
+        feature_dimensions: Dimension of features (Number of rows per feature)
 
     Returns:
         model: Graph of LSTM model
@@ -386,6 +336,10 @@ def build_model(features, feature_dimensions, hidden_layer_neurons):
     """
     # Initialize key variables
     start = time.time()
+
+    # Process the data for fitting
+    x_values, y_values = data[:, 0: -1], data[:, -1]
+    x_shaped = x_values.reshape(x_values.shape[0], 1, x_values.shape[1])
 
     # Let's do some learning!
     model = Sequential()
@@ -408,11 +362,39 @@ def build_model(features, feature_dimensions, hidden_layer_neurons):
     cleared by default, therefore we must make the LSTM stateful. This gives
     us fine-grained control over when state of the LSTM layer is cleared,
     by calling the reset_states() function.
+
+    LSTM networks can be stacked in Keras in the same way that other layer
+    types can be stacked. One addition to the configuration that is required
+    is that an LSTM layer prior to each subsequent LSTM layer must return the
+    sequence. This can be done by setting the return_sequences parameter on
+    the layer to True.
+
+    batch_size denotes the subset size of your training sample (e.g. 100 out
+    of 1000) which is going to be used in order to train the network during its
+    learning process. Each batch trains network in a successive order, taking
+    into account the updated weights coming from the appliance of the previous
+    batch.
+
+    return_sequence indicates if a recurrent layer of the network should return
+    its entire output sequence (i.e. a sequence of vectors of specific
+    dimension) to the next layer of the network, or just its last only output
+    which is a single vector of the same dimension. This value can be useful
+    for networks conforming with an RNN architecture.
+
+    batch_input_shape defines that the sequential classification of the
+    neural network can accept input data of the defined only batch size,
+    restricting in that way the creation of any variable dimension vector.
+    It is widely used in stacked LSTM networks. It is a tuple of (batch_size,
+    timesteps, data_dimension)
     '''
+    timesteps = x_shaped.shape[1]
+    data_dimension = x_shaped.shape[2]
+
+    # Add layers to the model
     model.add(
         LSTM(
             units=hidden_layer_neurons,
-            input_shape=(features, feature_dimensions),
+            batch_input_shape=(batch_size, timesteps, data_dimension),
             return_sequences=True,
             stateful=True
         )
@@ -422,6 +404,7 @@ def build_model(features, feature_dimensions, hidden_layer_neurons):
     model.add(
         LSTM(
             units=hidden_layer_neurons,
+            batch_input_shape=(batch_size, timesteps, data_dimension),
             return_sequences=False,
             stateful=True
         )
@@ -433,7 +416,7 @@ def build_model(features, feature_dimensions, hidden_layer_neurons):
             units=feature_dimensions
         )
     )
-    model.add(Activation('linear'))
+    # model.add(Activation('linear'))
 
     '''
     Once the network is specified, it must be compiled into an efficient
@@ -446,66 +429,6 @@ def build_model(features, feature_dimensions, hidden_layer_neurons):
     efficient ADAM optimization algorithm.
     '''
     model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
-    print('> Compilation Time:', time.time() - start)
-    return model
-
-
-def main():
-    """Main Function.
-
-    Display data prediction from tensorflow model
-
-    """
-    # Initialize key variables
-    periods = 288           # No. of periods per vector for predictions
-    features = 7            # No. of features per vector
-    forecast = 1            # No. of periods into the future for predictions
-    base = 2                # Round up to the base int(X)
-    rrd_step = 300
-    forecast = 5
-    feature_dimensions = 1
-    ts_start = int(time.time())
-
-    '''
-    The batch size is often much smaller than the total number of samples.
-    It, along with the number of epochs, defines how quickly the network learns
-    the data (how often the weights are updated).
-    '''
-    batch_size = 128
-    epochs = 5
-
-    '''
-    The final import parameter in defining the LSTM layer is the number of
-    neurons, also called the number of memory units or blocks.
-    '''
-    hidden_layer_neurons = 512
-
-    # Get filename
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-f', '--filename', help='Name of CSV file to read.',
-        type=str, required=True)
-    args = parser.parse_args()
-    filename = args.filename
-
-    file_data = read_file(filename, rrd_step=rrd_step)
-    data = _Data(file_data)
-    (scaler, train, test) = data.scale()
-    print(train)
-    sys.exit(0)
-
-    ######################################################################
-
-    # Open file and get data
-    print('> Loading data... ')
-    file_data = read_file(filename, rrd_step=rrd_step)
-    maxes_data = get_maxes(file_data, periods=periods)
-    data = Data(maxes_data, forecast=forecast, base=base, features=features)
-    (x_train, y_train, x_test, y_test) = data.load()
-
-    # Create the data model
-    print('> Data Loaded. Compiling...', x_train.shape, y_train.shape)
-    model = build_model(features, feature_dimensions, hidden_layer_neurons)
 
     '''
     Once compiled, the network can be fit to the training data. Because the
@@ -520,43 +443,131 @@ def main():
     '''
     for _ in range(epochs):
         model.fit(
-            x_train,
-            y_train,
+            x_shaped,
+            y_values,
             batch_size=batch_size,
             shuffle=False,
             epochs=1,
             validation_split=0.05)
         model.reset_states()
 
-    print('->', x_train.shape, x_test.shape)
-    #score, accuracy = model.evaluate(x_test, y_test, batch_size=batch_size)
-    predicted = model.predict(x_test)
-    predicted = np.reshape(predicted, (predicted.size,))
+    print('\n> Compilation Time: {:20.2f}'.format(time.time() - start))
+    return model
 
-    matching = 0
-    for index, prediction in enumerate(predicted):
-        value = roundup(prediction, base)
-        expected = roundup(y_test[index], base)
-        print('Prediction: {}\tActual: {}'.format(value, expected))
-        if value == expected:
-            matching += 1
 
-    '''matching = 0
-    for index, vector in enumerate(x_test):
-        _value = model.predict(vector[np.newaxis, :, :])[0, 0]
-        value = roundup(_value, base)
-        expected = roundup(y_test[index], base)
-        print(index, len(x_test), expected, value, _value)
-        #print(type(expected), type(value))
-        #sys.exit(0)
-        if value == expected:
-            matching += 1'''
+def forecast_lstm(model, feature_vector, batch_size=1):
+    """Make a one-step forecast.
 
-    print('\nAccuracy: \t\t{}%'.format(round(100 * matching/len(x_test), 3)))
-    print('Duration: \t\t{}s'.format(int(time.time()) - ts_start))
-    print('Days per Vector: \t\t{}'.format(features))
+    Args:
+        model: LSTM model
+        X:
+        batch_size: Size of batch
 
-    #print('Score: ', score)
+    Returns:
+        result: Forecast
+
+    """
+    reshaped_vector = feature_vector.reshape(1, 1, len(feature_vector))
+    y_value = model.predict(reshaped_vector, batch_size=batch_size)
+    result = y_value[0, 0]
+    return result
+
+
+def main():
+    """Main Function.
+
+    Display data prediction from tensorflow model
+
+    """
+    # Initialize key variables
+    base = 2                # Round up to the base int(X)
+    rrd_step = 300
+    ts_start = int(time.time())
+    predictions = []
+
+    '''
+    The batch size is often much smaller than the total number of samples.
+    It, along with the number of epochs, defines how quickly the network learns
+    the data (how often the weights are updated).
+
+    In a stateful network, you should only pass inputs with a number of samples
+    that can be divided by the batch size. Hence we use "1".
+    '''
+    batch_size = 1
+    epochs = 1
+
+    '''
+    The final import parameter in defining the LSTM layer is the number of
+    neurons, also called the number of memory units or blocks.
+    '''
+    hidden_layer_neurons = 10
+
+    # Get filename
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-f', '--filename', help='Name of CSV file to read.',
+        type=str, required=True)
+    args = parser.parse_args()
+    filename = args.filename
+
+    # Read data from file
+    file_data = read_file(filename, rrd_step=rrd_step)
+
+    # Prepare data for modeling
+    data = Data(file_data)
+
+    # Fit the data to the model
+    model = lstm_model(data.scaled_train, hidden_layer_neurons, epochs)
+
+    # Forecast the entire training dataset to build up state for forecasting
+    train_reshaped = data.scaled_train[:, 0].reshape(
+        len(data.scaled_train), 1, 1)
+    model.predict(train_reshaped, batch_size=batch_size)
+
+    # Walk-forward validation on the test data
+    test_scaled = data.scaled_test
+    for index_training in range(len(test_scaled)):
+        # Make one-step forecast
+        feature_vector = test_scaled[index_training, 0:-1]
+        feature_class = test_scaled[index_training, -1]
+        predicted_class_scaled = forecast_lstm(
+            model, feature_vector, batch_size=batch_size)
+
+        # Invert scaling
+        predicted_class_differenced = data.invert_scale(
+            feature_vector, predicted_class_scaled)
+
+        # Invert differencing
+        predicted_class = data.invert_difference(
+            predicted_class_differenced, len(test_scaled) + 1 - index_training)
+
+        # Store forecast
+        index = len(data.train) + index_training + 1
+        predictions.append(predicted_class)
+        expected = data.values[index]
+
+        # Print status
+        '''print(
+            'Timestamp={}, Predicted={}, Expected={}'
+            ''.format(data.timestamps[index], predicted_class, expected))'''
+
+    # Calculate RMSE
+    test_values = data.values[-len(test_scaled):]
+    rmse = sqrt(mean_squared_error(test_values, predictions))
+    print('Test RMSE: {:5.3f}'.format(rmse))
+
+    # Calculate % accuacy
+    found = []
+    for idx, value in enumerate(test_values):
+        # print(round(value, 0), round(predictions[idx], 0), round(value, 0) == round(predictions[idx], 0))
+        found.append(int(round(value, 0) == round(predictions[idx], 0)))
+    print('Accuracy: {:5.3f}%'.format((100 * sum(found)) / len(test_values)))
+
+    # Print execution time
+    print('Execution time: {:5.3f}s'.format(int(time.time() - ts_start)))
+
+    # All done
+    sys.exit(0)
 
 
 if __name__ == "__main__":
