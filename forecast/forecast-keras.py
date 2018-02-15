@@ -222,6 +222,268 @@ class Data(object):
         return result
 
 
+def lstm_model(
+        data, hidden_layer_neurons, epochs,
+        feature_dimensions=1, verbose=False):
+    """Build an LSTM model.
+
+    Args:
+        data: Data frame of X, Y values
+        hidden_layer_neurons: Number of neurons per layers
+        epochs: Number of iterations for learning
+        feature_dimensions: Dimension of features (Number of rows per feature)
+
+    Returns:
+        model: Graph of LSTM model
+
+    """
+    # Initialize key variables
+    start = time.time()
+
+    """
+    In a stateful LSTM network, you should only pass inputs with a number of
+    samples that can be divided by the batch size. Hence we use "1" as it is a
+    factor in any possible number of samples.
+    """
+    batch_size = 1
+
+    # Process the data for fitting
+    x_values, y_values = data[:, 0: -1], data[:, -1]
+    x_shaped = x_values.reshape(x_values.shape[0], 1, x_values.shape[1])
+
+    # Let's do some learning!
+    model = Sequential()
+
+    """
+    The Long Short-Term Memory network (LSTM) is a type of Recurrent Neural
+    Network (RNN).
+
+    A benefit of this type of network is that it can learn and remember over
+    long sequences and does not rely on a pre-specified window lagged
+    observation as input.
+
+    In Keras, this is referred to as being "stateful", and involves setting the
+    "stateful" argument to "True" when defining an LSTM layer.
+
+    By default, an LSTM layer in Keras maintains state between data within
+    one batch. A batch of data is a fixed-sized number of rows from the
+    training dataset that defines how many patterns (sequences) to process
+    before updating the weights of the network.
+
+    A state is:
+        Where am I now inside a sequence? Which time step is it? How is this
+        particular sequence behaving since its beginning up to now?
+
+    A weight is: What do I know about the general behavior of all sequences
+        I've seen so far?
+
+    State in the LSTM layer between batches is cleared by default. This is
+    undesirable therefore we must make the LSTM stateful. This gives us
+    fine-grained control over when state of the LSTM layer is cleared, by
+    calling the reset_states() function during the model.fit() method.
+
+    LSTM networks can be stacked in Keras in the same way that other layer
+    types can be stacked. One addition to the configuration that is required
+    is that an LSTM layer prior to each subsequent LSTM layer must return the
+    sequence. This can be done by setting the return_sequences parameter on
+    the layer to True.
+
+    batch_size denotes the subset size of your training sample (e.g. 100 out
+    of 1000) which is going to be used in order to train the network during its
+    learning process. Each batch trains network in a successive order, taking
+    into account the updated weights coming from the appliance of the previous
+    batch.
+
+    return_sequence indicates if a recurrent layer of the network should return
+    its entire output sequence (i.e. a sequence of vectors of specific
+    dimension) to the next layer of the network, or just its last only output
+    which is a single vector of the same dimension. This value can be useful
+    for networks conforming with an RNN architecture.
+
+    batch_input_shape defines that the sequential classification of the
+    neural network can accept input data of the defined only batch size,
+    restricting in that way the creation of any variable dimension vector.
+    It is widely used in stacked LSTM networks. It is a tuple of (batch_size,
+    timesteps, data_dimension)
+    """
+    timesteps = x_shaped.shape[1]
+    data_dimension = x_shaped.shape[2]
+
+    # Add layers to the model
+    model.add(
+        LSTM(
+            units=hidden_layer_neurons,
+            batch_input_shape=(batch_size, timesteps, data_dimension),
+            return_sequences=True,
+            stateful=True
+        )
+    )
+    model.add(Dropout(0.2))
+
+    model.add(
+        LSTM(
+            units=hidden_layer_neurons,
+            batch_input_shape=(batch_size, timesteps, data_dimension),
+            return_sequences=False,
+            stateful=True
+        )
+    )
+    model.add(Dropout(0.2))
+
+    model.add(
+        Dense(
+            units=feature_dimensions
+        )
+    )
+    # model.add(Activation('linear'))
+
+    """
+    Once the network is specified, it must be compiled into an efficient
+    symbolic representation using a backend mathematical library,
+    such as TensorFlow.
+
+    In compiling the network, we must specify a loss function and optimization
+    algorithm. We will use "mean_squared_error" or "mse" as the loss function
+    as it closely matches RMSE that we will are interested in, and the
+    efficient ADAM optimization algorithm.
+    """
+    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+
+    """
+    Once the model is compiled, the network can be fit to the training data.
+    Because the network is stateful, we must control when the internal state
+    is reset. Therefore, we must manually manage the training process one epoch
+    at a time across the desired number of epochs.
+
+    By default, the samples within an epoch are shuffled prior to being exposed
+    to the network. Again, this is undesirable for the LSTM because we want the
+    network to build up state as it learns across the sequence of observations.
+    We can disable the shuffling of samples by setting "shuffle" to "False".
+    """
+    for _ in range(epochs):
+        model.fit(
+            x_shaped,
+            y_values,
+            batch_size=batch_size,
+            shuffle=False,
+            epochs=1,
+            verbose=verbose,
+            validation_split=0.05)
+
+        """
+        When the fit process reaches the total length of the samples,
+        model.reset_states() is called to reset the internal state at the end
+        of the training epoch, ready for the next training iteration.
+
+        This iteration will start training from the beginning of the dataset
+        therefore state will need to be reset as the previous state would only
+        be relevant to the prior epoch iteration.
+        """
+        model.reset_states()
+
+    print('\n> Training Time: {:20.2f}'.format(time.time() - start))
+    return model
+
+
+class ForecastLSTM(object):
+    """Forecast LSTM.
+
+    Based on: https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
+
+    """
+
+    def __init__(self, model, data, scaled_data):
+        """Instantiate the class.
+
+        Args:
+            model: Trained LSTM model
+            data: Data object
+            scaled_data: Scaled data array to be used for forecasting
+
+        Returns:
+            None
+
+        """
+        # Initialize key variables
+        self._model = model
+        self._data = data
+        self._scaled_data = scaled_data
+
+        """
+        In a stateful LSTM network, you should only pass inputs with a number
+        of samples that can be divided by the batch size. Hence we use "1" as
+        it is a factor in any possible number of samples.
+        """
+        self._batch_size = 1
+
+    def value(self, index):
+        """Make a one-step forecast.
+
+        Args:
+            index: Offset in self.scaled_data
+
+        Returns:
+            result: Forecast
+
+        """
+        # Create feature vector
+        feature_vector = self._scaled_data[index, 0:-1]
+
+        # Get the predicted class (scaled)
+        predicted_class_scaled = self._forecast_lstm(feature_vector)
+
+        # Invert scaling
+        predicted_class_differenced = self._data.invert_scale(
+            feature_vector, predicted_class_scaled)
+
+        # Invert differencing
+        pointer_differenced = len(self._scaled_data) + 1 - index
+        result = self._data.invert_difference(
+            predicted_class_differenced, pointer_differenced)
+
+        # Return
+        return result
+
+    def _forecast_lstm(self, feature_vector):
+        """Make a one-step forecast.
+
+        Args:
+            feature_vector: Feature vector
+
+        Returns:
+            result: Forecast
+
+        """
+        # Initialize key variables
+        model = self._model
+        batch_size = self._batch_size
+
+        # Process
+        """
+        To make a forecast, we call the predict() function on the model.
+        This requires a 3D NumPy array input as an argument.
+        """
+        reshaped_vector = feature_vector.reshape(1, 1, len(feature_vector))
+        y_value = model.predict(reshaped_vector, batch_size=batch_size)
+        result = y_value[0, 0]
+        return result
+
+
+def reshape_scaled_data(data):
+    """Reshape scaled data for predictions.
+
+    Args:
+        data: Scaled data to be reshaped
+
+    Returns:
+        result: Reshaped data
+
+    """
+    # Return reshaped data
+    result = data[:, 0].reshape(len(data), 1, 1)
+    return result
+
+
 def read_file(filename, ts_start=None, rrd_step=300):
     """Read data from file.
 
@@ -335,326 +597,20 @@ def get_maxes(data, periods=288):
     return maxes
 
 
-def lstm_model(
-        data, hidden_layer_neurons, epochs,
-        feature_dimensions=1, verbose=False):
-    """Build an LSTM model.
+def do_accuracy(data, model, ts_start):
+    """Calculate the accuracy of the LSTM model using test data.
 
     Args:
-        data: Data frame of X, Y values
-        hidden_layer_neurons: Number of neurons per layers
-        epochs: Number of iterations for learning
-        feature_dimensions: Dimension of features (Number of rows per feature)
+        model: Trained LSTM model
+        data: Data object
+        ts_start: Timestamp of when processing began
 
     Returns:
-        model: Graph of LSTM model
+        None
 
     """
     # Initialize key variables
-    start = time.time()
-
-    '''
-    In a stateful LSTM network, you should only pass inputs with a number of
-    samples that can be divided by the batch size. Hence we use "1" as it is a
-    factor in any possible number of samples.
-    '''
-    batch_size = 1
-
-    # Process the data for fitting
-    x_values, y_values = data[:, 0: -1], data[:, -1]
-    x_shaped = x_values.reshape(x_values.shape[0], 1, x_values.shape[1])
-
-    # Let's do some learning!
-    model = Sequential()
-
-    '''
-    The Long Short-Term Memory network (LSTM) is a type of Recurrent Neural
-    Network (RNN).
-
-    A benefit of this type of network is that it can learn and remember over
-    long sequences and does not rely on a pre-specified window lagged
-    observation as input.
-
-    In Keras, this is referred to as being "stateful", and involves setting the
-    "stateful" argument to "True" when defining an LSTM layer.
-
-    By default, an LSTM layer in Keras maintains state between data within
-    one batch. A batch of data is a fixed-sized number of rows from the
-    training dataset that defines how many patterns (sequences) to process
-    before updating the weights of the network.
-
-    A state is:
-        Where am I now inside a sequence? Which time step is it? How is this
-        particular sequence behaving since its beginning up to now?
-
-    A weight is: What do I know about the general behavior of all sequences
-        I've seen so far?
-
-    State in the LSTM layer between batches is cleared by default. This is
-    undesirable therefore we must make the LSTM stateful. This gives us
-    fine-grained control over when state of the LSTM layer is cleared, by
-    calling the reset_states() function during the model.fit() method.
-
-    LSTM networks can be stacked in Keras in the same way that other layer
-    types can be stacked. One addition to the configuration that is required
-    is that an LSTM layer prior to each subsequent LSTM layer must return the
-    sequence. This can be done by setting the return_sequences parameter on
-    the layer to True.
-
-    batch_size denotes the subset size of your training sample (e.g. 100 out
-    of 1000) which is going to be used in order to train the network during its
-    learning process. Each batch trains network in a successive order, taking
-    into account the updated weights coming from the appliance of the previous
-    batch.
-
-    return_sequence indicates if a recurrent layer of the network should return
-    its entire output sequence (i.e. a sequence of vectors of specific
-    dimension) to the next layer of the network, or just its last only output
-    which is a single vector of the same dimension. This value can be useful
-    for networks conforming with an RNN architecture.
-
-    batch_input_shape defines that the sequential classification of the
-    neural network can accept input data of the defined only batch size,
-    restricting in that way the creation of any variable dimension vector.
-    It is widely used in stacked LSTM networks. It is a tuple of (batch_size,
-    timesteps, data_dimension)
-    '''
-    timesteps = x_shaped.shape[1]
-    data_dimension = x_shaped.shape[2]
-
-    # Add layers to the model
-    model.add(
-        LSTM(
-            units=hidden_layer_neurons,
-            batch_input_shape=(batch_size, timesteps, data_dimension),
-            return_sequences=True,
-            stateful=True
-        )
-    )
-    model.add(Dropout(0.2))
-
-    model.add(
-        LSTM(
-            units=hidden_layer_neurons,
-            batch_input_shape=(batch_size, timesteps, data_dimension),
-            return_sequences=False,
-            stateful=True
-        )
-    )
-    model.add(Dropout(0.2))
-
-    model.add(
-        Dense(
-            units=feature_dimensions
-        )
-    )
-    # model.add(Activation('linear'))
-
-    '''
-    Once the network is specified, it must be compiled into an efficient
-    symbolic representation using a backend mathematical library,
-    such as TensorFlow.
-
-    In compiling the network, we must specify a loss function and optimization
-    algorithm. We will use "mean_squared_error" or "mse" as the loss function
-    as it closely matches RMSE that we will are interested in, and the
-    efficient ADAM optimization algorithm.
-    '''
-    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
-
-    '''
-    Once the model is compiled, the network can be fit to the training data.
-    Because the network is stateful, we must control when the internal state
-    is reset. Therefore, we must manually manage the training process one epoch
-    at a time across the desired number of epochs.
-
-    By default, the samples within an epoch are shuffled prior to being exposed
-    to the network. Again, this is undesirable for the LSTM because we want the
-    network to build up state as it learns across the sequence of observations.
-    We can disable the shuffling of samples by setting "shuffle" to "False".
-    '''
-    for _ in range(epochs):
-        model.fit(
-            x_shaped,
-            y_values,
-            batch_size=batch_size,
-            shuffle=False,
-            epochs=1,
-            verbose=verbose,
-            validation_split=0.05)
-
-        '''
-        When the fit process reaches the total length of the samples,
-        model.reset_states() is called to reset the internal state at the end
-        of the training epoch, ready for the next training iteration.
-
-        This iteration will start training from the beginning of the dataset
-        therefore state will need to be reset as the previous state would only
-        be relevant to the prior epoch iteration.
-        '''
-        model.reset_states()
-
-    print('\n> Training Time: {:20.2f}'.format(time.time() - start))
-    return model
-
-
-class ForecastLSTM(object):
-    """Forecast LSTM.
-
-    Based on: https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
-
-    """
-
-    def __init__(self, model, data, scaled_data):
-        """Instantiate the class.
-
-        Args:
-            model: Trained LSTM model
-            data: Data object
-            scaled_data: Scaled data array to be used for forecasting
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        self._model = model
-        self._data = data
-        self._scaled_data = scaled_data
-
-        '''
-        In a stateful LSTM network, you should only pass inputs with a number
-        of samples that can be divided by the batch size. Hence we use "1" as
-        it is a factor in any possible number of samples.
-        '''
-        self._batch_size = 1
-
-    def value(self, index):
-        """Make a one-step forecast.
-
-        Args:
-            index: Offset in self.scaled_data
-
-        Returns:
-            result: Forecast
-
-        """
-        # Create feature vector
-        feature_vector = self._scaled_data[index, 0:-1]
-
-        # Get the predicted class (scaled)
-        predicted_class_scaled = self._forecast_lstm(feature_vector)
-
-        # Invert scaling
-        predicted_class_differenced = self._data.invert_scale(
-            feature_vector, predicted_class_scaled)
-
-        # Invert differencing
-        pointer_differenced = len(self._scaled_data) + 1 - index
-        result = self._data.invert_difference(
-            predicted_class_differenced, pointer_differenced)
-
-        # Return
-        return result
-
-    def _forecast_lstm(self, feature_vector):
-        """Make a one-step forecast.
-
-        Args:
-            feature_vector: Feature vector
-
-        Returns:
-            result: Forecast
-
-        """
-        # Initialize key variables
-        model = self._model
-        batch_size = self._batch_size
-
-        # Process
-        reshaped_vector = feature_vector.reshape(1, 1, len(feature_vector))
-        y_value = model.predict(reshaped_vector, batch_size=batch_size)
-        result = y_value[0, 0]
-        return result
-
-
-def main():
-    """Main Function.
-
-    Display data prediction from tensorflow model
-
-    """
-    # Initialize key variables
-    rrd_step = 300
-    verbose = True
-    periods = 288
-    ts_start = int(time.time())
     predictions = []
-
-    # Set logging level
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-    '''
-    The batch size is often much smaller than the total number of samples.
-    It, along with the number of epochs, defines how quickly the network learns
-    the data (how often the weights are updated).
-
-    In a stateful LSTM network, you should only pass inputs with a number of
-    samples that can be divided by the batch size. Hence we use "1" as it is a
-    factor in any possible number of samples.
-    '''
-    batch_size = 1
-    epochs = 1
-
-    '''
-    The final import parameter in defining the LSTM layer is the number of
-    neurons, also called the number of memory units or blocks.
-    '''
-    hidden_layer_neurons = 5
-
-    # Get filename
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-f', '--filename', help='Name of CSV file to read.',
-        type=str, required=True)
-    args = parser.parse_args()
-    filename = args.filename
-
-    # Read data from file
-    print('\nProcessing file: {}'.format(os.path.basename(filename)))
-    file_data = read_file(filename, rrd_step=rrd_step)
-    file_data = get_maxes(file_data, periods=periods)
-
-    # Prepare data for modeling
-    data = Data(file_data)
-
-    # Fit the data to the model
-    model = lstm_model(
-        data.scaled_train, hidden_layer_neurons, epochs, verbose=verbose)
-
-    '''
-    During training, the internal state is reset after each epoch.
-
-    While forecasting, we will not want to reset the internal state between
-    forecasts. In fact, we would like the model to build up state as we
-    forecast each time step in the test dataset.
-
-    This raises the question as to what would be a good initial state for the
-    network prior to forecasting the test dataset. We will seed the state by
-    making a prediction on all samples in the training dataset. In theory, the
-    internal state should now be set up ready to forecast the next time step.
-
-    In other words, the current state of the model (created during model.fit)
-    isn't suitable for forecasting.
-
-    We now forecast the entire training dataset to build up state for
-    forecasting.
-    '''
-    print('Creating model state for forecasting.')
-    train_reshaped = data.scaled_train[:, 0].reshape(
-        len(data.scaled_train), 1, 1)
-    model.predict(train_reshaped, batch_size=batch_size)
-    print('Completed model state for forecasting.')
 
     # Walk-forward validation on the test data
     test_scaled = data.scaled_test
@@ -665,15 +621,6 @@ def main():
 
         # Store forecast
         predictions.append(predicted_class)
-
-        # Get the expected value
-        index = len(data.scaled_train) + index_test + 1
-        expected = data.values[index]
-
-        # Print status
-        '''print(
-            'Timestamp={}, Predicted={}, Expected={}'
-            ''.format(data.timestamps[index], predicted_class, expected))'''
 
     # Calculate RMSE
     test_values = data.values[-len(test_scaled):]
@@ -691,6 +638,151 @@ def main():
 
     # All done
     sys.exit(0)
+
+
+def do_forecast(data, model, ts_start, periods, rrd_step=300, count=10):
+    """Get maximum values from data.
+
+    Args:
+        model: Trained LSTM model
+        data: Data object
+        ts_start: Timestamp of when processing began
+        periods: Interval between timestamps in the data
+        rrd_step: Step in seconds for the data
+
+    Returns:
+        None
+
+    """
+    # Initialize key variables
+    data_dict = {}
+    rows = []
+
+    # Populate dict
+    for index, value in enumerate(data.values):
+        data_dict[data.timestamps[index]] = value
+
+    # Do more forecasts
+    for _ in range(count):
+        new_data = Data(data_dict)
+        new_forecast = ForecastLSTM(model, new_data, new_data.scaled)
+        index = len(new_data.scaled) - 1
+        predicted_class = new_forecast.value(index)
+
+        # Populate Dict
+        last_timestamp = new_data.timestamps[-1]
+        for offset in range(
+                last_timestamp + rrd_step,
+                last_timestamp + (rrd_step * (periods + 1)),
+                rrd_step):
+            data_dict[offset] = predicted_class
+
+    # Create CSV file
+    for key, value in sorted(data_dict.items()):
+        rows.append([key, value])
+    with open('/tmp/forescast-data.csv', 'w') as output_file:
+        dict_writer = csv.writer(output_file)
+        dict_writer.writerows(rows)
+
+    # print
+    pprint(data_dict)
+
+    # Print execution time
+    print('Execution time: {:5.1f}s\n'.format(int(time.time() - ts_start)))
+
+    # All done
+    sys.exit(0)
+
+
+def main():
+    """Main Function.
+
+    Display data prediction from tensorflow model
+
+    """
+    # Initialize key variables
+    rrd_step = 300
+    verbose = True
+    periods = 288
+    ts_start = int(time.time())
+
+    # Set logging level
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+    """
+    The batch size is often much smaller than the total number of samples.
+    It, along with the number of epochs, defines how quickly the network learns
+    the data (how often the weights are updated).
+
+    In a stateful LSTM network, you should only pass inputs with a number of
+    samples that can be divided by the batch size. Hence we use "1" as it is a
+    factor in any possible number of samples.
+    """
+    batch_size = 1
+    epochs = 1
+
+    """
+    The final import parameter in defining the LSTM layer is the number of
+    neurons, also called the number of memory units or blocks.
+    """
+    hidden_layer_neurons = 5
+
+    # Get filename
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-f', '--filename', help='Name of CSV file to read.',
+        type=str, required=True)
+    parser.add_argument(
+        '--accuracy', help='Calculate accuracy of data',
+        action='store_true')
+    args = parser.parse_args()
+    filename = args.filename
+    accuracy = args.accuracy
+
+    # Read data from file
+    print('\nProcessing file: {}'.format(os.path.basename(filename)))
+    file_data = read_file(filename, rrd_step=rrd_step)
+    file_data = get_maxes(file_data, periods=periods)
+
+    # Prepare data for modeling
+    data = Data(file_data)
+
+    # Fit the data to the model
+    model = lstm_model(
+        data.scaled_train, hidden_layer_neurons, epochs, verbose=verbose)
+
+    """
+    During training, the internal state is reset after each epoch.
+
+    While forecasting, we will not want to reset the internal state between
+    forecasts. In fact, we would like the model to build up state as we
+    forecast each time step in the test dataset.
+
+    This raises the question as to what would be a good initial state for the
+    network prior to forecasting the test dataset. We will seed the state by
+    making a prediction on all samples in the training dataset. In theory, the
+    internal state should now be set up ready to forecast the next time step.
+
+    In other words, the current state of the model (created during model.fit)
+    isn't suitable for forecasting.
+
+    We now forecast the entire training dataset to build up state for
+    forecasting.
+
+    To make a forecast, we can call the predict() function on the model. This
+    requires a 3D NumPy array input as an argument. This is why we reshape the
+    data.
+    """
+    print('Creating model state for forecasting.')
+    train_reshaped = reshape_scaled_data(data.scaled_train)
+    model.predict(train_reshaped, batch_size=batch_size)
+    print('Completed model state for forecasting.')
+
+    # Do the accuracy routine if stated on the command line
+    if accuracy is True:
+        do_accuracy(data, model, ts_start)
+    else:
+        do_forecast(data, model, ts_start, periods, rrd_step=rrd_step)
 
 
 if __name__ == "__main__":
