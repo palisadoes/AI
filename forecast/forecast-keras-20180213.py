@@ -28,7 +28,7 @@ class Data(object):
     """
 
     def __init__(self, data, lag=1):
-        """Instantiate the class.
+        """Method that instantiates the class.
 
         Args:
             data: Dict of values keyed by timestamp
@@ -49,8 +49,8 @@ class Data(object):
             self.timestamps.append(timestamp)
 
         # Get data and scaled data
+        self.train, self.test = self._data()
         self.scaler, self.scaled_train, self.scaled_test = self._scaled_data()
-        self.scaled = np.vstack((self.scaled_train, self.scaled_test))
 
     def _timeseries_to_supervised(self):
         """Transform Time Series to Supervised Learning.
@@ -171,8 +171,8 @@ class Data(object):
         index = round(0.9 * len(data))
 
         # Return
-        train = data[:index]
-        test = data[index:]
+        train = data[0:-index]
+        test = data[-index:]
         return (train, test)
 
     def _scaled_data(self):
@@ -299,6 +299,26 @@ def _normalize(timestamp, rrd_step=300):
     return result
 
 
+def roundup(value, base):
+    """Round value to nearest base value.
+
+    Args:
+        value: Value to round up
+        base: Base to use
+
+    Returns:
+        result
+
+    """
+    # Initialize key variables
+    _base = int(base)
+
+    # Return
+    _result = int(base * round(float(value)/base))
+    result = np.float32(_result)
+    return result
+
+
 def get_maxes(data, periods=288):
     """Get maximum values from data.
 
@@ -336,7 +356,7 @@ def get_maxes(data, periods=288):
 
 
 def lstm_model(
-        data, hidden_layer_neurons, epochs,
+        data, hidden_layer_neurons, epochs, batch_size=1,
         feature_dimensions=1, verbose=False):
     """Build an LSTM model.
 
@@ -344,6 +364,7 @@ def lstm_model(
         data: Data frame of X, Y values
         hidden_layer_neurons: Number of neurons per layers
         epochs: Number of iterations for learning
+        batch_size
         feature_dimensions: Dimension of features (Number of rows per feature)
 
     Returns:
@@ -352,13 +373,6 @@ def lstm_model(
     """
     # Initialize key variables
     start = time.time()
-
-    '''
-    In a stateful LSTM network, you should only pass inputs with a number of
-    samples that can be divided by the batch size. Hence we use "1" as it is a
-    factor in any possible number of samples.
-    '''
-    batch_size = 1
 
     # Process the data for fitting
     x_values, y_values = data[:, 0: -1], data[:, -1]
@@ -498,84 +512,22 @@ def lstm_model(
     return model
 
 
-class ForecastLSTM(object):
-    """Forecast LSTM.
+def forecast_lstm(model, feature_vector, batch_size=1):
+    """Make a one-step forecast.
 
-    Based on: https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
+    Args:
+        model: LSTM model
+        X:
+        batch_size: Size of batch
+
+    Returns:
+        result: Forecast
 
     """
-
-    def __init__(self, model, data, scaled_data):
-        """Instantiate the class.
-
-        Args:
-            model: Trained LSTM model
-            data: Data object
-            scaled_data: Scaled data array to be used for forecasting
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        self._model = model
-        self._data = data
-        self._scaled_data = scaled_data
-
-        '''
-        In a stateful LSTM network, you should only pass inputs with a number
-        of samples that can be divided by the batch size. Hence we use "1" as
-        it is a factor in any possible number of samples.
-        '''
-        self._batch_size = 1
-
-    def value(self, index):
-        """Make a one-step forecast.
-
-        Args:
-            index: Offset in self.scaled_data
-
-        Returns:
-            result: Forecast
-
-        """
-        # Create feature vector
-        feature_vector = self._scaled_data[index, 0:-1]
-
-        # Get the predicted class (scaled)
-        predicted_class_scaled = self._forecast_lstm(feature_vector)
-
-        # Invert scaling
-        predicted_class_differenced = self._data.invert_scale(
-            feature_vector, predicted_class_scaled)
-
-        # Invert differencing
-        pointer_differenced = len(self._scaled_data) + 1 - index
-        result = self._data.invert_difference(
-            predicted_class_differenced, pointer_differenced)
-
-        # Return
-        return result
-
-    def _forecast_lstm(self, feature_vector):
-        """Make a one-step forecast.
-
-        Args:
-            feature_vector: Feature vector
-
-        Returns:
-            result: Forecast
-
-        """
-        # Initialize key variables
-        model = self._model
-        batch_size = self._batch_size
-
-        # Process
-        reshaped_vector = feature_vector.reshape(1, 1, len(feature_vector))
-        y_value = model.predict(reshaped_vector, batch_size=batch_size)
-        result = y_value[0, 0]
-        return result
+    reshaped_vector = feature_vector.reshape(1, 1, len(feature_vector))
+    y_value = model.predict(reshaped_vector, batch_size=batch_size)
+    result = y_value[0, 0]
+    return result
 
 
 def main():
@@ -585,9 +537,10 @@ def main():
 
     """
     # Initialize key variables
+    base = 2                # Round up to the base int(X)
     rrd_step = 300
-    verbose = True
-    periods = 288
+    verbose = False
+    periods = 288 * 30
     ts_start = int(time.time())
     predictions = []
 
@@ -599,9 +552,8 @@ def main():
     It, along with the number of epochs, defines how quickly the network learns
     the data (how often the weights are updated).
 
-    In a stateful LSTM network, you should only pass inputs with a number of
-    samples that can be divided by the batch size. Hence we use "1" as it is a
-    factor in any possible number of samples.
+    In a stateful network, you should only pass inputs with a number of samples
+    that can be divided by the batch size. Hence we use "1".
     '''
     batch_size = 1
     epochs = 1
@@ -650,24 +602,30 @@ def main():
     We now forecast the entire training dataset to build up state for
     forecasting.
     '''
-    print('Creating model state for forecasting.')
     train_reshaped = data.scaled_train[:, 0].reshape(
         len(data.scaled_train), 1, 1)
     model.predict(train_reshaped, batch_size=batch_size)
-    print('Completed model state for forecasting.')
 
     # Walk-forward validation on the test data
     test_scaled = data.scaled_test
-    forecast = ForecastLSTM(model, data, test_scaled)
-    for index_test in range(len(test_scaled)):
+    for index_training in range(len(test_scaled)):
         # Make one-step forecast
-        predicted_class = forecast.value(index_test)
+        feature_vector = test_scaled[index_training, 0:-1]
+        feature_class = test_scaled[index_training, -1]
+        predicted_class_scaled = forecast_lstm(
+            model, feature_vector, batch_size=batch_size)
+
+        # Invert scaling
+        predicted_class_differenced = data.invert_scale(
+            feature_vector, predicted_class_scaled)
+
+        # Invert differencing
+        predicted_class = data.invert_difference(
+            predicted_class_differenced, len(test_scaled) + 1 - index_training)
 
         # Store forecast
+        index = len(data.train) + index_training + 1
         predictions.append(predicted_class)
-
-        # Get the expected value
-        index = len(data.scaled_train) + index_test + 1
         expected = data.values[index]
 
         # Print status
