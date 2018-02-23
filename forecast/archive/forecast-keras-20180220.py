@@ -41,7 +41,7 @@ class Data(object):
         # Initialize key variables
         self.values = []
         self.timestamps = []
-        self.lag = lag
+        self._lag = lag
 
         # Get list of values
         for timestamp, value in sorted(data.items()):
@@ -90,7 +90,7 @@ class Data(object):
 
         # Create series for supervised learning
         dataframe = pandas.DataFrame(diff_values)
-        columns = [dataframe.shift(i) for i in range(1, self.lag + 1)]
+        columns = [dataframe.shift(i) for i in range(1, self._lag + 1)]
         columns.append(dataframe)
         dataframe = pandas.concat(columns, axis=1)
         dataframe.fillna(0, inplace=True)
@@ -469,7 +469,7 @@ class ForecastLSTM(object):
         return result
 
 
-def reshape_scaled_data(data, lag=1):
+def reshape_scaled_data(data):
     """Reshape scaled data for predictions.
 
     Args:
@@ -480,7 +480,7 @@ def reshape_scaled_data(data, lag=1):
 
     """
     # Return reshaped data
-    result = data[:, 0:lag].reshape(len(data), 1, lag)
+    result = data[:, 0].reshape(len(data), 1, 1)
     return result
 
 
@@ -651,60 +651,7 @@ def do_accuracy(data, model, ts_start):
     sys.exit(0)
 
 
-def do_forecast(data, model, ts_start, rrd_step=300, count=2000, lag=1):
-    """Get maximum values from data.
-
-    Args:
-        model: Trained LSTM model
-        data: Data object
-        ts_start: Timestamp of when processing began
-        periods: Interval between timestamps in the data
-        rrd_step: Step in seconds for the data
-
-    Returns:
-        None
-
-    """
-    # Initialize key variables
-    data_dict = {}
-    rows = []
-    timestamps = data.timestamps
-
-    # Populate dict
-    for index, value in enumerate(data.values):
-        data_dict[timestamps[index]] = value
-
-    # Print status
-    print(
-        'Predictions start at timestamp: {}'
-        ''.format(data.timestamps[-1] + rrd_step))
-
-    # Do more forecasts
-    for _ in range(count):
-        new_data = Data(data_dict, lag=lag)
-        new_forecast = ForecastLSTM(model, new_data, new_data.scaled)
-        index = len(new_data.scaled) - 1
-        predicted_class = new_forecast.value(index)
-
-        # Populate Dict
-        last_timestamp = new_data.timestamps[-1] + rrd_step
-        data_dict[last_timestamp] = predicted_class
-
-    # Create CSV file
-    for key, value in sorted(data_dict.items()):
-        rows.append([key, value])
-    with open('/tmp/forescast-data.csv', 'w') as output_file:
-        dict_writer = csv.writer(output_file)
-        dict_writer.writerows(rows)
-
-    # Print execution time
-    print('Execution time: {:5.1f}s\n'.format(int(time.time() - ts_start)))
-
-    # All done
-    sys.exit(0)
-
-
-def _do_forecast(data, model, ts_start, periods, rrd_step=300, count=10, lag=1):
+def do_forecast(data, model, ts_start, periods, rrd_step=300, count=10):
     """Get maximum values from data.
 
     Args:
@@ -733,7 +680,7 @@ def _do_forecast(data, model, ts_start, periods, rrd_step=300, count=10, lag=1):
 
     # Do more forecasts
     for _ in range(count):
-        new_data = Data(data_dict, lag=lag)
+        new_data = Data(data_dict)
         new_forecast = ForecastLSTM(model, new_data, new_data.scaled)
         index = len(new_data.scaled) - 1
         predicted_class = new_forecast.value(index)
@@ -770,9 +717,8 @@ def main():
     # Initialize key variables
     rrd_step = 300
     verbose = True
-    sliding = True
-    periods = 288
-    lag = 90
+    sliding = False
+    periods = 12
     ts_start = int(time.time())
 
     # Set logging level
@@ -788,7 +734,7 @@ def main():
     factor in any possible number of samples.
     """
     batch_size = 1
-    epochs = 5
+    epochs = 50
 
     """
     The final import parameter in defining the LSTM layer is the number of
@@ -814,7 +760,7 @@ def main():
     file_data = get_maxes(file_data, periods=periods, sliding=sliding)
 
     # Prepare data for modeling
-    data = Data(file_data, lag=lag)
+    data = Data(file_data)
 
     # Fit the data to the model
     model = lstm_model(
@@ -843,7 +789,7 @@ def main():
     data.
     """
     print('Creating model state for forecasting.')
-    train_reshaped = reshape_scaled_data(data.scaled_train, lag=lag)
+    train_reshaped = reshape_scaled_data(data.scaled_train)
     model.predict(train_reshaped, batch_size=batch_size)
     print('Completed model state for forecasting.')
 
@@ -851,7 +797,7 @@ def main():
     if accuracy is True:
         do_accuracy(data, model, ts_start)
     else:
-        do_forecast(data, model, ts_start, rrd_step=rrd_step, lag=lag)
+        do_forecast(data, model, ts_start, periods, rrd_step=rrd_step)
 
 
 if __name__ == "__main__":
