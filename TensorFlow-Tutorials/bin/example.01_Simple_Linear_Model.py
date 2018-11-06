@@ -12,7 +12,7 @@ class SimpleLinear(object):
     """Support vector machine class."""
 
     # Get data from files
-    data = MNIST(data_dir='data/MNIST/')
+    data = MNIST(data_dir='/tmp/data/MNIST/')
 
     # The images are stored in one-dimensional arrays of this length.
     img_size_flat = data.img_size_flat
