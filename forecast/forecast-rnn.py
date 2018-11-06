@@ -213,7 +213,7 @@ def main():
     input_vectors = 1       # Number of input vectors submitted
     learning_rate = 0.001   # Small learning rate to not overshoot the minimum
     base = 5             # Round up to the base int(X)
-    epochs_to_try = 1500
+    epochs_to_try = 600
 
     # Number of output vectors
     output_vectors = 1
