@@ -381,6 +381,15 @@ def plot_images(images, image_shape, cls_true, cls_pred=None):
     Function used to plot 9 images in a 3x3 grid, and writing the true and
     predicted classes below each image.
 
+    Args:
+        images: List of images
+        image_shape: Shape of each image
+        cls_true: List of actual classes associated with each image
+        cls_pred: List of predicted classes associated with each image
+
+    Returns:
+        None
+        
     """
     # Initialize key variables
     assert len(images) == len(cls_true) == 9
