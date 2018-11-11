@@ -96,7 +96,6 @@ class ConvolutionalNeuralNetwork(object):
             [-1, self.img_size, self.img_size, self.num_channels])
 
         print('Encoded X image: ', self.x_image)
-        sys.exit(0)
 
         '''
         Next we have the placeholder variable for the true labels associated
