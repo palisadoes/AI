@@ -61,6 +61,10 @@ class ConvolutionalNeuralNetwork(object):
         """
         # Initialize variables
         self.train_batch_size = train_batch_size
+        fill = 50
+
+        # Print a spacer
+        print('')
 
         # Counter for total number of iterations performed so far.
         self.total_iterations = 0
@@ -95,7 +99,7 @@ class ConvolutionalNeuralNetwork(object):
             self.x_vectors,
             [-1, self.img_size, self.img_size, self.num_channels])
 
-        print('Encoded X image: ', self.x_image)
+        print('{0: <{1}} {2}'.format('Encoded X image:', fill, self.x_image))
 
         '''
         Next we have the placeholder variable for the true labels associated
@@ -136,8 +140,10 @@ class ConvolutionalNeuralNetwork(object):
         pixels high, and there are 16 different channels, one channel for each
         of the filters.
         '''
-        print('Number of Channels: ', self.num_channels)
-        print('First Convolutional Layer: ', layer_conv1)
+        print('{0: <{1}} {2}'.format(
+            'Number of Channels:', fill, self.num_channels))
+        print('{0: <{1}} {2}'.format(
+            'First Convolutional Layer:', fill, layer_conv1))
 
         # Convolutional Layer 2
 
@@ -161,7 +167,8 @@ class ConvolutionalNeuralNetwork(object):
         Note: Convolution has converted the previously convoluted 14x14 images
         to 7x7 images.
         '''
-        print('Second Convolutional Layer: ', layer_conv2)
+        print('{0: <{1}} {2}'.format(
+            'Second Convolutional Layer:', fill, layer_conv2))
 
         # Flatten layer
 
@@ -177,9 +184,10 @@ class ConvolutionalNeuralNetwork(object):
         arbitrary number of images which have been flattened to vectors of
         length 1764 each. Note that 1764 = 7 x 7 x 36.
         '''
-
-        print('Flattened Layer: ', layer_flat)
-        print('Flattened Layer\'s Number of Features: ', num_features)
+        print('{0: <{1}} {2}'.format(
+            'Flattened Layer:', fill, layer_flat))
+        print('{0: <{1}} {2}'.format(
+            'Flattened Layer\'s Number of Features: ', fill, num_features))
 
         # Fully-Connected Layer 1
 
@@ -192,7 +200,8 @@ class ConvolutionalNeuralNetwork(object):
         layer_fc1 = new_fc_layer(
             layer_flat, num_features, self.fc_size, use_relu=True)
 
-        print('First Fully Connected Layer: ', layer_fc1)
+        print('{0: <{1}} {2}'.format(
+            'First Fully Connected Layer: ', fill, layer_fc1))
 
         # Fully-Connected Layer 2
 
@@ -204,11 +213,12 @@ class ConvolutionalNeuralNetwork(object):
         layer_fc2 = new_fc_layer(
             layer_fc1, self.fc_size, self.num_classes, use_relu=False)
 
-        print('Second Fully Connected Layer: ', layer_fc2)
+        print('{0: <{1}} {2}'.format(
+            'Second Fully Connected Layer: ', fill, layer_fc2))
 
         # Predicted Class
 
-        '''new_conv_layer
+        '''
         The second fully-connected layer estimates how likely it is that the
         input image belongs to each of the 10 classes. However, these estimates
         are a bit rough and difficult to interpret because the numbers may be
@@ -304,6 +314,9 @@ class ConvolutionalNeuralNetwork(object):
         start optimizing them.
         '''
         self.session.run(tf.global_variables_initializer())
+
+        # Print a spacer
+        print('')
 
     def optimize(self, num_iterations):
         """Optimize the graph.
