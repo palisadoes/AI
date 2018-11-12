@@ -126,7 +126,7 @@ class ConvolutionalNeuralNetwork(object):
         equal to filter_size1. Finally we wish to down-sample the image so it
         is half the size by using 2x2 max-pooling.
         '''
-        (layer_conv1, self.weights_conv1) = new_conv_layer(
+        (self.layer_conv1, self.weights_conv1) = new_conv_layer(
             self.x_image,
             self.num_channels, self.filter_size1, self.num_filters1,
             use_pooling=True)
@@ -143,7 +143,7 @@ class ConvolutionalNeuralNetwork(object):
         print('{0: <{1}} {2}'.format(
             'Number of Channels:', fill, self.num_channels))
         print('{0: <{1}} {2}'.format(
-            'First Convolutional Layer:', fill, layer_conv1))
+            'First Convolutional Layer:', fill, self.layer_conv1))
 
         # Convolutional Layer 2
 
@@ -152,8 +152,8 @@ class ConvolutionalNeuralNetwork(object):
         from the first convolutional layer. The number of input channels
         corresponds to the number of filters in the first convolutional layer.
         '''
-        (layer_conv2, self.weights_conv2) = new_conv_layer(
-            layer_conv1,
+        (self.layer_conv2, self.weights_conv2) = new_conv_layer(
+            self.layer_conv1,
             self.num_filters1, self.filter_size2, self.num_filters2,
             use_pooling=True)
 
@@ -168,7 +168,7 @@ class ConvolutionalNeuralNetwork(object):
         to 7x7 images.
         '''
         print('{0: <{1}} {2}'.format(
-            'Second Convolutional Layer:', fill, layer_conv2))
+            'Second Convolutional Layer:', fill, self.layer_conv2))
 
         # Flatten layer
 
@@ -177,7 +177,7 @@ class ConvolutionalNeuralNetwork(object):
         as input in a fully-connected network, which requires for the tensors
         to be reshaped or flattened to 2-dim tensors.
         '''
-        (layer_flat, num_features) = flatten_layer(layer_conv2)
+        (layer_flat, num_features) = flatten_layer(self.layer_conv2)
 
         '''
         Check that the tensors now have shape (?, 1764) which means there's an
@@ -253,7 +253,7 @@ class ConvolutionalNeuralNetwork(object):
         the output of layer_fc2 directly rather than y_pred which has already
         had the softmax applied.
         '''
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(
             logits=layer_fc2, labels=self.y_true)
 
         '''
@@ -587,7 +587,7 @@ class ConvolutionalNeuralNetwork(object):
         # Create a feed-dict containing just one image.
         # Note that we don't need to feed y_true because it is
         # not used in this calculation.
-        feed_dict = {self.x_image: [image]}
+        feed_dict = {self.x_vectors: [image]}
 
         # Calculate and retrieve the output values of the layer
         # when inputting that image.
@@ -924,6 +924,87 @@ def main():
     cnn.print_test_accuracy(
         show_example_errors=True,
         show_confusion_matrix=True)
+
+    # Plot image 1
+    image1 = cnn.data.x_test[0]
+    cnn.plot_image(image1)
+
+    # Plot image 2
+    image2 = cnn.data.x_test[13]
+    cnn.plot_image(image2)
+
+    '''
+    Now plot the filter-weights for the first convolutional layer.
+    Note that positive weights are red and negative weights are blue.
+    '''
+
+    # Plot weights for convolutional layer 1
+    cnn.plot_conv_weights(weights=cnn.weights_conv1)
+
+    '''
+    Applying each of these convolutional filters to the first input image gives
+    the following output images, which are then used as input to the second
+    convolutional layer. Note that these images are down-sampled to 14 x 14
+    pixels which is half the resolution of the original input image.
+    '''
+
+    # Plot how the convolutional layer weights affect image 1
+    cnn.plot_conv_layer(layer=cnn.layer_conv1, image=image1)
+
+    '''
+    The following images are the results of applying the convolutional filters
+    to the second image.
+
+    It is difficult to see from these images what the purpose of the
+    convolutional filters might be. It appears that they have merely created
+    several variations of the input image, as if light was shining from
+    different angles and casting shadows in the image.
+    '''
+
+    # Plot how the convolutional layer weights affect image 2
+    cnn.plot_conv_layer(layer=cnn.layer_conv1, image=image2)
+
+    '''
+    Convolution Layer 2
+
+    Now plot the filter-weights for the second convolutional layer.
+
+    There are 16 output channels from the first conv-layer, which means there
+    are 16 input channels to the second conv-layer. The second conv-layer has
+    a set of filter-weights for each of its input channels. We start by
+    plotting the filter-weigths for the first channel.
+
+    Note again that positive weights are red and negative weights are blue.
+    '''
+
+    # Plot weights for convolutional layer 2
+    cnn.plot_conv_weights(weights=cnn.weights_conv2, input_channel=0)
+
+    '''
+    There are 16 input channels to the second convolutional layer, so we can
+    make another 15 plots of filter-weights like this. We just make one more
+    with the filter-weights for the second channel.
+    '''
+
+    # Plot weights for convolutional layer 2
+    cnn.plot_conv_weights(weights=cnn.weights_conv2, input_channel=1)
+
+    '''
+    It can be difficult to understand and keep track of how these filters are
+    applied because of the high dimensionality.
+
+    Applying these convolutional filters to the images that were ouput from the
+    first conv-layer gives the following images.
+
+    Note that these are down-sampled yet again to 7 x 7 pixels which is half
+    the resolution of the images from the first conv-layer.
+    '''
+
+    # Plot how the second convolutional layer's weights affect image 1
+    cnn.plot_conv_layer(layer=cnn.layer_conv2, image=image1)
+
+    # Plot how the second convolutional layer's weights affect image 2
+    cnn.plot_conv_layer(layer=cnn.layer_conv2, image=image2)
 
 
 if __name__ == "__main__":
