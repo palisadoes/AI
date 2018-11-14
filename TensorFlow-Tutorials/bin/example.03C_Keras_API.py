@@ -71,7 +71,7 @@ class KerasCNN(object):
 
         """
         # Initialize variables
-        fill = 50
+        epochs = 2
 
         """
         print('{0: <{1}} {2}'.format('Encoded X image:', fill, self.x_image))
@@ -150,7 +150,7 @@ class KerasCNN(object):
 
         self.model.fit(x=self.data.x_train,
                        y=self.data.y_train,
-                       epochs=1, batch_size=128)
+                       epochs=epochs, batch_size=128)
 
         # Evaluation
 
@@ -162,11 +162,33 @@ class KerasCNN(object):
         result = self.model.evaluate(x=self.data.x_test, y=self.data.y_test)
 
         '''
-        We can print all the performance metrics for the test-set.
+        Print actual versus predicted values
         '''
 
+        print('\nActual vs Predicted X values')
+        start = 0
+        stop = 300
+        predictions = self.model.predict(self.data.x_test[start:stop])
+        for pointer in range(start, stop):
+            predicted = np.argmax(predictions[pointer])
+            actual = np.argmax(self.data.y_test[pointer])
+            print(
+                '{}: Actual: {}\tPredicted: {}\tMatch: {}'.format(
+                    str(pointer).zfill(3),
+                    predicted, actual, predicted == actual))
+
+        '''
+        We can print all the performance metrics for the test-set.
+        '''
+        print('\nPerfomance metrics')
         for name, value in zip(self.model.metrics_names, result):
             print('{} {}'.format(name, value))
+
+        '''
+        Print the model summary
+        '''
+
+        print('\n\nModel Summary\n\n{}'.format(self.model.summary()))
 
     def plot_example_errors(self, cls_pred):
         """Plot 9 images in a 3x3 grid.
