@@ -49,7 +49,7 @@ import download
 
 # Directory where you want to download and save the data-set.
 # Set this before you start calling any of the functions below.
-data_dir = "data/weather-denmark/"
+data_dir = "/tmp/data/weather-denmark/"
 
 
 # Full path for the pickled data-file. (Original data).
