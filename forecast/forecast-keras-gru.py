@@ -325,7 +325,7 @@ class RNNGRU(object):
         self.model.fit_generator(
             generator=generator,
             epochs=20,
-            steps_per_epoch=20,
+            steps_per_epoch=10,
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -674,7 +674,7 @@ def main():
     choice of sequence_length below.
     '''
 
-    batch_size = 64
+    batch_size = 16
 
     '''
     We will use a sequence-length of 1344, which means that each random
@@ -734,20 +734,6 @@ def main():
     '''
 
     rnn.plot_comparison(start_idx=100000, length=1000, train=True)
-
-    # Strange Example
-
-    '''
-    The following is another example from the training-set.
-
-    Note how the temperature does not oscillate very much within each day
-    (this plot shows almost 42 days). The temperature normally oscillates
-    within each day, see e.g. the plot above where the daily
-    temperature-oscillation is very clear. It is unclear whether this period
-    had unusually stable temperature, or if perhaps there's a data-error.
-    '''
-
-    rnn.plot_comparison(start_idx=200000, length=1000, train=True)
 
     # Example from Test-Set
 
