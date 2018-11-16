@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Timeseries Example Code."""
+"""Script to forecast data using RNN AI using GRU feedback."""
 
 # Standard imports
+import argparse
+import csv
 import sys
-
-import numpy as np
+import os
+from datetime import datetime
+import time
 
 # PIP3 imports
+import numpy as np
+import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 
@@ -19,30 +24,33 @@ from tensorflow.python.keras.initializers import RandomUniform
 from tensorflow.python.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 
-# Local import
-import weather
-
 
 class RNNGRU(object):
-    """Support vector machine class."""
+    """Process data for ingestion."""
 
-    def __init__(self, batch_size, sequence_length):
+    def __init__(
+            self, data, periods=288, batch_size=64, sequence_length=20,
+            warmup_steps=50):
         """Instantiate the class.
 
         Args:
+            data: Dict of values keyed by timestamp
+            periods: Number of timestamp data points per vector
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
+            warmup_steps:
 
         Returns:
             None
 
         """
         # Initialize key variables
-        self.target_names = ['Temp', 'WindSpeed', 'Pressure']
-        self.warmup_steps = 50
+        self.periods = periods
+        self.target_names = ['value']
+        self.warmup_steps = warmup_steps
 
         # Get data
-        x_data, y_data = self.data()
+        (x_data, y_data) = convert_data(data, periods, self.target_names)
 
         print('\n> Numpy Data Type: {}'.format(type(x_data)))
         print("> Numpy Data Shape: {}".format(x_data.shape))
@@ -357,7 +365,7 @@ class RNNGRU(object):
                 print('{0}: {1:.3e}'.format(metric, res))
 
     def batch_generator(self, batch_size, sequence_length):
-        """Generator function for creating random batches of training-data.
+        """Create generator function to create random batches of training-data.
 
         Args:
             batch_size: Size of batch
@@ -388,219 +396,6 @@ class RNNGRU(object):
                 y_batch[i] = self.y_train_scaled[idx:idx+sequence_length]
 
             yield (x_batch, y_batch)
-
-    def plot_comparison(self, start_idx, length=100, train=True):
-        """Plot the predicted and true output-signals.
-
-        Args:
-            start_idx: Start-index for the time-series.
-            length: Sequence-length to process and plot.
-            train: Boolean whether to use training- or test-set.
-
-        Returns:
-            None
-
-        """
-
-        if train:
-            # Use training-data.
-            x_values = self.x_train_scaled
-            y_true = self.y_train
-        else:
-            # Use test-data.
-            x_values = self.x_test_scaled
-            y_true = self.y_test
-
-        # End-index for the sequences.
-        end_idx = start_idx + length
-
-        # Select the sequences from the given start-index and
-        # of the given length.
-        x_values = x_values[start_idx:end_idx]
-        y_true = y_true[start_idx:end_idx]
-
-        # Input-signals for the model.
-        x_values = np.expand_dims(x_values, axis=0)
-
-        # Use the model to predict the output-signals.
-        y_pred = self.model.predict(x_values)
-
-        # The output of the model is between 0 and 1.
-        # Do an inverse map to get it back to the scale
-        # of the original data-set.
-        y_pred_rescaled = self.y_scaler.inverse_transform(y_pred[0])
-
-        # For each output-signal.
-        for signal in range(len(self.target_names)):
-            # Get the output-signal predicted by the model.
-            signal_pred = y_pred_rescaled[:, signal]
-
-            # Get the true output-signal from the data-set.
-            signal_true = y_true[:, signal]
-
-            # Make the plotting-canvas bigger.
-            plt.figure(figsize=(15, 5))
-
-            # Plot and compare the two signals.
-            plt.plot(signal_true, label='true')
-            plt.plot(signal_pred, label='pred')
-
-            # Plot grey box for warmup-period.
-            _ = plt.axvspan(
-                0, self.warmup_steps, facecolor='black', alpha=0.15)
-
-            # Plot labels etc.
-            plt.ylabel(self.target_names[signal])
-            plt.legend()
-            plt.show()
-
-    def data(self): 
-        """Get data to analyze.
-
-        Args:
-            None
-
-        Returns:
-            (x_data, y_data): X and Y values as numpy arrays
-
-        """
-        # Download data
-        weather.maybe_download_and_extract()
-
-        # Import data into Pandas dataframe
-        pandas_df = weather.load_resampled_data()
-        print('\n> First Rows of Data:\n\n{}'.format(pandas_df.head(3)))
-
-        # Print the cities
-        cities = weather.cities
-        print('\n> Cities: {}'.format(cities))
-
-        # Print dataframe shape
-        print(
-            '> Dataframe shape (Original): {}'.format(pandas_df.values.shape))
-
-        # The two signals that have missing data. (Columns with Nans)
-        pandas_df.drop(('Esbjerg', 'Pressure'), axis=1, inplace=True)
-        pandas_df.drop(('Roskilde', 'Pressure'), axis=1, inplace=True)
-
-        # Print dataframe shape
-        print('> Dataframe shape (New): {}'.format(pandas_df.values.shape))
-
-        # Verify that the columns have been dropped
-        print(
-            '\n> First Rows of Updated Data:\n\n{}'.format(pandas_df.head(1)))
-
-        # Add Data
-
-        '''
-        We can add some input-signals to the data that may help our model in
-        making predictions.
-
-        For example, given just a temperature of 10 degrees Celcius the model
-        wouldn't know whether that temperature was measured during the day or
-        the night, or during summer or winter. The model would have to infer
-        this from the surrounding data-points which might not be very accurate
-        for determining whether it's an abnormally warm winter, or an
-        abnormally cold summer, or whether it's day or night. So having this
-        information could make a big difference in how accurately the model can
-        predict the next output.
-
-        Although the data-set does contain the date and time information for
-        each observation, it is only used in the index so as to order the data.
-        We will therefore add separate input-signals to the data-set for the
-        day-of-year (between 1 and 366) and the hour-of-day (between 0 and 23).
-        '''
-
-        pandas_df['Various', 'Day'] = pandas_df.index.dayofyear
-        pandas_df['Various', 'Hour'] = pandas_df.index.hour
-
-        # Target Data for Prediction
-
-        '''
-        We will try and predict the future weather-data for this city.
-        '''
-
-        target_city = 'Odense'
-
-        '''
-        We will try and predict these signals.
-        '''
-
-        self.target_names = ['Temp', 'WindSpeed', 'Pressure']
-
-        '''
-        The following is the number of time-steps that we will shift the
-        target-data. Our data-set is resampled to have an observation for each
-        hour, so there are 24 observations for 24 hours.
-
-        If we want to predict the weather 24 hours into the future, we shift
-        the data 24 time-steps. If we want to predict the weather 7 days into
-        the future, we shift the data 7 * 24 time-steps.
-        '''
-
-        shift_days = 1
-        shift_steps = shift_days * 24  # Number of hours.
-
-        # Create a new data-frame with the time-shifted data.
-
-        '''
-        Note the negative time-shift!
-
-        We want the future state targets to line up with the timestamp of the
-        last value of each sample set.
-        '''
-
-        df_targets = pandas_df[
-            target_city][self.target_names].shift(-shift_steps)
-
-        '''
-        WARNING! You should double-check that you have shifted the data in the
-        right direction! We want to predict the future, not the past!
-
-        The shifted data-frame is confusing because Pandas keeps the original
-
-        This is the first shift_steps + 5 rows of the original data-frame:
-        '''
-
-        explanatory_hours = shift_steps + 5
-        print('\n> First Rows of Updated Data ({} hours):\n\n{}'.format(
-            explanatory_hours,
-            pandas_df[target_city][self.target_names].head(explanatory_hours)))
-
-        '''
-        The following is the first 5 rows of the time-shifted data-frame. This
-        should be identical to the last 5 rows shown above from the original
-        data, except for the time-stamp.
-        '''
-        print('\n> First Rows of Shifted Data - Target Labels '
-              '(Notice 1980 Dates):\n\n{}'.format(df_targets.head(5)))
-
-        '''
-        The time-shifted data-frame has the same length as the original
-        data-frame, but the last observations are NaN (not a number) because
-        the data has been shifted backwards so we are trying to shift data that
-        does not exist in the original data-frame.
-        '''
-        print('\n> Last Rows of Shifted Data - Target Labels '
-              '(Notice 2018 Dates):\n\n{}'.format(df_targets.tail()))
-
-        # NumPy Arrays
-
-        '''
-        We now convert the Pandas data-frames to NumPy arrays that can be input
-        to the neural network. We also remove the last part of the numpy
-        arrays, because the target-data has NaN for the shifted period, and we
-        only want to have valid data and we need the same array-shapes for the
-        input- and output-data.
-
-        These are the input-signals:
-        '''
-
-        x_data = pandas_df.values[0:-shift_steps]
-        y_data = df_targets.values[:-shift_steps]
-
-        # Return
-        return (x_data, y_data)
 
     def loss_mse_warmup(self, y_true, y_pred):
         """Calculate the Mean Squared Errror.
@@ -653,10 +448,225 @@ class RNNGRU(object):
 
         return loss_mean
 
+    def plot_comparison(self, start_idx, length=100, train=True):
+        """Plot the predicted and true output-signals.
+
+        Args:
+            start_idx: Start-index for the time-series.
+            length: Sequence-length to process and plot.
+            train: Boolean whether to use training- or test-set.
+
+        Returns:
+            None
+
+        """
+        if train:
+            # Use training-data.
+            x_values = self.x_train_scaled
+            y_true = self.y_train
+        else:
+            # Use test-data.
+            x_values = self.x_test_scaled
+            y_true = self.y_test
+
+        # End-index for the sequences.
+        end_idx = start_idx + length
+
+        # Select the sequences from the given start-index and
+        # of the given length.
+        x_values = x_values[start_idx:end_idx]
+        y_true = y_true[start_idx:end_idx]
+
+        # Input-signals for the model.
+        x_values = np.expand_dims(x_values, axis=0)
+
+        # Use the model to predict the output-signals.
+        y_pred = self.model.predict(x_values)
+
+        # The output of the model is between 0 and 1.
+        # Do an inverse map to get it back to the scale
+        # of the original data-set.
+        y_pred_rescaled = self.y_scaler.inverse_transform(y_pred[0])
+
+        # For each output-signal.
+        for signal in range(len(self.target_names)):
+            # Get the output-signal predicted by the model.
+            signal_pred = y_pred_rescaled[:, signal]
+
+            # Get the true output-signal from the data-set.
+            signal_true = y_true[:, signal]
+
+            # Make the plotting-canvas bigger.
+            plt.figure(figsize=(15, 5))
+
+            # Plot and compare the two signals.
+            plt.plot(signal_true, label='true')
+            plt.plot(signal_pred, label='pred')
+
+            # Plot grey box for warmup-period.
+            _ = plt.axvspan(
+                0, self.warmup_steps, facecolor='black', alpha=0.15)
+
+            # Plot labels etc.
+            plt.ylabel(self.target_names[signal])
+            plt.legend()
+            plt.show()
+
+
+def convert_data(data, periods, target_names):
+    """Get data to analyze.
+
+    Args:
+        data: Dict of values keyed by epoch timestamp
+        periods: Number of periods to shift data to get forecasts for Y values
+        target_names: Name of dataframe column to use for Y values
+
+    Returns:
+        (x_data, y_data): X and Y values as numpy arrays
+
+    """
+    # Initialize key variables
+    shift_steps = periods
+    output = {
+        'doy': [],
+        'dow': [],
+        'dom': [],
+        'hour': [],
+        'minute': [],
+        'second': [],
+        'value': []}
+
+    # Get list of values
+    for epoch, value in sorted(data.items()):
+        output['value'].append(value)
+        output['doy'].append(
+            int(datetime.fromtimestamp(epoch).strftime('%j')))
+        output['dom'].append(
+            int(datetime.fromtimestamp(epoch).strftime('%d')))
+        output['dow'].append(
+            int(datetime.fromtimestamp(epoch).strftime('%w')))
+        output['hour'].append(
+            int(datetime.fromtimestamp(epoch).strftime('%H')))
+        output['minute'].append(
+            int(datetime.fromtimestamp(epoch).strftime('%M')))
+        output['second'].append(
+            int(datetime.fromtimestamp(epoch).strftime('%S')))
+
+    # Convert to dataframe
+    pandas_df = pd.DataFrame.from_dict(output)
+
+    '''
+    Note the negative time-shift!
+
+    We want the future state targets to line up with the timestamp of the
+    last value of each sample set.
+    '''
+
+    df_targets = pandas_df[target_names].shift(-shift_steps)
+    x_data = pandas_df.values[0:-shift_steps]
+    y_data = df_targets.values[:-shift_steps]
+
+    # Return
+    return(x_data, y_data)
+
+
+def read_file(filename, ts_start=None, rrd_step=300):
+    """Read data from file.
+
+    Args:
+        filename: Name of CSV file to read
+        ts_start: Starting timestamp for which data should be retrieved
+        rrd_step: Default RRD step time of the CSV file
+
+    Returns:
+        data_dict: Dict of values keyed by timestamp
+
+    """
+    # Initialize key variables
+    data_dict = {}
+    now = _normalize(int(time.time()), rrd_step)
+    count = 1
+
+    # Set the start time to be 2 years by default
+    if (ts_start is None) or (ts_start < 0):
+        ts_start = now - (3600 * 24 * 365 * 2)
+    else:
+        ts_start = _normalize(ts_start, rrd_step)
+
+    # Read data
+    with open(filename, 'r') as csvfile:
+        spamreader = csv.reader(csvfile, delimiter=',')
+        for row in spamreader:
+            timestamp = _normalize(int(row[0]), rrd_step)
+            if ts_start <= timestamp:
+                value = float(row[1])
+                data_dict[timestamp] = value
+
+    # Fill in the blanks in timestamps
+    ts_max = max(data_dict.keys())
+    ts_min = min(data_dict.keys())
+    timestamps = range(
+        _normalize(ts_min, rrd_step),
+        _normalize(ts_max, rrd_step),
+        rrd_step)
+    for timestamp in timestamps:
+        if timestamp not in data_dict:
+            data_dict[timestamp] = 0
+
+    # Back track from the end of the data and delete any zero values until
+    # no zeros are found. Sometimes the most recent csv data is zero due to
+    # update delays. Replace the deleted entries with a zero value at the
+    # beginning of the series
+    _timestamps = sorted(data_dict.keys(), reverse=True)
+    for timestamp in _timestamps:
+        if bool(data_dict[timestamp]) is False:
+            data_dict.pop(timestamp, None)
+            # Replace the popped item with one at the beginning of the series
+            data_dict[int(ts_min - (count * rrd_step))] = 0
+        else:
+            break
+        count += 1
+
+    # Return
+    print('Records ingested:', len(data_dict))
+    return data_dict
+
+
+def _normalize(timestamp, rrd_step=300):
+    """Normalize the timestamp to nearest rrd_step value.
+
+    Args:
+        rrd_step: RRD tool step value
+
+    Returns:
+        result: Normalized timestamp
+
+    """
+    # Return
+    result = int((timestamp // rrd_step) * rrd_step)
+    return result
+
 
 def main():
-    """Run main function."""
+    """Generate forecasts.
+
+    Display data prediction from tensorflow model
+
+    """
     # Initialize key variables
+    periods = 288
+    ts_start = int(time.time())
+
+    # Set logging level
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+    # Get filename
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-f', '--filename', help='Name of CSV file to read.',
+        type=str, required=True)
+    args = parser.parse_args()
+    filename = args.filename
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -672,11 +682,16 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 4
-    sequence_length = 24 * 7 * weeks
+    weeks = 12
+    sequence_length = 7 * periods * weeks
 
-    # Initialize RNN
-    rnn = RNNGRU(batch_size, sequence_length)
+    # Get the data
+    data = read_file(filename)
+    rnn = RNNGRU(
+        data,
+        periods=periods,
+        batch_size=batch_size,
+        sequence_length=sequence_length)
 
     '''
     We can now plot an example of predicted output-signals. It is important to

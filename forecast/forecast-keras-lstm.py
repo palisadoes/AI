@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Script to forecast data using CNN AI."""
+"""Script to forecast data using RNN AI."""
 
 # Standard imports
 import sys
