@@ -63,7 +63,7 @@ class RNNGRU(object):
 
         # Crash with DeadlineExceeded instead of hanging forever when your
         # queues get full/empty
-        config.operation_timeout_in_ms=60000
+        config.operation_timeout_in_ms = 60000
 
         # Create a session with the above options specified.
         backend.tensorflow_backend.set_session(tf.Session(config=config))
@@ -268,7 +268,7 @@ class RNNGRU(object):
         if False:
             # Maybe use lower init-ranges.
             # init = RandomUniform(minval=-0.05, maxval=0.05)
-            init = RandomUniform(minval=-0.1, maxval=0.1)
+            init = RandomUniform(minval=-0.05, maxval=0.05)
 
             self.model.add(Dense(
                 self.num_y_signals,
@@ -367,7 +367,7 @@ class RNNGRU(object):
         those settings.
         '''
 
-        print('> Starting data training')
+        print('\n> Starting data training\n')
 
         try:
             self.model.fit_generator(
@@ -766,7 +766,7 @@ def main():
     number of iterations given by epochs, but merely until the epoch of index
     epochs is reached.
     '''
-    epochs = 50
+    epochs = 20
 
     # Get the data
     data = read_file(filename)
