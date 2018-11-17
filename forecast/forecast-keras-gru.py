@@ -5,9 +5,9 @@
 import argparse
 import csv
 import sys
-import os
 from datetime import datetime
 import time
+import traceback
 
 # PIP3 imports
 import numpy as np
@@ -31,7 +31,7 @@ class RNNGRU(object):
 
     def __init__(
             self, data, periods=288, batch_size=64, sequence_length=20,
-            warmup_steps=50, epochs=20, steps_per_epoch=10):
+            warmup_steps=50, epochs=20):
         """Instantiate the class.
 
         Args:
@@ -50,7 +50,6 @@ class RNNGRU(object):
         self.target_names = ['value']
         self.warmup_steps = warmup_steps
         self.epochs = epochs
-        self.steps_per_epoch = steps_per_epoch
 
         ###################################
         # TensorFlow wizardry
@@ -115,6 +114,13 @@ class RNNGRU(object):
 
         print("> Training Minimum Value:", np.min(x_train))
         print("> Training Maximum Value:", np.max(x_train))
+
+        '''
+        steps_per_epoch is the number of batch iterations before a training
+        epoch is considered finished.
+        '''
+
+        self.steps_per_epoch = int(self.num_train / batch_size) + 1
 
         '''
         Calculate the estimated memory footprint.
@@ -217,7 +223,7 @@ class RNNGRU(object):
         '''
 
         self.model.add(GRU(
-            units=256,
+            units=512,
             return_sequences=True,
             input_shape=(None, self.num_x_signals,)))
 
@@ -353,12 +359,17 @@ class RNNGRU(object):
         those settings.
         '''
 
-        self.model.fit_generator(
-            generator=generator,
-            epochs=self.epochs,
-            steps_per_epoch=self.steps_per_epoch,
-            validation_data=validation_data,
-            callbacks=callbacks)
+        try:
+            self.model.fit_generator(
+                generator=generator,
+                epochs=self.epochs,
+                steps_per_epoch=self.steps_per_epoch,
+                validation_data=validation_data,
+                callbacks=callbacks)
+        except Exception as error:
+            print('\n>{}\n'.format(error))
+            traceback.print_exc()
+            sys.exit(0)
 
         # Load Checkpoint
 
@@ -373,6 +384,7 @@ class RNNGRU(object):
             self.model.load_weights(path_checkpoint)
         except Exception as error:
             print('\n> Error trying to load checkpoint.\n\n{}'.format(error))
+            traceback.print_exc()
             sys.exit(0)
 
         # Performance on Test-Set
@@ -707,6 +719,10 @@ def main():
     samples. The samples in a batch are processed independently, in parallel.
     If training, a batch results in only one update to the model.
 
+    In other words, "batch size" is the number of samples you put into for each
+    training round to calculate the gradient. A training round would be a
+    "step" within an epoch.
+
     A batch generally approximates the distribution of the input data better
     than a single input. The larger the batch, the better the approximation;
     however, it is also true that the batch will take longer to process and
@@ -724,7 +740,7 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 4
+    weeks = 1
     sequence_length = 7 * periods * weeks
 
     '''
@@ -738,14 +754,7 @@ def main():
     number of iterations given by epochs, but merely until the epoch of index
     epochs is reached.
     '''
-    epochs = 20
-
-    '''
-    steps_per_epoch is the number of batch iterations before a training epoch
-    is considered finished.
-    '''
-    # steps_per_epoch = 50
-    steps_per_epoch = int(sequence_length / batch_size) + 1
+    epochs = 50
 
     # Get the data
     data = read_file(filename)
@@ -754,8 +763,7 @@ def main():
         periods=periods,
         batch_size=batch_size,
         sequence_length=sequence_length,
-        epochs=epochs,
-        steps_per_epoch=steps_per_epoch)
+        epochs=epochs)
 
     '''
     Calculate the duration
