@@ -59,7 +59,7 @@ class RNNGRU(object):
         config.gpu_options.allow_growth = True
 
         # Only allow a total of half the GPU memory to be allocated
-        config.gpu_options.per_process_gpu_memory_fraction = 0.9
+        config.gpu_options.per_process_gpu_memory_fraction = 0.8
 
         # Crash with DeadlineExceeded instead of hanging forever when your
         # queues get full/empty
@@ -267,7 +267,8 @@ class RNNGRU(object):
 
         if False:
             # Maybe use lower init-ranges.
-            init = RandomUniform(minval=-0.01, maxval=0.01)
+            # init = RandomUniform(minval=-0.05, maxval=0.05)
+            init = RandomUniform(minval=-0.025, maxval=0.025)
 
             self.model.add(Dense(
                 self.num_y_signals,
