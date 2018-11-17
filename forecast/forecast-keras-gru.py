@@ -59,7 +59,7 @@ class RNNGRU(object):
         config.gpu_options.allow_growth = True
 
         # Only allow a total of half the GPU memory to be allocated
-        config.gpu_options.per_process_gpu_memory_fraction = 0.8
+        config.gpu_options.per_process_gpu_memory_fraction = 0.95
 
         # Crash with DeadlineExceeded instead of hanging forever when your
         # queues get full/empty
