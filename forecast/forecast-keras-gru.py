@@ -31,7 +31,7 @@ class RNNGRU(object):
 
     def __init__(
             self, data, periods=288, batch_size=64, sequence_length=20,
-            warmup_steps=50, epochs=20):
+            warmup_steps=50, epochs=20, save=False):
         """Instantiate the class.
 
         Args:
@@ -50,6 +50,8 @@ class RNNGRU(object):
         self.target_names = ['value']
         self.warmup_steps = warmup_steps
         self.epochs = epochs
+        self.batch_size = batch_size
+        self.save = save
 
         ###################################
         # TensorFlow wizardry
@@ -519,10 +521,18 @@ class RNNGRU(object):
             # Use training-data.
             x_values = self.x_train_scaled
             y_true = self.y_train
+            shim = 'Train'
         else:
             # Use test-data.
             x_values = self.x_test_scaled
             y_true = self.y_test
+            shim = 'Test'
+
+        # Create a filename
+        filename = (
+            '~/tmp/batch_{}_epochs_{}_training_{}_{}_{}.png').format(
+                self.batch_size, self.epochs, self.num_train,
+                int(time.time()), shim)
 
         # End-index for the sequences.
         end_idx = start_idx + length
@@ -565,7 +575,12 @@ class RNNGRU(object):
             # Plot labels etc.
             plt.ylabel(self.target_names[signal])
             plt.legend()
-            plt.show()
+
+            # Show and save the image
+            if self.save is True:
+                plt.savefig(filename, bbox_inches='tight')
+            else:
+                plt.show()
 
 
 def convert_data(data, periods, target_names):
@@ -719,8 +734,13 @@ def main():
     parser.add_argument(
         '-f', '--filename', help='Name of CSV file to read.',
         type=str, required=True)
+    parser.add_argument(
+        '--save',
+        help='Save figures to file if True. Don\'t display on console',
+        action='store_false')
     args = parser.parse_args()
     filename = args.filename
+    save = args.save
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -775,7 +795,8 @@ def main():
         periods=periods,
         batch_size=batch_size,
         sequence_length=sequence_length,
-        epochs=epochs)
+        epochs=epochs,
+        save=save)
 
     '''
     Calculate the duration
