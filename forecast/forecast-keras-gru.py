@@ -23,6 +23,7 @@ from tensorflow.python.keras.optimizers import RMSprop
 from tensorflow.python.keras.initializers import RandomUniform
 from tensorflow.python.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
+from tensorflow.python.keras import backend
 
 
 class RNNGRU(object):
@@ -50,6 +51,20 @@ class RNNGRU(object):
         self.warmup_steps = warmup_steps
         self.epochs = epochs
         self.steps_per_epoch = steps_per_epoch
+
+        ###################################
+        # TensorFlow wizardry
+        config = tf.ConfigProto()
+
+        # Don't pre-allocate memory; allocate as-needed
+        config.gpu_options.allow_growth = True
+
+        # Only allow a total of half the GPU memory to be allocated
+        config.gpu_options.per_process_gpu_memory_fraction = 0.9
+
+        # Create a session with the above options specified.
+        backend.tensorflow_backend.set_session(tf.Session(config=config))
+        ###################################
 
         # Get data
         (x_data, y_data) = convert_data(data, periods, self.target_names)
@@ -709,7 +724,7 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 1
+    weeks = 4
     sequence_length = 7 * periods * weeks
 
     '''
