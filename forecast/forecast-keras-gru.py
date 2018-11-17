@@ -30,7 +30,7 @@ class RNNGRU(object):
 
     def __init__(
             self, data, periods=288, batch_size=64, sequence_length=20,
-            warmup_steps=50):
+            warmup_steps=50, epochs=20, steps_per_epoch=10):
         """Instantiate the class.
 
         Args:
@@ -48,6 +48,8 @@ class RNNGRU(object):
         self.periods = periods
         self.target_names = ['value']
         self.warmup_steps = warmup_steps
+        self.epochs = epochs
+        self.steps_per_epoch = steps_per_epoch
 
         # Get data
         (x_data, y_data) = convert_data(data, periods, self.target_names)
@@ -98,6 +100,20 @@ class RNNGRU(object):
 
         print("> Training Minimum Value:", np.min(x_train))
         print("> Training Maximum Value:", np.max(x_train))
+
+        '''
+        Calculate the estimated memory footprint.
+        '''
+
+        print("> Data size: {:.2f} Bytes".format(x_data.nbytes))
+
+        '''
+        if memory_footprint > 7:
+            print('\n\n{}\n\n'.format(
+                '> Estimated GPU memory usage too large. Use new parameters '
+                'to reduce the footprint.'))
+            sys.exit(0)
+        '''
 
         '''
         The neural network works best on values roughly between -1 and 1, so we
@@ -324,8 +340,8 @@ class RNNGRU(object):
 
         self.model.fit_generator(
             generator=generator,
-            epochs=20,
-            steps_per_epoch=10,
+            epochs=self.epochs,
+            steps_per_epoch=self.steps_per_epoch,
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -528,7 +544,6 @@ def convert_data(data, periods, target_names):
     # Initialize key variables
     shift_steps = periods
     output = {
-        'doy': [],
         'dow': [],
         'dom': [],
         'hour': [],
@@ -539,8 +554,8 @@ def convert_data(data, periods, target_names):
     # Get list of values
     for epoch, value in sorted(data.items()):
         output['value'].append(value)
-        output['doy'].append(
-            int(datetime.fromtimestamp(epoch).strftime('%j')))
+        '''output['doy'].append(
+            int(datetime.fromtimestamp(epoch).strftime('%j')))'''
         output['dom'].append(
             int(datetime.fromtimestamp(epoch).strftime('%d')))
         output['dow'].append(
@@ -657,8 +672,8 @@ def main():
     periods = 288
     ts_start = int(time.time())
 
-    # Set logging level
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    # Set logging level - No Tensor flow messages
+    # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
     # Get filename
     parser = argparse.ArgumentParser()
@@ -672,9 +687,21 @@ def main():
     We will use a large batch-size so as to keep the GPU near 100% work-load.
     You may have to adjust this number depending on your GPU, its RAM and your
     choice of sequence_length below.
+
+    Batch size is the number of samples per gradient update. It is a set of N
+    samples. The samples in a batch are processed independently, in parallel.
+    If training, a batch results in only one update to the model.
+
+    A batch generally approximates the distribution of the input data better
+    than a single input. The larger the batch, the better the approximation;
+    however, it is also true that the batch will take longer to process and
+    will still result in only one update. For inference (evaluate/predict),
+    it is recommended to pick a batch size that is as large as you can afford
+    without going out of memory (since larger batches will usually result in
+    faster evaluating/prediction).
     '''
 
-    batch_size = 16
+    batch_size = 64
 
     '''
     We will use a sequence-length of 1344, which means that each random
@@ -682,8 +709,28 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 12
+    weeks = 1
     sequence_length = 7 * periods * weeks
+
+    '''
+    An epoch is an arbitrary cutoff, generally defined as "one pass over the
+    entire dataset", used to separate training into distinct phases, which is
+    useful for logging and periodic evaluation.
+
+    Number of epochs to train the model. An epoch is an iteration over the
+    entire x and y data provided. Note that in conjunction with initial_epoch,
+    epochs is to be understood as "final epoch". The model is not trained for a
+    number of iterations given by epochs, but merely until the epoch of index
+    epochs is reached.
+    '''
+    epochs = 20
+
+    '''
+    steps_per_epoch is the number of batch iterations before a training epoch
+    is considered finished.
+    '''
+    # steps_per_epoch = 50
+    steps_per_epoch = int(sequence_length / batch_size) + 1
 
     # Get the data
     data = read_file(filename)
@@ -691,7 +738,15 @@ def main():
         data,
         periods=periods,
         batch_size=batch_size,
-        sequence_length=sequence_length)
+        sequence_length=sequence_length,
+        epochs=epochs,
+        steps_per_epoch=steps_per_epoch)
+
+    '''
+    Calculate the duration
+    '''
+
+    duration = int(time.time()) - ts_start
 
     '''
     We can now plot an example of predicted output-signals. It is important to
@@ -756,6 +811,9 @@ def main():
     '''
 
     rnn.plot_comparison(start_idx=200, length=1000, train=False)
+
+    # Print duration
+    print("> Duration: {}s".format(duration))
 
 
 if __name__ == "__main__":
