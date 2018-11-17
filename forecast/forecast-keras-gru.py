@@ -724,7 +724,7 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 1
+    weeks = 4
     sequence_length = 7 * periods * weeks
 
     '''
