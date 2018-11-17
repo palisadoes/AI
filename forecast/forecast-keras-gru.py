@@ -61,6 +61,10 @@ class RNNGRU(object):
         # Only allow a total of half the GPU memory to be allocated
         config.gpu_options.per_process_gpu_memory_fraction = 0.9
 
+        # Crash with DeadlineExceeded instead of hanging forever when your
+        # queues get full/empty
+        config.operation_timeout_in_ms=60000
+
         # Create a session with the above options specified.
         backend.tensorflow_backend.set_session(tf.Session(config=config))
         ###################################
@@ -121,6 +125,9 @@ class RNNGRU(object):
         '''
 
         self.steps_per_epoch = int(self.num_train / batch_size) + 1
+        print("> Epochs:", epochs)
+        print("> Batch Size:", batch_size)
+        print("> Steps:", self.steps_per_epoch)
 
         '''
         Calculate the estimated memory footprint.
@@ -732,7 +739,7 @@ def main():
     faster evaluating/prediction).
     '''
 
-    batch_size = 64
+    batch_size = 32
 
     '''
     We will use a sequence-length of 1344, which means that each random
