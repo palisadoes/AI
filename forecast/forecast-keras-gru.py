@@ -217,7 +217,7 @@ class RNNGRU(object):
         '''
 
         self.model.add(GRU(
-            units=512,
+            units=256,
             return_sequences=True,
             input_shape=(None, self.num_x_signals,)))
 
@@ -725,7 +725,7 @@ def main():
     corresponds to 8 weeks.
     '''
     weeks = 1
-    sequence_length = 24 * periods * weeks
+    sequence_length = 7 * periods * weeks
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
