@@ -53,9 +53,6 @@ class RNNGRU(object):
         self.steps_per_epoch = steps_per_epoch
 
         ###################################
-
-        # From: https://michaelblogscode.wordpress.com/2017/10/10/reducing-and-profiling-gpu-memory-usage-in-keras-with-tensorflow-backend/
-
         # TensorFlow wizardry
         config = tf.ConfigProto()
 
@@ -728,7 +725,7 @@ def main():
     corresponds to 8 weeks.
     '''
     weeks = 1
-    sequence_length = 7 * periods * weeks
+    sequence_length = 24 * periods * weeks
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
@@ -741,7 +738,7 @@ def main():
     number of iterations given by epochs, but merely until the epoch of index
     epochs is reached.
     '''
-    epochs = 10
+    epochs = 20
 
     '''
     steps_per_epoch is the number of batch iterations before a training epoch
