@@ -268,7 +268,7 @@ class RNNGRU(object):
         if False:
             # Maybe use lower init-ranges.
             # init = RandomUniform(minval=-0.05, maxval=0.05)
-            init = RandomUniform(minval=-0.025, maxval=0.025)
+            init = RandomUniform(minval=-0.1, maxval=0.1)
 
             self.model.add(Dense(
                 self.num_y_signals,
