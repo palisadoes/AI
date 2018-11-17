@@ -23,7 +23,7 @@ from tensorflow.python.keras.optimizers import RMSprop
 from tensorflow.python.keras.initializers import RandomUniform
 from tensorflow.python.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
-from tensorflow.python.keras import backend
+from keras import backend
 
 
 class RNNGRU(object):
@@ -724,7 +724,7 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 4
+    weeks = 1
     sequence_length = 7 * periods * weeks
 
     '''
