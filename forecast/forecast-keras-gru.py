@@ -267,7 +267,7 @@ class RNNGRU(object):
 
         if False:
             # Maybe use lower init-ranges.
-            init = RandomUniform(minval=-0.05, maxval=0.05)
+            init = RandomUniform(minval=-0.01, maxval=0.01)
 
             self.model.add(Dense(
                 self.num_y_signals,
@@ -366,6 +366,8 @@ class RNNGRU(object):
         those settings.
         '''
 
+        print('> Starting data training')
+
         try:
             self.model.fit_generator(
                 generator=generator,
@@ -386,6 +388,8 @@ class RNNGRU(object):
         epochs before training was stopped. We therefore reload the last saved
         checkpoint, which should have the best performance on the test-set.
         '''
+
+        print('> Loading model weights')
 
         try:
             self.model.load_weights(path_checkpoint)
@@ -739,7 +743,7 @@ def main():
     faster evaluating/prediction).
     '''
 
-    batch_size = 32
+    batch_size = 64
 
     '''
     We will use a sequence-length of 1344, which means that each random
