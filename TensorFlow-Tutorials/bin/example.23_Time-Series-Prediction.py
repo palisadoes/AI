@@ -3,10 +3,11 @@
 
 # Standard imports
 import sys
-
-import numpy as np
+import argparse
+import time
 
 # PIP3 imports
+import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 
@@ -26,12 +27,15 @@ import weather
 class RNNGRU(object):
     """Support vector machine class."""
 
-    def __init__(self, batch_size, sequence_length):
+    def __init__(self,
+                 batch_size=64, sequence_length=20, warmup_steps=50,
+                 epochs=20, display=False):
         """Instantiate the class.
 
         Args:
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
+            save: Save charts if True
 
         Returns:
             None
@@ -39,7 +43,10 @@ class RNNGRU(object):
         """
         # Initialize key variables
         self.target_names = ['Temp', 'WindSpeed', 'Pressure']
-        self.warmup_steps = 50
+        self.warmup_steps = warmup_steps
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.display = display
 
         # Get data
         x_data, y_data = self.data()
@@ -79,6 +86,9 @@ class RNNGRU(object):
         print('> Number of Samples: {}'.format(num_data))
         print("> Number of Training Samples: {}".format(self.num_train))
         print("> Number of Test Samples: {}".format(num_test))
+        print("> Batch Size: {}".format(batch_size))
+        steps_per_epoch = int(self.num_train/batch_size)
+        print("> Recommended Epoch Steps: {:.2f}".format(steps_per_epoch))
 
         # Create test and training data
         x_train = x_data[0:self.num_train]
@@ -316,8 +326,8 @@ class RNNGRU(object):
 
         self.model.fit_generator(
             generator=generator,
-            epochs=20,
-            steps_per_epoch=20,
+            epochs=self.epochs,
+            steps_per_epoch=steps_per_epoch,
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -406,10 +416,12 @@ class RNNGRU(object):
             # Use training-data.
             x_values = self.x_train_scaled
             y_true = self.y_train
+            shim = 'Train'
         else:
             # Use test-data.
             x_values = self.x_test_scaled
             y_true = self.y_test
+            shim = 'Test'
 
         # End-index for the sequences.
         end_idx = start_idx + length
@@ -432,6 +444,12 @@ class RNNGRU(object):
 
         # For each output-signal.
         for signal in range(len(self.target_names)):
+            # Create a filename
+            filename = (
+                '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
+                    self.batch_size, self.epochs, self.num_train, signal,
+                    int(time.time()), shim)
+
             # Get the output-signal predicted by the model.
             signal_pred = y_pred_rescaled[:, signal]
 
@@ -452,9 +470,16 @@ class RNNGRU(object):
             # Plot labels etc.
             plt.ylabel(self.target_names[signal])
             plt.legend()
-            plt.show()
 
-    def data(self): 
+            # Show and save the image
+            if self.display is True:
+                plt.savefig(filename, bbox_inches='tight')
+                plt.show()
+            else:
+                plt.savefig(filename, bbox_inches='tight')
+            print('> Saving file: {}'.format(filename))
+
+    def data(self):
         """Get data to analyze.
 
         Args:
@@ -658,13 +683,33 @@ def main():
     """Run main function."""
     # Initialize key variables
 
+    # Get CLI arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-b', '--batch-size', help='Size of batch.',
+        type=int, default=64)
+    parser.add_argument(
+        '-w', '--weeks',
+        help='Number of weeks of data to consider when learning.',
+        type=int, default=4)
+    parser.add_argument(
+        '-e', '--epochs',
+        help='Number of epoch iterations to use.',
+        type=int, default=20)
+    parser.add_argument(
+        '--display',
+        help='Display on screen if True',
+        action='store_true')
+    args = parser.parse_args()
+    display = args.display
+
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
     You may have to adjust this number depending on your GPU, its RAM and your
     choice of sequence_length below.
     '''
 
-    batch_size = 64
+    batch_size = args.batch_size
 
     '''
     We will use a sequence-length of 1344, which means that each random
@@ -672,11 +717,28 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 4
+    weeks = args.weeks
     sequence_length = 24 * 7 * weeks
 
+    '''
+    An epoch is an arbitrary cutoff, generally defined as "one pass over the
+    entire dataset", used to separate training into distinct phases, which is
+    useful for logging and periodic evaluation.
+
+    Number of epochs to train the model. An epoch is an iteration over the
+    entire x and y data provided. Note that in conjunction with initial_epoch,
+    epochs is to be understood as "final epoch". The model is not trained for a
+    number of iterations given by epochs, but merely until the epoch of index
+    epochs is reached.
+    '''
+    epochs = args.epochs
+
     # Initialize RNN
-    rnn = RNNGRU(batch_size, sequence_length)
+    rnn = RNNGRU(
+        batch_size=batch_size,
+        sequence_length=sequence_length,
+        epochs=epochs,
+        display=display)
 
     '''
     We can now plot an example of predicted output-signals. It is important to

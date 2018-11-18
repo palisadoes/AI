@@ -31,7 +31,7 @@ class RNNGRU(object):
 
     def __init__(
             self, data, periods=288, batch_size=64, sequence_length=20,
-            warmup_steps=50, epochs=20, save=False):
+            warmup_steps=50, epochs=20, display=False):
         """Instantiate the class.
 
         Args:
@@ -51,7 +51,7 @@ class RNNGRU(object):
         self.warmup_steps = warmup_steps
         self.epochs = epochs
         self.batch_size = batch_size
-        self.save = save
+        self.display = display
 
         ###################################
         # TensorFlow wizardry
@@ -528,12 +528,6 @@ class RNNGRU(object):
             y_true = self.y_test
             shim = 'Test'
 
-        # Create a filename
-        filename = (
-            '~/tmp/batch_{}_epochs_{}_training_{}_{}_{}.png').format(
-                self.batch_size, self.epochs, self.num_train,
-                int(time.time()), shim)
-
         # End-index for the sequences.
         end_idx = start_idx + length
 
@@ -555,6 +549,12 @@ class RNNGRU(object):
 
         # For each output-signal.
         for signal in range(len(self.target_names)):
+            # Create a filename
+            filename = (
+                '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
+                    self.batch_size, self.epochs, self.num_train, signal,
+                    int(time.time()), shim)
+
             # Get the output-signal predicted by the model.
             signal_pred = y_pred_rescaled[:, signal]
 
@@ -577,10 +577,12 @@ class RNNGRU(object):
             plt.legend()
 
             # Show and save the image
-            if self.save is True:
+            if self.display is True:
                 plt.savefig(filename, bbox_inches='tight')
-            else:
                 plt.show()
+            else:
+                plt.savefig(filename, bbox_inches='tight')
+            print('> Saving file: {}'.format(filename))
 
 
 def convert_data(data, periods, target_names):
@@ -729,18 +731,29 @@ def main():
     # Set logging level - No Tensor flow messages
     # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-    # Get filename
+    # Get CLI arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-f', '--filename', help='Name of CSV file to read.',
         type=str, required=True)
     parser.add_argument(
-        '--save',
-        help='Save figures to file if True. Don\'t display on console',
-        action='store_false')
+        '-b', '--batch-size', help='Size of batch.',
+        type=int, default=64)
+    parser.add_argument(
+        '-w', '--weeks',
+        help='Number of weeks of data to consider when learning.',
+        type=int, default=1)
+    parser.add_argument(
+        '-e', '--epochs',
+        help='Number of epoch iterations to use.',
+        type=int, default=20)
+    parser.add_argument(
+        '--display',
+        help='Display on screen if True',
+        action='store_true')
     args = parser.parse_args()
     filename = args.filename
-    save = args.save
+    display = args.display
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -764,7 +777,7 @@ def main():
     faster evaluating/prediction).
     '''
 
-    batch_size = 64
+    batch_size = args.batch_size
 
     '''
     We will use a sequence-length of 1344, which means that each random
@@ -772,7 +785,7 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 1
+    weeks = args.weeks
     sequence_length = 7 * periods * weeks
 
     '''
@@ -786,7 +799,7 @@ def main():
     number of iterations given by epochs, but merely until the epoch of index
     epochs is reached.
     '''
-    epochs = 20
+    epochs = args.epochs
 
     # Get the data
     data = read_file(filename)
@@ -796,7 +809,7 @@ def main():
         batch_size=batch_size,
         sequence_length=sequence_length,
         epochs=epochs,
-        save=save)
+        display=display)
 
     '''
     Calculate the duration
