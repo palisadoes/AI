@@ -897,7 +897,7 @@ def main():
 
     rnn.plot_comparison(start_idx=1, length=200, train=False)
 
-    # Print duration
+    # Print duration.
     print("> Duration: {}s".format(duration))
 
 
