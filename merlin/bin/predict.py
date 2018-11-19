@@ -228,9 +228,17 @@ class RNNGRU(object):
         '''
 
         self.model.add(GRU(
-            units=1024,
+            units=512,
             return_sequences=True,
             input_shape=(None, self.num_x_signals,)))
+
+        self.model.add(GRU(
+            units=512,
+            return_sequences=True))
+
+        self.model.add(GRU(
+            units=512,
+            return_sequences=True))
 
         '''
         The GRU outputs a batch of sequences of 512 values. We want to predict
