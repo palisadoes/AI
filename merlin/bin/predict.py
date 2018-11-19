@@ -242,7 +242,6 @@ class RNNGRU(object):
             dropout=dropout,
             return_sequences=True))
 
-
         '''
         The GRU outputs a batch of sequences of 512 values. We want to predict
         3 output-signals, so we add a fully-connected (or dense) layer which
@@ -744,23 +743,23 @@ def main():
         '-f', '--filename', help='Name of CSV file to read.',
         type=str, required=True)
     parser.add_argument(
-        '-b', '--batch-size', help='Size of batch.',
+        '-b', '--batch-size', help='Size of batch. Default 500.',
         type=int, default=500)
     parser.add_argument(
         '-w', '--weeks',
-        help='Number of weeks of data to consider when learning.',
+        help='Number of weeks of data to consider when learning. Default 53.',
         type=int, default=53)
     parser.add_argument(
         '-e', '--epochs',
-        help='Number of epoch iterations to use.',
+        help='Number of epoch iterations to use. Default 20.',
         type=int, default=20)
     parser.add_argument(
         '-d', '--dropout',
-        help='Dropout rate.',
-        type=float, default=0)
+        help='Dropout rate as decimal from 0 to 1. Default 0.1 (or 10%)',
+        type=float, choices=range(0, 1, 0.001), default=0.1)
     parser.add_argument(
         '--display',
-        help='Display on screen if True',
+        help='Display on screen if True. Default False.',
         action='store_true')
     args = parser.parse_args()
     filename = args.filename
