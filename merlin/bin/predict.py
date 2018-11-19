@@ -34,7 +34,7 @@ class RNNGRU(object):
 
     def __init__(
             self, data, periods=288, batch_size=64, sequence_length=20,
-            warmup_steps=50, epochs=20, display=False):
+            warmup_steps=50, epochs=20, dropout=0, display=False):
         """Instantiate the class.
 
         Args:
@@ -229,19 +229,19 @@ class RNNGRU(object):
         self.model.add(GRU(
             units=512,
             return_sequences=True,
+            dropout=dropout,
             input_shape=(None, self.num_x_signals,)))
 
         self.model.add(GRU(
             units=256,
+            dropout=dropout,
             return_sequences=True))
 
         self.model.add(GRU(
             units=256,
+            dropout=dropout,
             return_sequences=True))
 
-        self.model.add(GRU(
-            units=256,
-            return_sequences=True))
 
         '''
         The GRU outputs a batch of sequences of 512 values. We want to predict
@@ -755,12 +755,17 @@ def main():
         help='Number of epoch iterations to use.',
         type=int, default=20)
     parser.add_argument(
+        '-d', '--dropout',
+        help='Dropout rate.',
+        type=float, default=0)
+    parser.add_argument(
         '--display',
         help='Display on screen if True',
         action='store_true')
     args = parser.parse_args()
     filename = args.filename
     display = args.display
+    dropout = args.dropout
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -820,6 +825,7 @@ def main():
         batch_size=batch_size,
         sequence_length=sequence_length,
         epochs=epochs,
+        dropout=dropout,
         display=display)
 
     '''
