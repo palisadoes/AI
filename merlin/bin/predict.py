@@ -51,7 +51,6 @@ class RNNGRU(object):
         # Initialize key variables
         self.periods = periods
         self.target_names = ['one', 'two', 'three', 'four', 'five']
-        self.target_names = ['one']
         self.warmup_steps = warmup_steps
         self.epochs = epochs
         self.batch_size = batch_size
@@ -233,11 +232,15 @@ class RNNGRU(object):
             input_shape=(None, self.num_x_signals,)))
 
         self.model.add(GRU(
-            units=512,
+            units=256,
             return_sequences=True))
 
         self.model.add(GRU(
-            units=512,
+            units=256,
+            return_sequences=True))
+
+        self.model.add(GRU(
+            units=256,
             return_sequences=True))
 
         '''
@@ -808,7 +811,7 @@ def main():
     # Get the data
     _db = database.ReadFile(filename)
     data = _db.vector_targets([1, 2, 3, 4, 5])
-    data = _db.vector_targets([1])
+    # data = _db.vector_targets([1])
 
     # Do training
     rnn = RNNGRU(

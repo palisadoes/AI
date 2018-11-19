@@ -101,6 +101,7 @@ class ReadFile(object):
         result['pct_diff_high'] = pct_difference['high']
         result['pct_diff_low'] = pct_difference['low']
         result['pct_diff_close'] = pct_difference['close']
+        result['pct_diff_volume'] = pct_difference['volume']
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
