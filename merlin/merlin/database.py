@@ -75,9 +75,14 @@ class ReadFile(object):
 
         # Create result to return
         result = pd.DataFrame(columns=[
+            'open', 'high', 'low', 'close',
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close'])
+        result['open'] = data['open']
+        result['high'] = data['high']
+        result['low'] = data['low']
+        result['close'] = data['close']
         result['day'] = day
         result['weekday'] = weekday
         result['dayofyear'] = dayofyear
@@ -118,6 +123,7 @@ class ReadFile(object):
         pandas_df = self.data()
         targets = {}
         columns = []
+        label2predict = 'close'
 
         # Create column labels for dataframe columns
         # Create shifted values for learning
@@ -128,7 +134,7 @@ class ReadFile(object):
             We want the future state targets to line up with the timestamp of
             the last value of each sample set.
             '''
-            targets[step] = pandas_df['pct_diff_close'].shift(-step)
+            targets[step] = pandas_df[label2predict].shift(-step)
             columns.append('{}'.format(step))
 
         # Get vectors
@@ -138,7 +144,7 @@ class ReadFile(object):
         classes = pd.DataFrame(columns=columns)
         for step in shift_steps:
             # Shift each column by the value of its label
-            classes[str(step)] = pandas_df['pct_diff_close'].shift(-step)
+            classes[str(step)] = pandas_df[label2predict].shift(-step)
         # Create dataframe with only non NaN values
         y_data = classes.values[:-max(shift_steps)]
 

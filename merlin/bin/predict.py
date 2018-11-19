@@ -228,7 +228,7 @@ class RNNGRU(object):
         '''
 
         self.model.add(GRU(
-            units=512,
+            units=1024,
             return_sequences=True,
             input_shape=(None, self.num_x_signals,)))
 
