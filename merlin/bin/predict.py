@@ -142,14 +142,6 @@ class RNNGRU(object):
         print("> Data size: {:.2f} Bytes".format(x_data.nbytes))
 
         '''
-        if memory_footprint > 7:
-            print('\n\n{}\n\n'.format(
-                '> Estimated GPU memory usage too large. Use new parameters '
-                'to reduce the footprint.'))
-            sys.exit(0)
-        '''
-
-        '''
         The neural network works best on values roughly between -1 and 1, so we
         need to scale the data before it is being input to the neural network.
         We can use scikit-learn for this.
@@ -742,7 +734,7 @@ def main():
         type=str, required=True)
     parser.add_argument(
         '-b', '--batch-size', help='Size of batch.',
-        type=int, default=64)
+        type=int, default=500)
     parser.add_argument(
         '-w', '--weeks',
         help='Number of weeks of data to consider when learning.',
@@ -809,9 +801,6 @@ def main():
     _db = database.ReadFile(filename)
     data = _db.vector_targets([1, 2, 3, 4, 5])
     data = _db.vector_targets([1])
-
-    print(data[0], '\n\n', data[1], '\n')
-    sys.exit(0)
 
     # Do training
     rnn = RNNGRU(
@@ -890,7 +879,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    # rnn.plot_comparison(start_idx=1000, length=1000, train=False)
+    rnn.plot_comparison(start_idx=1, length=200, train=False)
 
     # Print duration
     print("> Duration: {}s".format(duration))
