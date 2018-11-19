@@ -756,7 +756,7 @@ def main():
     parser.add_argument(
         '-d', '--dropout',
         help='Dropout rate as decimal from 0 to 1. Default 0.1 (or 10%)',
-        type=float, choices=range(0, 1, 0.001), default=0.1)
+        type=float, default=0.1)
     parser.add_argument(
         '--display',
         help='Display on screen if True. Default False.',
@@ -814,7 +814,7 @@ def main():
 
     # Get the data
     _db = database.ReadFile(filename)
-    data = _db.vector_targets([1, 2, 3, 4, 5])
+    data = _db.vector_targets([1, 2, 3, 4, 5, 10])
     # data = _db.vector_targets([1])
 
     # Do training
