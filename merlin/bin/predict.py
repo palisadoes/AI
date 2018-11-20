@@ -106,11 +106,11 @@ class RNNGRU(object):
         This is the number of observations in the test-set:
         '''
 
-        num_test = num_data - self.num_train
+        self.num_test = num_data - self.num_train
 
         print('> Number of Samples: {}'.format(num_data))
         print("> Number of Training Samples: {}".format(self.num_train))
-        print("> Number of Test Samples: {}".format(num_test))
+        print("> Number of Test Samples: {}".format(self.num_test))
 
         # Create test and training data
         x_train = x_data[0:self.num_train]
@@ -237,7 +237,17 @@ class RNNGRU(object):
             return_sequences=True))
 
         self.model.add(GRU(
-            units=256,
+            units=128,
+            dropout=dropout,
+            return_sequences=True))
+
+        self.model.add(GRU(
+            units=128,
+            dropout=dropout,
+            return_sequences=True))
+            
+        self.model.add(GRU(
+            units=128,
             dropout=dropout,
             return_sequences=True))
 
@@ -578,7 +588,8 @@ class RNNGRU(object):
                 0, self.warmup_steps, facecolor='black', alpha=0.15)
 
             # Plot labels etc.
-            plt.ylabel('{} day forecast'.format(self.target_names[signal]))
+            plt.ylabel('{} day forecast ({})'.format(
+                self.target_names[signal], shim))
             plt.legend()
 
             # Show and save the image
@@ -748,7 +759,7 @@ def main():
 
     '''
 
-    rnn.plot_comparison(start_idx=1, length=1000, train=True)
+    rnn.plot_comparison(start_idx=1, length=rnn.num_train - 1, train=True)
 
     # Example from Test-Set
 
@@ -770,7 +781,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    rnn.plot_comparison(start_idx=1, length=200, train=False)
+    rnn.plot_comparison(start_idx=1, length=rnn.num_test - 1, train=False)
 
     # Print duration
     print("> Duration: {}s".format(duration))
