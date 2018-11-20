@@ -182,7 +182,7 @@ class ReadFile(_File):
         result['d'] = stochastic.d(window=d_window)
 
         # Calculate the Miscellaneous values
-        miscellaneous = math.Miscellaneous(values_only)
+        miscellaneous = math.Misc(values_only)
         result['rsi'] = miscellaneous.rsi()
 
         # Delete the first row of the dataframe as it has NaN values from the
