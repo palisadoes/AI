@@ -9,7 +9,7 @@ from datetime import datetime
 import time
 import traceback
 
-# PIP3 imports
+# PIP3 imports.
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
@@ -38,7 +38,7 @@ class RNNGRU(object):
         """Instantiate the class.
 
         Args:
-            data: Tuple of (x_data, y_data)
+            data: Tuple of (x_data, y_data, target_names)
             periods: Number of timestamp data points per vector
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
@@ -50,7 +50,6 @@ class RNNGRU(object):
         """
         # Initialize key variables
         self.periods = periods
-        self.target_names = ['one', 'two', 'three', 'four', 'five']
         self.warmup_steps = warmup_steps
         self.epochs = epochs
         self.batch_size = batch_size
@@ -75,7 +74,7 @@ class RNNGRU(object):
         ###################################
 
         # Get data
-        (x_data, y_data) = data
+        (x_data, y_data, self.target_names) = data
 
         print('\n> Numpy Data Type: {}'.format(type(x_data)))
         print("> Numpy Data Shape: {}".format(x_data.shape))
@@ -579,7 +578,7 @@ class RNNGRU(object):
                 0, self.warmup_steps, facecolor='black', alpha=0.15)
 
             # Plot labels etc.
-            plt.ylabel(self.target_names[signal])
+            plt.ylabel('{} day forecast'.format(self.target_names[signal]))
             plt.legend()
 
             # Show and save the image
@@ -589,139 +588,6 @@ class RNNGRU(object):
             else:
                 plt.savefig(filename, bbox_inches='tight')
             print('> Saving file: {}'.format(filename))
-
-
-def convert_data(data, periods, target_names):
-    """Get data to analyze.
-
-    Args:
-        data: Dict of values keyed by epoch timestamp
-        periods: Number of periods to shift data to get forecasts for Y values
-        target_names: Name of dataframe column to use for Y values
-
-    Returns:
-        (x_data, y_data): X and Y values as numpy arrays
-
-    """
-    # Initialize key variables
-    shift_steps = periods
-    output = {
-        'dow': [],
-        'dom': [],
-        'hour': [],
-        'minute': [],
-        'second': [],
-        'value': []}
-
-    # Get list of values
-    for epoch, value in sorted(data.items()):
-        output['value'].append(value)
-        '''output['doy'].append(
-            int(datetime.fromtimestamp(epoch).strftime('%j')))'''
-        output['dom'].append(
-            int(datetime.fromtimestamp(epoch).strftime('%d')))
-        output['dow'].append(
-            int(datetime.fromtimestamp(epoch).strftime('%w')))
-        output['hour'].append(
-            int(datetime.fromtimestamp(epoch).strftime('%H')))
-        output['minute'].append(
-            int(datetime.fromtimestamp(epoch).strftime('%M')))
-        output['second'].append(
-            int(datetime.fromtimestamp(epoch).strftime('%S')))
-
-    # Convert to dataframe
-    pandas_df = pd.DataFrame.from_dict(output)
-
-    '''
-    Note the negative time-shift!
-
-    We want the future state targets to line up with the timestamp of the
-    last value of each sample set.
-    '''
-
-    df_targets = pandas_df[target_names].shift(-shift_steps)
-    x_data = pandas_df.values[0:-shift_steps]
-    y_data = df_targets.values[:-shift_steps]
-
-    # Return
-    return(x_data, y_data)
-
-
-def read_file(filename, ts_start=None, rrd_step=300):
-    """Read data from file.
-
-    Args:
-        filename: Name of CSV file to read
-        ts_start: Starting timestamp for which data should be retrieved
-        rrd_step: Default RRD step time of the CSV file
-
-    Returns:
-        data_dict: Dict of values keyed by timestamp
-
-    """
-    # Initialize key variables
-    data_dict = {}
-    now = _normalize(int(time.time()), rrd_step)
-    count = 1
-
-    # Set the start time to be 2 years by default
-    if (ts_start is None) or (ts_start < 0):
-        ts_start = now - (3600 * 24 * 365 * 2)
-    else:
-        ts_start = _normalize(ts_start, rrd_step)
-
-    # Read data
-    with open(filename, 'r') as csvfile:
-        spamreader = csv.reader(csvfile, delimiter=',')
-        for row in spamreader:
-            timestamp = _normalize(int(row[0]), rrd_step)
-            if ts_start <= timestamp:
-                value = float(row[1])
-                data_dict[timestamp] = value
-
-    # Fill in the blanks in timestamps
-    ts_max = max(data_dict.keys())
-    ts_min = min(data_dict.keys())
-    timestamps = range(
-        _normalize(ts_min, rrd_step),
-        _normalize(ts_max, rrd_step),
-        rrd_step)
-    for timestamp in timestamps:
-        if timestamp not in data_dict:
-            data_dict[timestamp] = 0
-
-    # Back track from the end of the data and delete any zero values until
-    # no zeros are found. Sometimes the most recent csv data is zero due to
-    # update delays. Replace the deleted entries with a zero value at the
-    # beginning of the series
-    _timestamps = sorted(data_dict.keys(), reverse=True)
-    for timestamp in _timestamps:
-        if bool(data_dict[timestamp]) is False:
-            data_dict.pop(timestamp, None)
-            # Replace the popped item with one at the beginning of the series
-            data_dict[int(ts_min - (count * rrd_step))] = 0
-        else:
-            break
-        count += 1
-
-    # Return
-    print('Records ingested:', len(data_dict))
-    return data_dict
-
-
-def _normalize(timestamp, rrd_step=300):
-    """Normalize the timestamp to nearest rrd_step value.
-
-    Args:
-        rrd_step: RRD tool step value
-
-    Returns:
-        result: Normalized timestamp
-
-    """
-    # Return
-    result = int((timestamp // rrd_step) * rrd_step)
-    return result
 
 
 def main():
@@ -754,6 +620,10 @@ def main():
         help='Number of epoch iterations to use. Default 20.',
         type=int, default=20)
     parser.add_argument(
+        '-t', '--type',
+        help='CSV file format type.',
+        type=int, default=1)
+    parser.add_argument(
         '-d', '--dropout',
         help='Dropout rate as decimal from 0 to 1. Default 0.1 (or 10%)',
         type=float, default=0.1)
@@ -765,6 +635,7 @@ def main():
     filename = args.filename
     display = args.display
     dropout = args.dropout
+    file_format = args.type
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -813,7 +684,11 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    _db = database.ReadFile(filename)
+    if file_format == 1:
+        _db = database.ReadFile(filename)
+    else:
+        _db = database.ReadFile2(filename)
+
     data = _db.vector_targets([1, 2, 3, 4, 5, 10])
     # data = _db.vector_targets([1])
 
@@ -897,7 +772,7 @@ def main():
 
     rnn.plot_comparison(start_idx=1, length=200, train=False)
 
-    # Print duration.
+    # Print duration
     print("> Duration: {}s".format(duration))
 
 

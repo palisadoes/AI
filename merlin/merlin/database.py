@@ -1,12 +1,5 @@
 """Library to process the ingest of data files."""
 
-import sys
-import os
-import time
-import datetime
-import zipfile
-import shutil
-
 # PIP imports
 import pandas as pd
 
@@ -14,7 +7,7 @@ import pandas as pd
 from merlin import log
 
 
-class ReadFile(object):
+class _File(object):
     """Class ingests file data."""
 
     def __init__(self, filename):
@@ -46,6 +39,80 @@ class ReadFile(object):
         validity = True
         return validity
 
+    def vector_targets(self, shift_steps):
+        """Create vectors and targets from data.
+
+        Args:
+            shift_steps: List of steps
+
+        Returns:
+            result: dataframe for learning
+
+        """
+        # Initialize key variables
+        pandas_df = self.data()
+        targets = {}
+        columns = []
+        label2predict = 'close'
+
+        # Create column labels for dataframe columns
+        # Create shifted values for learning
+        for step in shift_steps:
+            '''
+            Note the negative time-shift!
+
+            We want the future state targets to line up with the timestamp of
+            the last value of each sample set.
+            '''
+            targets[step] = pandas_df[label2predict].shift(-step)
+            columns.append('{}'.format(step))
+
+        # Get vectors
+        x_data = pandas_df.values[0:-max(shift_steps)]
+
+        # Get class values for each vector
+        classes = pd.DataFrame(columns=columns)
+        for step in shift_steps:
+            # Shift each column by the value of its label
+            classes[str(step)] = pandas_df[label2predict].shift(-step)
+        # Create dataframe with only non NaN values
+        y_data = classes.values[:-max(shift_steps)]
+
+        # Return.
+        return(x_data, y_data, shift_steps)
+
+
+class ReadFile(_File):
+    """Class ingests file data."""
+
+    def __init__(self, filename):
+        """Function for intializing the class.
+
+        Args:
+            filename: Name of file
+            symbol: Symbol to update
+
+        Returns:
+            None
+
+        """
+        # Set up inheritance
+        _File.__init__(self, filename)
+
+    def valid(self):
+        """Process file data.
+
+        Args:
+            None
+
+        Returns:
+            validity: True if basic file validity checks pass.
+
+        """
+        # Initialize key variables
+        validity = True
+        return validity
+
     def data(self):
         """Process file data.
 
@@ -53,7 +120,7 @@ class ReadFile(object):
             None
 
         Returns:
-            result: dataframe for learning
+            result: dataframe for learninobjectg
 
         """
         # Read data
@@ -110,44 +177,86 @@ class ReadFile(object):
         # Return
         return result
 
-    def vector_targets(self, shift_steps=[1]):
-        """Create vectors and targets from data.
+
+class ReadFile2(_File):
+    """Class ingests file data."""
+
+    def __init__(self, filename):
+        """Function for intializing the class.
+
+        Args:
+            filename: Name of file
+            symbol: Symbol to update
+
+        Returns:
+            None
+
+        """
+        # Set up inheritance
+        _File.__init__(self, filename)
+
+    def valid(self):
+        """Process file data.
 
         Args:
             None
 
         Returns:
-            result: dataframe for learning
+            validity: True if basic file validity checks pass.
 
         """
         # Initialize key variables
-        pandas_df = self.data()
-        targets = {}
-        columns = []
-        label2predict = 'close'
+        validity = True
+        return validity
 
-        # Create column labels for dataframe columns
-        # Create shifted values for learning
-        for step in shift_steps:
-            '''
-            Note the negative time-shift!
+    def data(self):
+        """Process file data.
 
-            We want the future state targets to line up with the timestamp of
-            the last value of each sample set.
-            '''
-            targets[step] = pandas_df[label2predict].shift(-step)
-            columns.append('{}'.format(step))
+        Args:
+            None
 
-        # Get vectors
-        x_data = pandas_df.values[0:-max(shift_steps)]
+        Returns:
+            result: dataframe for learninobjectg
 
-        # Get class values for each vector
-        classes = pd.DataFrame(columns=columns)
-        for step in shift_steps:
-            # Shift each column by the value of its label
-            classes[str(step)] = pandas_df[label2predict].shift(-step)
-        # Create dataframe with only non NaN values
-        y_data = classes.values[:-max(shift_steps)]
+        """
+        # Read data
+        headings = ['date', 'close']
+        data = pd.read_csv(self.filename, names=headings)
+
+        # Get date values from data
+        weekday = pd.to_datetime(data['date'], format='%d %b %Y').dt.weekday
+        day = pd.to_datetime(data['date'], format='%d %b %Y').dt.day
+        dayofyear = pd.to_datetime(
+            data['date'], format='%d %b %Y').dt.dayofyear
+        quarter = pd.to_datetime(data['date'], format='%d %b %Y').dt.quarter
+        month = pd.to_datetime(data['date'], format='%d %b %Y').dt.month
+
+        # Calculate the percentage and real differences between columns
+        num_difference = data.drop(['date'], axis=1).diff()
+        pct_difference = data.drop(['date'], axis=1).pct_change()
+
+        # Create result to return
+        result = pd.DataFrame(columns=[
+            'close',
+            'weekday', 'day', 'dayofyear', 'quarter', 'month',
+            'num_diff_close', 'pct_diff_close'])
+        result['close'] = data['close']
+        result['day'] = day
+        result['weekday'] = weekday
+        result['dayofyear'] = dayofyear
+        result['quarter'] = quarter
+        result['month'] = month
+        result['weekday'] = weekday
+        result['day'] = day
+        result['dayofyear'] = dayofyear
+        result['quarter'] = quarter
+        result['month'] = month
+        result['num_diff_close'] = num_difference['close']
+        result['pct_diff_close'] = pct_difference['close']
+
+        # Delete the first row of the dataframe as it has NaN values from the
+        # .diff() and .pct_change() operations
+        result = result.iloc[1:]
 
         # Return
-        return(x_data, y_data)
+        return result
