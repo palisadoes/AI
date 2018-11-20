@@ -624,8 +624,8 @@ def main():
         type=int, default=1)
     parser.add_argument(
         '-d', '--dropout',
-        help='Dropout rate as decimal from 0 to 1. Default 0.1 (or 10%)',
-        type=float, default=0.1)
+        help='Dropout rate as decimal from 0 to 1. Default 0.5 (or 50%)',
+        type=float, default=0.5)
     parser.add_argument(
         '--display',
         help='Display on screen if True. Default False.',
@@ -753,6 +753,9 @@ def main():
     # time.sleep(2)
     rnn.plot_comparison(
         start_idx=rnn.num_train - 1000, length=1000 - 1, train=True)
+    time.sleep(2)
+    rnn.plot_comparison(
+        start_idx=1, length=rnn.num_train - 1, train=True)
 
     # Example from Test-Set
 
