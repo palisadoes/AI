@@ -3,15 +3,12 @@
 
 # Standard imports
 import argparse
-import csv
 import sys
-from datetime import datetime
 import time
 import traceback
 
 # PIP3 imports.
 import numpy as np
-import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 
@@ -228,28 +225,14 @@ class RNNGRU(object):
         self.model.add(GRU(
             units=512,
             return_sequences=True,
-            dropout=dropout,
+            recurrent_dropout=dropout,
             input_shape=(None, self.num_x_signals,)))
 
-        self.model.add(GRU(
-            units=256,
-            dropout=dropout,
-            return_sequences=True))
-
-        self.model.add(GRU(
-            units=512,
-            dropout=dropout,
-            return_sequences=True))
-
-        self.model.add(GRU(
-            units=256,
-            dropout=dropout,
-            return_sequences=True))
-
-        self.model.add(GRU(
-            units=128,
-            dropout=dropout,
-            return_sequences=True))
+        for _ in range(0, 3):
+            self.model.add(GRU(
+                units=256,
+                recurrent_dropout=dropout,
+                return_sequences=True))
 
         '''
         The GRU outputs a batch of sequences of 512 values. We want to predict
@@ -679,7 +662,7 @@ def main():
     corresponds to 8 weeks.
     '''
     weeks = args.weeks
-    sequence_length = 7 * periods * weeks
+    sequence_length = 5 * periods * weeks
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
@@ -700,7 +683,7 @@ def main():
     else:
         _db = database.ReadFile2(filename)
 
-    data = _db.vector_targets([1, 2, 3, 4, 5, 10])
+    data = _db.vector_targets([3])
     # data = _db.vector_targets([1])
 
     # Do training
@@ -759,7 +742,10 @@ def main():
 
     '''
 
-    rnn.plot_comparison(start_idx=1, length=rnn.num_train - 1, train=True)
+    # rnn.plot_comparison(start_idx=1, length=1000, train=True)
+    # time.sleep(2)
+    rnn.plot_comparison(
+        start_idx=rnn.num_train - 1000, length=1000 - 1, train=True)
 
     # Example from Test-Set
 
