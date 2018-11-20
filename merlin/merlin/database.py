@@ -1,10 +1,15 @@
 """Library to process the ingest of data files."""
 
+# Standard imports
+import sys
+
 # PIP imports
 import pandas as pd
 
 # Append custom application libraries
 from merlin import log
+from merlin import general
+from merlin import math
 
 
 class _File(object):
@@ -123,43 +128,42 @@ class ReadFile(_File):
             result: dataframe for learninobjectg
 
         """
+        # Initialize key variables
+        k_window = 35
+        d_window = 5
+
         # Read data
         headings = ['date', 'time', 'open', 'high', 'low', 'close', 'volume']
         data = pd.read_csv(self.filename, names=headings)
         data = data.drop(['time'], axis=1)
 
+        # Drop date column from data
+        values_only = data.drop(['date'], axis=1)
+
         # Get date values from data
-        weekday = pd.to_datetime(data['date'], format='%Y.%m.%d').dt.weekday
-        day = pd.to_datetime(data['date'], format='%Y.%m.%d').dt.day
-        dayofyear = pd.to_datetime(
-            data['date'], format='%Y.%m.%d').dt.dayofyear
-        quarter = pd.to_datetime(data['date'], format='%Y.%m.%d').dt.quarter
-        month = pd.to_datetime(data['date'], format='%Y.%m.%d').dt.month
+        dates = general.Dates(data['date'], '%Y.%m.%d')
 
         # Calculate the percentage and real differences between columns
-        num_difference = data.drop(['date'], axis=1).diff()
-        pct_difference = data.drop(['date'], axis=1).pct_change()
+        difference = math.Difference(values_only)
+        num_difference = difference.actual()
+        pct_difference = difference.relative()
 
         # Create result to return
         result = pd.DataFrame(columns=[
             'open', 'high', 'low', 'close',
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
-            'pct_diff_high', 'pct_diff_low', 'pct_diff_close'])
+            'pct_diff_high', 'pct_diff_low', 'pct_diff_close', 'k', 'd'])
         result['open'] = data['open']
         result['high'] = data['high']
         result['low'] = data['low']
         result['close'] = data['close']
-        result['day'] = day
-        result['weekday'] = weekday
-        result['dayofyear'] = dayofyear
-        result['quarter'] = quarter
-        result['month'] = month
-        result['weekday'] = weekday
-        result['day'] = day
-        result['dayofyear'] = dayofyear
-        result['quarter'] = quarter
-        result['month'] = month
+        result['day'] = dates.day
+        result['weekday'] = dates.weekday
+        result['week'] = dates.week
+        result['month'] = dates.month
+        result['quarter'] = dates.quarter
+        result['dayofyear'] = dates.dayofyear
         result['num_diff_open'] = num_difference['open']
         result['num_diff_high'] = num_difference['high']
         result['num_diff_low'] = num_difference['low']
@@ -170,9 +174,14 @@ class ReadFile(_File):
         result['pct_diff_close'] = pct_difference['close']
         result['pct_diff_volume'] = pct_difference['volume']
 
+        # Calculate the Stochastic values
+        stochastic = math.Stochastic(values_only, window=k_window)
+        result['k'] = stochastic.k()
+        result['d'] = stochastic.d(window=d_window)
+
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
-        result = result.iloc[1:]
+        result = result.iloc[max(1, k_window + d_window):]
 
         # Return
         return result
