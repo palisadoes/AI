@@ -183,7 +183,7 @@ class ReadFile(_File):
 
         # Calculate the Miscellaneous values
         miscellaneous = math.Misc(values_only)
-        result['rsi'] = miscellaneous.rsi()
+        result['rsi'] = miscellaneous.rsi(window=rsi_window)
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations

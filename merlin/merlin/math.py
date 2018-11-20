@@ -66,7 +66,7 @@ class Stochastic(object):
         Args:
             data: Pandas DataFrame with columns:
                 ['open', 'high', 'low', 'close', 'volume']
-            window: Rolling window
+            window: Size of rolling window
 
         Returns:
             None
@@ -86,7 +86,7 @@ class Stochastic(object):
         """Calculate Stochastic percentage K values.
 
         Args:
-            Mpme
+            None
 
         Returns:
             result: Series of Stochastic K percentage values
@@ -105,7 +105,7 @@ class Stochastic(object):
         """Calculate Stochastic percentage D values.
 
         Args:
-            percent: Give percentage differences if True
+            window: Size of rolling window
 
         Returns:
             result: DataFrame with columns:
@@ -146,7 +146,7 @@ class Misc(object):
         https://en.wikipedia.org/wiki/Relative_strength_index
 
         Args:
-            window: Number of days
+            window: Size of rolling window
 
         Returns:
             result: Pandas Series
