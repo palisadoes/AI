@@ -131,6 +131,7 @@ class ReadFile(_File):
         # Initialize key variables
         k_window = 35
         d_window = 5
+        rsi_window = 14
 
         # Read data
         headings = ['date', 'time', 'open', 'high', 'low', 'close', 'volume']
@@ -153,7 +154,8 @@ class ReadFile(_File):
             'open', 'high', 'low', 'close',
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
-            'pct_diff_high', 'pct_diff_low', 'pct_diff_close', 'k', 'd'])
+            'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
+            'k', 'd', 'rsi'])
         result['open'] = data['open']
         result['high'] = data['high']
         result['low'] = data['low']
@@ -178,6 +180,10 @@ class ReadFile(_File):
         stochastic = math.Stochastic(values_only, window=k_window)
         result['k'] = stochastic.k()
         result['d'] = stochastic.d(window=d_window)
+
+        # Calculate the Miscellaneous values
+        miscellaneous = math.Miscellaneous(values_only)
+        result['rsi'] = miscellaneous.rsi()
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations

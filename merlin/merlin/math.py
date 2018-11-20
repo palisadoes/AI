@@ -120,3 +120,69 @@ class Stochastic(object):
 
         # Return
         return result
+
+
+class Misc(object):
+    """Convert Pandas DataFrame to components."""
+
+    def __init__(self, data):
+        """Function for intializing the class.
+
+        Args:
+            data: Pandas DataFrame with columns:
+                ['open', 'high', 'low', 'close', 'volume']
+
+        Returns:
+            None
+
+        """
+        # Initialize key variables
+        self._data = data
+
+    def rsi(self, window):
+        """Calculate the RSI (Relative Strength Index) within N days.
+
+        Calculated based on the formula at:
+        https://en.wikipedia.org/wiki/Relative_strength_index
+
+        Args:
+            window: Number of days
+
+        Returns:
+            result: Pandas Series
+
+        """
+        # Initialize key variables
+        close = self._data['close']
+
+        # Track positive and negative deltas
+        dataframe = pd.DataFrame(columns=['positive', 'negative'])
+        dataframe['positive'] = (close + close.abs()) / 2
+        dataframe['negative'] = (-close + close.abs()) / 2
+
+        # Calculate the smoothed simple moving average
+        positive_ema = smma(dataframe['positive'], window)
+        negative_ema = smma(dataframe['negative'], window)
+
+        # Return
+        relative_strength = positive_ema / negative_ema
+        result = 100 - (100 / (1.0 + relative_strength))
+        return result
+
+
+def smma(data, window):
+    """Calculate the smooth modified moving average.
+
+    Args:
+        data: Pandas Series
+        window: Moving average window
+
+    Returns:
+        result: Pandas Series
+
+    """
+    # Return
+    result = data.ewm(
+        ignore_na=False, alpha=1.0 / window,
+        min_periods=0, adjust=True).mean()
+    return result
