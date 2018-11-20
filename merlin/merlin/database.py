@@ -131,7 +131,7 @@ class ReadFile(_File):
         # Initialize key variables
         k_window = 35
         d_window = 5
-        rsi_window = 14
+        rsi_window = k_window
 
         # Read data
         headings = ['date', 'time', 'open', 'high', 'low', 'close', 'volume']
@@ -184,6 +184,15 @@ class ReadFile(_File):
         # Calculate the Miscellaneous values
         miscellaneous = math.Misc(values_only)
         result['rsi'] = miscellaneous.rsi(window=rsi_window)
+
+        # Selectively drop columns
+        colunms2drop = [
+            'num_diff_open',
+            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
+            'pct_diff_high', 'pct_diff_low', 'pct_diff_close']
+        for _column in colunms2drop:
+            continue
+            result = result.drop([_column], axis=1)
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations

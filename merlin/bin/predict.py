@@ -31,7 +31,7 @@ class RNNGRU(object):
 
     def __init__(
             self, data, periods=288, batch_size=64, sequence_length=20,
-            warmup_steps=50, epochs=20, dropout=0, display=False):
+            warmup_steps=50, epochs=20, dropout=0, layers=1, display=False):
         """Instantiate the class.
 
         Args:
@@ -51,6 +51,7 @@ class RNNGRU(object):
         self.epochs = epochs
         self.batch_size = batch_size
         self.display = display
+        _layers = int(abs(layers))
 
         ###################################
         # TensorFlow wizardry
@@ -228,7 +229,7 @@ class RNNGRU(object):
             recurrent_dropout=dropout,
             input_shape=(None, self.num_x_signals,)))
 
-        for _ in range(0, 2):
+        for _ in range(0, _layers):
             self.model.add(GRU(
                 units=256,
                 recurrent_dropout=dropout,
@@ -614,6 +615,10 @@ def main():
         help='Number of epoch iterations to use. Default 20.',
         type=int, default=20)
     parser.add_argument(
+        '-l', '--layers',
+        help='Number of GRU layers to use.',
+        type=int, default=2)
+    parser.add_argument(
         '-t', '--type',
         help='CSV file format type.',
         type=int, default=1)
@@ -630,6 +635,7 @@ def main():
     display = args.display
     dropout = args.dropout
     file_format = args.type
+    layers = args.layers
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -694,6 +700,7 @@ def main():
         sequence_length=sequence_length,
         epochs=epochs,
         dropout=dropout,
+        layers=layers,
         display=display)
 
     '''
