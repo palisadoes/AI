@@ -237,15 +237,15 @@ class RNNGRU(object):
             return_sequences=True))
 
         self.model.add(GRU(
-            units=128,
+            units=512,
             dropout=dropout,
             return_sequences=True))
 
         self.model.add(GRU(
-            units=128,
+            units=256,
             dropout=dropout,
             return_sequences=True))
-            
+
         self.model.add(GRU(
             units=128,
             dropout=dropout,
