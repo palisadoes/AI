@@ -228,7 +228,7 @@ class RNNGRU(object):
             recurrent_dropout=dropout,
             input_shape=(None, self.num_x_signals,)))
 
-        for _ in range(0, 3):
+        for _ in range(0, 2):
             self.model.add(GRU(
                 units=256,
                 recurrent_dropout=dropout,

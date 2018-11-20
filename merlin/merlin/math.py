@@ -153,7 +153,8 @@ class Misc(object):
 
         """
         # Initialize key variables
-        close = self._data['close']
+        difference = Difference(self._data)
+        close = difference.actual()['close']
 
         # Track positive and negative deltas
         dataframe = pd.DataFrame(columns=['positive', 'negative'])
