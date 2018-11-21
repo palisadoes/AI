@@ -13,7 +13,7 @@ from merlin import math
 
 
 class _File(object):
-    """Class ingests file data."""
+    """Super class for file data ingestion."""
 
     def __init__(self, filename):
         """Function for intializing the class.
