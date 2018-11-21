@@ -27,8 +27,8 @@ class _File(object):
 
         """
         # Initialize key variables
-        self.filename = filename
-        self.symbol = ''
+        self._filename = filename
+        self._symbol = ''
 
     def valid(self):
         """Process file data.
@@ -91,7 +91,7 @@ class ReadFile(_File):
     """Class ingests file data."""
 
     def __init__(self, filename):
-        """Function for intializing the class.
+        """Intialize the class.
 
         Args:
             filename: Name of file
@@ -103,6 +103,11 @@ class ReadFile(_File):
         """
         # Set up inheritance
         _File.__init__(self, filename)
+
+        # Setup classwide variables
+        self._kwindow = 35
+        self._dwindow = 5
+        self._rsiwindow = self._kwindow
 
     def valid(self):
         """Process file data.
@@ -118,7 +123,7 @@ class ReadFile(_File):
         validity = True
         return validity
 
-    def data(self):
+    def _data(self):
         """Process file data.
 
         Args:
@@ -128,14 +133,9 @@ class ReadFile(_File):
             result: dataframe for learninobjectg
 
         """
-        # Initialize key variables
-        k_window = 35
-        d_window = 5
-        rsi_window = k_window
-
         # Read data
         headings = ['date', 'time', 'open', 'high', 'low', 'close', 'volume']
-        data = pd.read_csv(self.filename, names=headings)
+        data = pd.read_csv(self._filename, names=headings)
         data = data.drop(['time'], axis=1)
 
         # Drop date column from data
@@ -177,13 +177,13 @@ class ReadFile(_File):
         result['pct_diff_volume'] = pct_difference['volume']
 
         # Calculate the Stochastic values
-        stochastic = math.Stochastic(values_only, window=k_window)
+        stochastic = math.Stochastic(values_only, window=self._kwindow)
         result['k'] = stochastic.k()
-        result['d'] = stochastic.d(window=d_window)
+        result['d'] = stochastic.d(window=self._dwindow)
 
         # Calculate the Miscellaneous values
         miscellaneous = math.Misc(values_only)
-        result['rsi'] = miscellaneous.rsi(window=rsi_window)
+        result['rsi'] = miscellaneous.rsi(window=self._rsiwindow)
 
         # Selectively drop columns
         colunms2drop = [
@@ -194,9 +194,25 @@ class ReadFile(_File):
             continue
             result = result.drop([_column], axis=1)
 
+        # Return
+        return result
+
+    def data(self):
+        """Process file data.
+
+        Args:
+            None
+
+        Returns:
+            result: dataframe for learninobjectg
+
+        """
+        # Initialize key variables
+        result = self._data()
+
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
-        result = result.iloc[max(1, k_window + d_window):]
+        result = result.iloc[max(1, self._kwindow + self._dwindow):]
 
         # Return
         return result
@@ -206,7 +222,7 @@ class ReadFile2(_File):
     """Class ingests file data."""
 
     def __init__(self, filename):
-        """Function for intializing the class.
+        """Intialize the class.
 
         Args:
             filename: Name of file
@@ -245,7 +261,7 @@ class ReadFile2(_File):
         """
         # Read data
         headings = ['date', 'close']
-        data = pd.read_csv(self.filename, names=headings)
+        data = pd.read_csv(self._filename, names=headings)
 
         # Get date values from data
         weekday = pd.to_datetime(data['date'], format='%d %b %Y').dt.weekday

@@ -26,3 +26,4 @@ class Dates(object):
         self.quarter = pd.to_datetime(dates, format=date_format).dt.quarter
         self.month = pd.to_datetime(dates, format=date_format).dt.month
         self.week = pd.to_datetime(dates, format=date_format).dt.week
+        self.year = pd.to_datetime(dates, format=date_format).dt.year
