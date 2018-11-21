@@ -47,9 +47,9 @@ class RNNGRU(object):
         """
         # Initialize key variables
         self.periods = periods
-        self.warmup_steps = warmup_steps
-        self.epochs = epochs
-        self.batch_size = batch_size
+        self._warmup_steps = warmup_steps
+        self._epochs = epochs
+        self._batch_size = batch_size
         self.display = display
         _layers = int(abs(layers))
 
@@ -72,7 +72,7 @@ class RNNGRU(object):
         ###################################
 
         # Get data
-        (x_data, y_data, self.target_names) = data
+        (x_data, y_data, self._target_names) = data
 
         print('\n> Numpy Data Type: {}'.format(type(x_data)))
         print("> Numpy Data Shape: {}".format(x_data.shape))
@@ -113,10 +113,10 @@ class RNNGRU(object):
         # Create test and training data
         x_train = x_data[0:self.num_train]
         x_test = x_data[self.num_train:]
-        self.y_train = y_data[0:self.num_train]
-        self.y_test = y_data[self.num_train:]
-        self.num_x_signals = x_data.shape[1]
-        self.num_y_signals = y_data.shape[1]
+        self._y_train = y_data[0:self.num_train]
+        self._y_test = y_data[self.num_train:]
+        self._num_x_signals = x_data.shape[1]
+        self._num_y_signals = y_data.shape[1]
 
         print("> Training Minimum Value:", np.min(x_train))
         print("> Training Maximum Value:", np.max(x_train))
@@ -126,10 +126,10 @@ class RNNGRU(object):
         epoch is considered finished.
         '''
 
-        self.steps_per_epoch = int(self.num_train / batch_size) + 1
+        self._steps_per_epoch = int(self.num_train / batch_size) + 1
         print("> Epochs:", epochs)
         print("> Batch Size:", batch_size)
-        print("> Steps:", self.steps_per_epoch)
+        print("> Steps:", self._steps_per_epoch)
 
         '''
         Calculate the estimated memory footprint.
@@ -149,14 +149,14 @@ class RNNGRU(object):
         '''
 
         x_scaler = MinMaxScaler()
-        self.x_train_scaled = x_scaler.fit_transform(x_train)
+        self._x_train_scaled = x_scaler.fit_transform(x_train)
 
         print('> Scaled Training Minimum Value: {}'.format(
-            np.min(self.x_train_scaled)))
+            np.min(self._x_train_scaled)))
         print('> Scaled Training Maximum Value: {}'.format(
-            np.max(self.x_train_scaled)))
+            np.max(self._x_train_scaled)))
 
-        self.x_test_scaled = x_scaler.transform(x_test)
+        self._x_test_scaled = x_scaler.transform(x_test)
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -166,9 +166,9 @@ class RNNGRU(object):
         target-data.
         '''
 
-        self.y_scaler = MinMaxScaler()
-        self.y_train_scaled = self.y_scaler.fit_transform(self.y_train)
-        y_test_scaled = self.y_scaler.transform(self.y_test)
+        self._y_scaler = MinMaxScaler()
+        self._y_train_scaled = self._y_scaler.fit_transform(self._y_train)
+        y_test_scaled = self._y_scaler.transform(self._y_test)
 
         # Data Generator
 
@@ -181,13 +181,13 @@ class RNNGRU(object):
         '''
 
         print('> Scaled Training Data Shape: {}'.format(
-            self.x_train_scaled.shape))
+            self._x_train_scaled.shape))
         print('> Scaled Training Targets Shape: {}'.format(
-            self.y_train_scaled.shape))
+            self._y_train_scaled.shape))
 
         # We then create the batch-generator.
 
-        generator = self.batch_generator(batch_size, sequence_length)
+        generator = self._batch_generator(batch_size, sequence_length)
 
         # Validation Set
 
@@ -206,12 +206,12 @@ class RNNGRU(object):
         sequence.
         '''
 
-        validation_data = (np.expand_dims(self.x_test_scaled, axis=0),
+        validation_data = (np.expand_dims(self._x_test_scaled, axis=0),
                            np.expand_dims(y_test_scaled, axis=0))
 
         # Create the Recurrent Neural Network
 
-        self.model = Sequential()
+        self._model = Sequential()
 
         '''
         We can now add a Gated Recurrent Unit (GRU) to the network. This will
@@ -223,14 +223,14 @@ class RNNGRU(object):
         input-signals (num_x_signals).
         '''
 
-        self.model.add(GRU(
+        self._model.add(GRU(
             units=512,
             return_sequences=True,
             recurrent_dropout=dropout,
-            input_shape=(None, self.num_x_signals,)))
+            input_shape=(None, self._num_x_signals,)))
 
         for _ in range(0, _layers):
-            self.model.add(GRU(
+            self._model.add(GRU(
                 units=256,
                 recurrent_dropout=dropout,
                 return_sequences=True))
@@ -245,7 +245,7 @@ class RNNGRU(object):
         network using the Sigmoid activation function, which squashes the
         output to be between 0 and 1.'''
 
-        self.model.add(Dense(self.num_y_signals, activation='sigmoid'))
+        self._model.add(Dense(self._num_y_signals, activation='sigmoid'))
 
         '''
         A problem with using the Sigmoid activation function, is that we can
@@ -271,8 +271,8 @@ class RNNGRU(object):
             # init = RandomUniform(minval=-0.05, maxval=0.05)
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
-            self.model.add(Dense(
-                self.num_y_signals,
+            self._model.add(Dense(
+                self._num_y_signals,
                 activation='linear',
                 kernel_initializer=init))
 
@@ -283,7 +283,10 @@ class RNNGRU(object):
         We then compile the Keras model so it is ready for training.
         '''
         optimizer = RMSprop(lr=1e-3)
-        self.model.compile(loss=self.loss_mse_warmup, optimizer=optimizer)
+        self._model.compile(
+            loss=self._loss_mse_warmup,
+            optimizer=optimizer,
+            metrics=['accuracy'])
 
         '''
         This is a very small model with only two layers. The output shape of
@@ -293,7 +296,7 @@ class RNNGRU(object):
         the 3 target signals we want to predict.
         '''
         print('> Model Summary:\n')
-        print(self.model.summary())
+        print(self._model.summary())
 
         # Callback Functions
 
@@ -317,7 +320,7 @@ class RNNGRU(object):
         '''
 
         callback_early_stopping = EarlyStopping(monitor='val_loss',
-                                                patience=5, verbose=1)
+                                                patience=10, verbose=1)
 
         '''
         This is the callback for writing the TensorBoard log during training.
@@ -370,17 +373,12 @@ class RNNGRU(object):
 
         print('\n> Starting data training\n')
 
-        try:
-            self.model.fit_generator(
-                generator=generator,
-                epochs=self.epochs,
-                steps_per_epoch=self.steps_per_epoch,
-                validation_data=validation_data,
-                callbacks=callbacks)
-        except Exception as error:
-            print('\n>{}\n'.format(error))
-            traceback.print_exc()
-            sys.exit(0)
+        self._history = self._model.fit_generator(
+            generator=generator,
+            epochs=self._epochs,
+            steps_per_epoch=self._steps_per_epoch,
+            validation_data=validation_data,
+            callbacks=callbacks)
 
         # Load Checkpoint
 
@@ -394,7 +392,7 @@ class RNNGRU(object):
         print('> Loading model weights')
 
         try:
-            self.model.load_weights(path_checkpoint)
+            self._model.load_weights(path_checkpoint)
         except Exception as error:
             print('\n> Error trying to load checkpoint.\n\n{}'.format(error))
             traceback.print_exc()
@@ -409,18 +407,18 @@ class RNNGRU(object):
         array-dimensionality to create a batch with that one sequence.
         '''
 
-        result = self.model.evaluate(
-            x=np.expand_dims(self.x_test_scaled, axis=0),
+        result = self._model.evaluate(
+            x=np.expand_dims(self._x_test_scaled, axis=0),
             y=np.expand_dims(y_test_scaled, axis=0))
 
         print('> Loss (test-set): {}'.format(result))
 
         # If you have several metrics you can use this instead.
         if False:
-            for res, metric in zip(result, self.model.metrics_names):
+            for res, metric in zip(result, self._model.metrics_names):
                 print('{0}: {1:.3e}'.format(metric, res))
 
-    def batch_generator(self, batch_size, sequence_length):
+    def _batch_generator(self, batch_size, sequence_length):
         """Create generator function to create random batches of training-data.
 
         Args:
@@ -434,11 +432,11 @@ class RNNGRU(object):
         # Infinite loop.
         while True:
             # Allocate a new array for the batch of input-signals.
-            x_shape = (batch_size, sequence_length, self.num_x_signals)
+            x_shape = (batch_size, sequence_length, self._num_x_signals)
             x_batch = np.zeros(shape=x_shape, dtype=np.float16)
 
             # Allocate a new array for the batch of output-signals.
-            y_shape = (batch_size, sequence_length, self.num_y_signals)
+            y_shape = (batch_size, sequence_length, self._num_y_signals)
             y_batch = np.zeros(shape=y_shape, dtype=np.float16)
 
             # Fill the batch with random sequences of data.
@@ -448,12 +446,12 @@ class RNNGRU(object):
                 idx = np.random.randint(self.num_train - sequence_length)
 
                 # Copy the sequences of data starting at this index.
-                x_batch[i] = self.x_train_scaled[idx:idx+sequence_length]
-                y_batch[i] = self.y_train_scaled[idx:idx+sequence_length]
+                x_batch[i] = self._x_train_scaled[idx:idx+sequence_length]
+                y_batch[i] = self._y_train_scaled[idx:idx+sequence_length]
 
             yield (x_batch, y_batch)
 
-    def loss_mse_warmup(self, y_true, y_pred):
+    def _loss_mse_warmup(self, y_true, y_pred):
         """Calculate the Mean Squared Errror.
 
         Calculate the Mean Squared Error between y_true and y_pred,
@@ -478,7 +476,7 @@ class RNNGRU(object):
             loss_mean: Mean Squared Error
 
         """
-        warmup_steps = self.warmup_steps
+        warmup_steps = self._warmup_steps
 
         # The shape of both input tensors are:
         # [batch_size, sequence_length, num_y_signals].
@@ -518,13 +516,13 @@ class RNNGRU(object):
         """
         if train:
             # Use training-data.
-            x_values = self.x_train_scaled
-            y_true = self.y_train
+            x_values = self._x_train_scaled
+            y_true = self._y_train
             shim = 'Train'
         else:
             # Use test-data.
-            x_values = self.x_test_scaled
-            y_true = self.y_test
+            x_values = self._x_test_scaled
+            y_true = self._y_test
             shim = 'Test'
 
         # End-index for the sequences.
@@ -539,19 +537,19 @@ class RNNGRU(object):
         x_values = np.expand_dims(x_values, axis=0)
 
         # Use the model to predict the output-signals.
-        y_pred = self.model.predict(x_values)
+        y_pred = self._model.predict(x_values)
 
         # The output of the model is between 0 and 1.
         # Do an inverse map to get it back to the scale
         # of the original data-set.
-        y_pred_rescaled = self.y_scaler.inverse_transform(y_pred[0])
+        y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
 
         # For each output-signal.
-        for signal in range(len(self.target_names)):
+        for signal in range(len(self._target_names)):
             # Create a filename
             filename = (
                 '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
-                    self.batch_size, self.epochs, self.num_train, signal,
+                    self._batch_size, self._epochs, self.num_train, signal,
                     int(time.time()), shim)
 
             # Get the output-signal predicted by the model.
@@ -569,11 +567,11 @@ class RNNGRU(object):
 
             # Plot grey box for warmup-period.
             _ = plt.axvspan(
-                0, self.warmup_steps, facecolor='black', alpha=0.15)
+                0, self._warmup_steps, facecolor='black', alpha=0.15)
 
             # Plot labels etc.
             plt.ylabel('{} day forecast ({})'.format(
-                self.target_names[signal], shim))
+                self._target_names[signal], shim))
             plt.legend()
 
             # Show and save the image
@@ -584,6 +582,35 @@ class RNNGRU(object):
                 plt.savefig(filename, bbox_inches='tight')
             print('> Saving file: {}'.format(filename))
 
+    def plot_accuracy(self):
+        """Plot the predicted and true output-signals.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Summarize history for accuracy
+        plt.figure(figsize=(15, 5))
+        plt.plot(self._history.history['acc'])
+        plt.plot(self._history.history['val_acc'])
+        plt.title('Model Accuracy')
+        plt.ylabel('Accuracy')
+        plt.xlabel('Epoch')
+        plt.legend(['train', 'test'], loc='upper left')
+        plt.show()
+
+        # Summarize history for loss
+        plt.figure(figsize=(15, 5))
+        plt.plot(self._history.history['loss'])
+        plt.plot(self._history.history['val_loss'])
+        plt.title('Model loss')
+        plt.ylabel('Loss')
+        plt.xlabel('Epoch')
+        plt.legend(['Train', 'Test'], loc='upper left')
+        plt.show()
 
 def main():
     """Generate forecasts.
@@ -689,7 +716,7 @@ def main():
     else:
         _db = database.ReadFile2(filename)
 
-    data = _db.vector_targets([3])
+    data = _db.vector_targets([1, 3])
     # data = _db.vector_targets([1])
 
     # Do training
@@ -751,11 +778,14 @@ def main():
 
     # rnn.plot_comparison(start_idx=1, length=1000, train=True)
     # time.sleep(2)
-    rnn.plot_comparison(
+    '''rnn.plot_comparison(
         start_idx=rnn.num_train - 1000, length=1000 - 1, train=True)
-    time.sleep(2)
+    time.sleep(1.1  )
     rnn.plot_comparison(
-        start_idx=1, length=rnn.num_train - 1, train=True)
+        start_idx=1, length=rnn.num_train - 1, train=True)'''
+
+    rnn.plot_comparison(
+        start_idx=rnn.num_train - 250, length=rnn.num_train - 1, train=True)
 
     # Example from Test-Set
 
@@ -778,6 +808,9 @@ def main():
     '''
 
     rnn.plot_comparison(start_idx=1, length=rnn.num_test - 1, train=False)
+
+    # Plot accuracy
+    # rnn.plot_accuracy()
 
     # Print duration
     print("> Duration: {}s".format(duration))
