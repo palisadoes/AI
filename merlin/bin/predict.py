@@ -6,11 +6,13 @@ import argparse
 import sys
 import time
 import traceback
+from pprint import pprint
 
 # PIP3 imports.
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 # TensorFlow imports
 import tensorflow as tf
@@ -31,11 +33,12 @@ class RNNGRU(object):
 
     def __init__(
             self, data, periods=288, batch_size=64, sequence_length=20,
-            warmup_steps=50, epochs=20, dropout=0, layers=1, display=False):
+            warmup_steps=50, epochs=20, dropout=0, layers=1, patience=10,
+            display=False):
         """Instantiate the class.
 
         Args:
-            data: Tuple of (x_data, y_data, target_names)
+            data: Tuple of (x_data, ydata, target_names)
             periods: Number of timestamp data points per vector
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
@@ -72,13 +75,14 @@ class RNNGRU(object):
         ###################################
 
         # Get data
-        (x_data, y_data, self._target_names) = data
+        (x_data, ydata, self._y_current,
+         self._datetimes, self._target_names) = data
 
         print('\n> Numpy Data Type: {}'.format(type(x_data)))
         print("> Numpy Data Shape: {}".format(x_data.shape))
         print("> Numpy Data Row[0]: {}".format(x_data[0]))
-        print('> Numpy Targets Type: {}'.format(type(y_data)))
-        print("> Numpy Targets Shape: {}".format(y_data.shape))
+        print('> Numpy Targets Type: {}'.format(type(ydata)))
+        print("> Numpy Targets Shape: {}".format(ydata.shape))
 
         '''
         This is the number of observations (aka. data-points or samples) in
@@ -111,12 +115,12 @@ class RNNGRU(object):
         print("> Number of Test Samples: {}".format(self.num_test))
 
         # Create test and training data
-        x_train = x_data[0:self.num_train]
+        x_train = x_data[:self.num_train]
         x_test = x_data[self.num_train:]
-        self._y_train = y_data[0:self.num_train]
-        self._y_test = y_data[self.num_train:]
+        self._y_train = ydata[:self.num_train]
+        self._y_test = ydata[self.num_train:]
         self._num_x_signals = x_data.shape[1]
-        self._num_y_signals = y_data.shape[1]
+        self._num_y_signals = ydata.shape[1]
 
         print("> Training Minimum Value:", np.min(x_train))
         print("> Training Maximum Value:", np.max(x_train))
@@ -320,7 +324,7 @@ class RNNGRU(object):
         '''
 
         callback_early_stopping = EarlyStopping(monitor='val_loss',
-                                                patience=10, verbose=1)
+                                                patience=patience, verbose=1)
 
         '''
         This is the callback for writing the TensorBoard log during training.
@@ -514,24 +518,39 @@ class RNNGRU(object):
             None
 
         """
+        # End-index for the sequences.
+        end_idx = start_idx + length
+
+        days = mdates.DayLocator()   # Every day
+        months = mdates.MonthLocator()  # Every month
+        months_format = mdates.DateFormatter('%b %Y')
+
+        # Assign other variables dependent on the type of data we are plotting
         if train:
             # Use training-data.
             x_values = self._x_train_scaled
             y_true = self._y_train
             shim = 'Train'
+
+            # Only get current values that are a part of the training data
+            current = self._y_current[:self.num_train][start_idx:end_idx]
         else:
             # Use test-data.
             x_values = self._x_test_scaled
             y_true = self._y_test
             shim = 'Test'
 
-        # End-index for the sequences.
-        end_idx = start_idx + length
+            # Only get current values that are a part of the test data
+            current = self._y_current[self.num_train:][start_idx:end_idx]
 
         # Select the sequences from the given start-index and
         # of the given length.
         x_values = x_values[start_idx:end_idx]
         y_true = y_true[start_idx:end_idx]
+
+        print('\boo -->', len(self._y_current), len(self._datetimes), len(self._y_train) + len(self._y_test))
+
+        datetimes = self._datetimes[start_idx:end_idx]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
@@ -558,29 +577,58 @@ class RNNGRU(object):
             # Get the true output-signal from the data-set.
             signal_true = y_true[:, signal]
 
-            # Make the plotting-canvas bigger.
-            plt.figure(figsize=(15, 5))
+            # Create a new chart
+            (fig, axis) = plt.subplots(figsize=(15, 5))
 
             # Plot and compare the two signals.
-            plt.plot(signal_true, label='true')
-            plt.plot(signal_pred, label='pred')
+            axis.plot(
+                datetimes, signal_true,
+                label='Current +{}'.format(self._target_names[signal]))
+            axis.plot(datetimes, signal_pred, label='Prediction')
+            axis.plot(datetimes, current, label='Current')
+
+            # Set plot labels and titles
+            axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(
+                self._target_names[signal], shim))
+            axis.set_ylabel('Values')
+            axis.legend(
+                bbox_to_anchor=(1.04, 0.5),
+                loc='center left', borderaxespad=0)
+
+            # Add gridlines and ticks
+            ax = plt.gca()
+            ax.grid(True)
+
+            # Add major gridlines
+            ax.xaxis.grid(which='major', color='black', alpha=0.4)
+            ax.yaxis.grid(which='major', color='black', alpha=0.4)
+
+            # Add minor ticks (They must be turned on first)
+            ax.minorticks_on()
+            ax.xaxis.grid(which='minor', color='black', alpha=0.2)
+            ax.yaxis.grid(which='minor', color='black', alpha=0.2)
+
+            # Format the ticks
+            ax.xaxis.set_major_locator(months)
+            ax.xaxis.set_major_formatter(months_format)
+            ax.xaxis.set_minor_locator(days)
 
             # Plot grey box for warmup-period.
-            _ = plt.axvspan(
-                0, self._warmup_steps, facecolor='black', alpha=0.15)
-
-            # Plot labels etc.
-            plt.ylabel('{} day forecast ({})'.format(
-                self._target_names[signal], shim))
-            plt.legend()
+            if 0 < start_idx < self._warmup_steps:
+                plt.axvspan(
+                    datetimes[start_idx], datetimes[self._warmup_steps],
+                    facecolor='black', alpha=0.15)
 
             # Show and save the image
             if self.display is True:
-                plt.savefig(filename, bbox_inches='tight')
+                fig.savefig(filename, bbox_inches='tight')
                 plt.show()
             else:
-                plt.savefig(filename, bbox_inches='tight')
+                fig.savefig(filename, bbox_inches='tight')
             print('> Saving file: {}'.format(filename))
+
+            # Close figure
+            plt.close(fig=fig)
 
     def plot_accuracy(self):
         """Plot the predicted and true output-signals.
@@ -642,6 +690,12 @@ def main():
         help='Number of epoch iterations to use. Default 20.',
         type=int, default=20)
     parser.add_argument(
+        '-p', '--patience',
+        help=(
+            'Number of iterations of without loss improvement '
+            'before exiting.'),
+        type=int, default=10)
+    parser.add_argument(
         '-l', '--layers',
         help='Number of GRU layers to use.',
         type=int, default=2)
@@ -663,6 +717,7 @@ def main():
     dropout = args.dropout
     file_format = args.type
     layers = args.layers
+    patience = args.patience
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -717,7 +772,6 @@ def main():
         _db = database.ReadFile2(filename)
 
     data = _db.vector_targets([1, 3])
-    # data = _db.vector_targets([1])
 
     # Do training
     rnn = RNNGRU(
@@ -728,6 +782,7 @@ def main():
         epochs=epochs,
         dropout=dropout,
         layers=layers,
+        patience=patience,
         display=display)
 
     '''
@@ -785,7 +840,7 @@ def main():
         start_idx=1, length=rnn.num_train - 1, train=True)'''
 
     rnn.plot_comparison(
-        start_idx=rnn.num_train - 250, length=rnn.num_train - 1, train=True)
+        start_idx=rnn.num_train - 250, length=250, train=True)
 
     # Example from Test-Set
 

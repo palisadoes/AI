@@ -55,7 +55,7 @@ class _File(object):
 
         """
         # Initialize key variables
-        pandas_df = self.data()
+        pandas_df = self._dataframe
         targets = {}
         columns = []
         label2predict = 'close'
@@ -73,7 +73,7 @@ class _File(object):
             columns.append('{}'.format(step))
 
         # Get vectors
-        x_data = pandas_df.values[0:-max(shift_steps)]
+        x_data = pandas_df.values[:-max(shift_steps)]
 
         # Get class values for each vector
         classes = pd.DataFrame(columns=columns)
@@ -83,8 +83,16 @@ class _File(object):
         # Create dataframe with only non NaN values
         y_data = classes.values[:-max(shift_steps)]
 
+        # Get current values
+        #y_actual = pandas_df[label2predict].values[:-max(shift_steps)]
+        y_actual = self._original_values[label2predict].values
+
+        # Get datetimes
+        #_datetime = self._datetime[:-max(shift_steps)]
+        _datetime = self._datetime[:len(y_actual)]
+
         # Return.
-        return(x_data, y_data, shift_steps)
+        return(x_data, y_data, y_actual, _datetime, shift_steps)
 
 
 class ReadFile(_File):
@@ -108,6 +116,11 @@ class ReadFile(_File):
         self._kwindow = 35
         self._dwindow = 5
         self._rsiwindow = self._kwindow
+        self._original_values = None
+
+        # Convert the data to a dataframe
+        self._dataframe = self._create_dataframe()
+        self._datetime = self.datetime()
 
     def valid(self):
         """Process file data.
@@ -123,14 +136,14 @@ class ReadFile(_File):
         validity = True
         return validity
 
-    def _data(self):
+    def _create_dataframe(self):
         """Process file data.
 
         Args:
             None
 
         Returns:
-            result: dataframe for learninobjectg
+            result: dataframe for learning
 
         """
         # Read data
@@ -139,13 +152,13 @@ class ReadFile(_File):
         data = data.drop(['time'], axis=1)
 
         # Drop date column from data
-        values_only = data.drop(['date'], axis=1)
+        self._original_values = data.drop(['date'], axis=1)
 
         # Get date values from data
         dates = general.Dates(data['date'], '%Y.%m.%d')
 
         # Calculate the percentage and real differences between columns
-        difference = math.Difference(values_only)
+        difference = math.Difference(self._original_values)
         num_difference = difference.actual()
         pct_difference = difference.relative()
 
@@ -156,16 +169,14 @@ class ReadFile(_File):
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
             'k', 'd', 'rsi'])
+
+        # Add current value columns
         result['open'] = data['open']
         result['high'] = data['high']
         result['low'] = data['low']
         result['close'] = data['close']
-        result['day'] = dates.day
-        result['weekday'] = dates.weekday
-        result['week'] = dates.week
-        result['month'] = dates.month
-        result['quarter'] = dates.quarter
-        result['dayofyear'] = dates.dayofyear
+
+        # Add columns of differences
         result['num_diff_open'] = num_difference['open']
         result['num_diff_high'] = num_difference['high']
         result['num_diff_low'] = num_difference['low']
@@ -176,13 +187,22 @@ class ReadFile(_File):
         result['pct_diff_close'] = pct_difference['close']
         result['pct_diff_volume'] = pct_difference['volume']
 
+        # Add date related columns
+        result['day'] = dates.day
+        result['weekday'] = dates.weekday
+        result['week'] = dates.week
+        result['month'] = dates.month
+        result['quarter'] = dates.quarter
+        result['year'] = dates.year
+        result['dayofyear'] = dates.dayofyear
+
         # Calculate the Stochastic values
-        stochastic = math.Stochastic(values_only, window=self._kwindow)
+        stochastic = math.Stochastic(self._original_values, window=self._kwindow)
         result['k'] = stochastic.k()
         result['d'] = stochastic.d(window=self._dwindow)
 
         # Calculate the Miscellaneous values
-        miscellaneous = math.Misc(values_only)
+        miscellaneous = math.Misc(self._original_values)
         result['rsi'] = miscellaneous.rsi(window=self._rsiwindow)
 
         # Selectively drop columns
@@ -197,6 +217,27 @@ class ReadFile(_File):
         # Return
         return result
 
+    def datetime(self):
+        """Create a numpy array of datetimes.
+
+        Args:
+            None
+
+        Returns:
+            result: numpy array of timestamps
+
+        """
+        # Initialize key variables
+        _result = self._dataframe
+
+        result = pd.to_datetime(pd.DataFrame({
+            'year': _result['year'].values.tolist(),
+            'month': _result['month'].values.tolist(),
+            'day': _result['day'].values.tolist()})).values
+
+        # Return
+        return result
+
     def data(self):
         """Process file data.
 
@@ -204,11 +245,11 @@ class ReadFile(_File):
             None
 
         Returns:
-            result: dataframe for learninobjectg
+            result: dataframe for learning
 
         """
         # Initialize key variables
-        result = self._data()
+        result = self._create_dataframe()
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
@@ -256,7 +297,7 @@ class ReadFile2(_File):
             None
 
         Returns:
-            result: dataframe for learninobjectg
+            result: dataframe for learning
 
         """
         # Read data
