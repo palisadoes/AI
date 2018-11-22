@@ -6,6 +6,7 @@ import argparse
 import sys
 import os
 import time
+from pprint import pprint
 
 # PIP3 imports.
 import numpy as np
@@ -27,210 +28,13 @@ from keras import backend
 from merlin import database
 
 
-class ModelVariables(object):
-    """Process data for ingestion."""
-
-    def __init__(
-            self, data, batch_size=64, epochs=20):
-        """Instantiate the class.
-
-        Args:
-            data: Tuple of (x_data, y_data, target_names)
-            batch_size: Size of batch
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        self._epochs = epochs
-        self._batch_size = batch_size
-
-        # Make data object accessible throughout the class
-        self._data = data
-
-        # Total number of available vectors
-        num_data = len(self._data.vectors()[1])
-
-        # Fraction of vectors to be used for training
-        train_split = 0.9
-
-        # Fraction of vectors to be used for training and testing
-        self._training_count = int(train_split * num_data)
-
-    def vectors_train(self):
-        """Get vectors for learning.
-
-        Args:
-            train: Return training vectors
-
-        Returns:
-            result: Training or test vector numpy arrays
-
-        """
-        return self._vectors(train=True)
-
-    def vectors_test(self):
-        """Get vectors for testing.
-
-        Args:
-            None
-
-        Returns:
-            result: Training or test vector numpy arrays
-
-        """
-        return self._vectors(train=False)
-
-    def _vectors(self, train=True):
-        """Get vectors for learning.
-
-        Args:
-            train: Return training vectors if true, else return test vectors
-
-        Returns:
-            result: Training or test vector numpy arrays
-
-        """
-        # Return
-        if train is True:
-            result = self._data.vectors()[0][:self._training_count]
-        else:
-            result = self._data.vectors()[1][self._training_count:]
-        return result
-
-    def classes_train(self):
-        """Get classes for learning.
-
-        Args:
-            train: Return training classes
-
-        Returns:
-            result: Training or test vector numpy arrays
-
-        """
-        return self._classes(train=True)
-
-    def classes_test(self):
-        """Get classes for testing.
-
-        Args:
-            None
-
-        Returns:
-            result: Training or test vector numpy arrays
-
-        """
-        return self._classes(train=False)
-
-    def _classes(self, train=True):
-        """Get classes for learning.
-
-        Args:
-            train: Return training classes if true, else return test classes
-
-        Returns:
-            result: Training or test vector numpy arrays
-
-        """
-        # Return
-        if train is True:
-            result = self._data.classes()[0][:self._training_count]
-        else:
-            result = self._data.classes()[1][self._training_count:]
-        return result
-
-    def close(self):
-        """Get closing data.
-
-        Args:
-            None
-
-        Returns:
-            result: close numpy array
-
-        """
-        # Return
-        result = self._data.close()
-        return result
-
-    def datetime(self):
-        """Get closing data.
-
-        Args:
-            None
-
-        Returns:
-            result: datetime numpy array
-
-        """
-        # Return
-        result = self._data.datetime()
-        return result
-
-    def labels(self):
-        """Get closing data.
-
-        Args:
-            None
-
-        Returns:
-            result: labels numpy array
-
-        """
-        # Return
-        result = self._data.labels()
-        return result
-
-    def epochs(self):
-        """Get epochs for learning.
-
-        Args:
-            None
-
-        Returns:
-            result: Number of epochs for training
-
-        """
-        # Return
-        result = self._epochs
-        return result
-
-    def batch_size(self):
-        """Get batch_size for learning.
-
-        Args:
-            None
-
-        Returns:
-            result: Number of batch_size for training
-
-        """
-        # Return
-        result = self._batch_size
-        return result
-
-    def epoch_steps(self):
-        """Get number of batch iterations to finish a training epoch.
-
-        Args:
-            None
-
-        Returns:
-            result: Number of batch_size for training
-
-        """
-        # Return
-        result = int(self._training_count / self.batch_size()) + 1
-        return result
-
-
 class RNNGRU(object):
     """Process data for ingestion."""
 
     def __init__(
-            self, data, sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, display=False):
+            self, data, batch_size=64, sequence_length=20,
+            warmup_steps=50, epochs=20, dropout=0, layers=1, patience=10,
+            display=False):
         """Instantiate the class.
 
         Args:
@@ -245,7 +49,8 @@ class RNNGRU(object):
         """
         # Initialize key variables
         self._warmup_steps = warmup_steps
-        self._data = data
+        self._epochs = epochs
+        self._batch_size = batch_size
         self.display = display
         path_checkpoint = '/tmp/checkpoint.keras'
         _layers = int(abs(layers))
@@ -273,30 +78,74 @@ class RNNGRU(object):
         ###################################
 
         # Get data
-        self._y_current = self._data.close()
+        x_data = data.vectors()[0]
+        y_data = data.classes()
+        self._y_current = data.close()
+        self._datetimes = data.datetime()
+        self._target_names = data.labels()
+
+        print('\n> Numpy Data Type: {}'.format(type(x_data)))
+        print("> Numpy Data Shape: {}".format(x_data.shape))
+        print("> Numpy Data Row[0]: {}".format(x_data[0]))
+        print('> Numpy Targets Type: {}'.format(type(y_data)))
+        print("> Numpy Targets Shape: {}".format(y_data.shape))
+
+        '''
+        This is the number of observations (aka. data-points or samples) in
+        the data-set:
+        '''
+
+        num_data = len(x_data)
+
+        '''
+        This is the fraction of the data-set that will be used for the
+        training-set:
+        '''
+
+        train_split = 0.9
+
+        '''
+        This is the number of observations in the training-set:
+        '''
+
+        self.num_train = int(train_split * num_data)
+
+        '''
+        This is the number of observations in the test-set:
+        '''
+
+        self.num_test = num_data - self.num_train
+
+        print('> Number of Samples: {}'.format(num_data))
+        print("> Number of Training Samples: {}".format(self.num_train))
+        print("> Number of Test Samples: {}".format(self.num_test))
 
         # Create test and training data
-        x_train = self._data.vectors_train()
-        x_test = self._data.vectors_test()
-        self._y_train = self._data.classes_train()
-        self._y_test = self._data.classes_test()
-        (self.training_rows, self._training_vector_count) = x_train.shape
-        (self.test_rows, _) = x_test.shape
-        (_, self._training_class_count) = self._y_train.shape
+        x_train = x_data[:self.num_train]
+        x_test = x_data[self.num_train:]
+        self._y_train = y_data[:self.num_train]
+        self._y_test = y_data[self.num_train:]
+        self._num_x_signals = x_data.shape[1]
+        self._num_y_signals = y_data.shape[1]
 
-        print('> Number of Samples: {}'.format(self._y_current.shape[0]))
-        print('> Number of Training Samples: {}'.format(x_train.shape[0]))
-        print('> Number of Training Classes: {}'.format(
-            self._y_train.shape[0]))
-        print('> Number of Test Samples: {}'.format(self.test_rows))
+        print("> Training Minimum Value:", np.min(x_train))
+        print("> Training Maximum Value:", np.max(x_train))
 
-        # Print epoch related data
-        print('> Epochs:', self._data.epochs())
-        print('> Batch Size:', self._data.batch_size())
-        print('> Steps:', self._data.epoch_steps())
+        '''
+        steps_per_epoch is the number of batch iterations before a training
+        epoch is considered finished.
+        '''
 
-        # Display estimated memory footprint of training data.
-        print("> Data size: {:.2f} Bytes".format(x_train.nbytes))
+        self._steps_per_epoch = int(self.num_train / batch_size) + 1
+        print("> Epochs:", epochs)
+        print("> Batch Size:", batch_size)
+        print("> Steps:", self._steps_per_epoch)
+
+        '''
+        Calculate the estimated memory footprint.
+        '''
+
+        print("> Data size: {:.2f} Bytes".format(x_data.nbytes))
 
         '''
         The neural network works best on values roughly between -1 and 1, so we
@@ -348,8 +197,7 @@ class RNNGRU(object):
 
         # We then create the batch-generator.
 
-        generator = self._batch_generator(
-            self._data.batch_size(), sequence_length)
+        generator = self._batch_generator(batch_size, sequence_length)
 
         # Validation Set
 
@@ -389,7 +237,7 @@ class RNNGRU(object):
             units=512,
             return_sequences=True,
             recurrent_dropout=dropout,
-            input_shape=(None, self._training_vector_count,)))
+            input_shape=(None, self._num_x_signals,)))
 
         for _ in range(0, _layers):
             self._model.add(GRU(
@@ -407,8 +255,7 @@ class RNNGRU(object):
         network using the Sigmoid activation function, which squashes the
         output to be between 0 and 1.'''
 
-        self._model.add(
-            Dense(self._training_class_count, activation='sigmoid'))
+        self._model.add(Dense(self._num_y_signals, activation='sigmoid'))
 
         '''
         A problem with using the Sigmoid activation function, is that we can
@@ -435,7 +282,7 @@ class RNNGRU(object):
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
             self._model.add(Dense(
-                self._training_class_count,
+                self._num_y_signals,
                 activation='linear',
                 kernel_initializer=init))
 
@@ -537,8 +384,8 @@ class RNNGRU(object):
 
         self._history = self._model.fit_generator(
             generator=generator,
-            epochs=self._data.epochs(),
-            steps_per_epoch=self._data.epoch_steps(),
+            epochs=self._epochs,
+            steps_per_epoch=self._steps_per_epoch,
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -589,20 +436,18 @@ class RNNGRU(object):
         # Infinite loop.
         while True:
             # Allocate a new array for the batch of input-signals.
-            x_shape = (
-                batch_size, sequence_length, self._training_vector_count)
+            x_shape = (batch_size, sequence_length, self._num_x_signals)
             x_batch = np.zeros(shape=x_shape, dtype=np.float16)
 
             # Allocate a new array for the batch of output-signals.
-            y_shape = (batch_size, sequence_length, self._training_class_count)
+            y_shape = (batch_size, sequence_length, self._num_y_signals)
             y_batch = np.zeros(shape=y_shape, dtype=np.float16)
 
             # Fill the batch with random sequences of data.
             for i in range(batch_size):
                 # Get a random start-index.
                 # This points somewhere into the training-data.
-                idx = np.random.randint(
-                    self.training_rows - sequence_length)
+                idx = np.random.randint(self.num_train - sequence_length)
 
                 # Copy the sequences of data starting at this index.
                 x_batch[i] = self._x_train_scaled[idx:idx+sequence_length]
@@ -703,7 +548,6 @@ class RNNGRU(object):
         """
         # Initialize key variables
         datetimes = {}
-        num_train = self.training_rows
 
         # End-index for the sequences.
         end_idx = start_idx + length
@@ -722,8 +566,8 @@ class RNNGRU(object):
             shim = 'Train'
 
             # Datetimes to use for training
-            datetimes[shim] = self._data.datetime()[
-                :num_train][start_idx:end_idx]
+            datetimes[shim] = self._datetimes[
+                :self.num_train][start_idx:end_idx]
 
         else:
             # Use test-data.
@@ -732,8 +576,8 @@ class RNNGRU(object):
             shim = 'Test'
 
             # Datetimes to use for testing
-            datetimes[shim] = self._data.datetime()[
-                num_train:][start_idx:end_idx]
+            datetimes[shim] = self._datetimes[
+                self.num_train:][start_idx:end_idx]
 
         # Select the sequences from the given start-index and
         # of the given length.
@@ -752,36 +596,32 @@ class RNNGRU(object):
         y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
 
         # For each output-signal.
-        for signal in range(len(self._data.labels())):
+        for signal in range(len(self._target_names)):
             # Assign other variables dependent on the type of data plot
             if train is True:
                 # Only get current values that are a part of the training data
-                current = self._y_current[:num_train][start_idx:end_idx]
+                current = self._y_current[:self.num_train][start_idx:end_idx]
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self._data.datetime()[
-                    :num_train][start_idx:end_idx]
+                datetimes['actual'] = self._datetimes[
+                    :self.num_train][start_idx:end_idx]
 
             else:
                 # Only get current values that are a part of the test data
                 current = self._y_current[
-                    num_train:][start_idx:]
+                    self.num_train:][start_idx:]
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self._data.datetime()[
-                    num_train:][start_idx:]
+                datetimes['actual'] = self._datetimes[
+                    self.num_train:][start_idx:]
 
             # Create a filename
             filename = (
                 '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
-                    self._data.batch_size(),
-                    self._data.epochs(),
-                    num_train,
-                    signal,
-                    int(time.time()),
-                    shim)
+                    self._batch_size, self._epochs, self.num_train, signal,
+                    int(time.time()), shim)
 
             # Get the output-signal predicted by the model.
             signal_pred = y_pred_rescaled[:, signal]
@@ -796,7 +636,7 @@ class RNNGRU(object):
             axis.plot(
                 datetimes[shim][:len(signal_true)],
                 signal_true,
-                label='Current +{}'.format(self._data.labels()[signal]))
+                label='Current +{}'.format(self._target_names[signal]))
             axis.plot(
                 datetimes[shim][:len(signal_pred)],
                 signal_pred,
@@ -805,7 +645,7 @@ class RNNGRU(object):
 
             # Set plot labels and titles
             axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(
-                self._data.labels()[signal], shim))
+                self._target_names[signal], shim))
             axis.set_ylabel('Values')
             axis.legend(
                 bbox_to_anchor=(1.04, 0.5),
@@ -994,14 +834,15 @@ def main():
 
     # Get the data
     lookahead_periods = [1, 3]
-    file_data = database.FileData(filename)
-    training_data = database.Data(file_data, lookahead_periods)
-    data = ModelVariables(training_data, batch_size=batch_size, epochs=epochs)
+    _db = database.FileData(filename)
+    data = database.Data(_db, lookahead_periods)
 
     # Do training
     rnn = RNNGRU(
         data,
+        batch_size=batch_size,
         sequence_length=sequence_length,
+        epochs=epochs,
         dropout=dropout,
         layers=layers,
         patience=patience,
@@ -1053,7 +894,7 @@ def main():
 
     '''
 
-    rnn.plot_train(start_idx=rnn.training_rows - 250, length=250)
+    rnn.plot_train(start_idx=rnn.num_train - 250, length=250)
 
     # Example from Test-Set
 
@@ -1075,7 +916,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    rnn.plot_test(start_idx=rnn.test_rows-30, length=rnn.test_rows)
+    rnn.plot_test(start_idx=rnn.num_test-30, length=rnn.num_test)
 
     # Plot accuracy
     # rnn.plot_accuracy()
