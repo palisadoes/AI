@@ -70,25 +70,24 @@ class _File(object):
             the last value of each sample set.
             '''
             targets[step] = pandas_df[label2predict].shift(-step)
-            columns.append('{}'.format(step))
+            columns.append(step)
 
         # Get vectors
-        x_data = pandas_df.values[:-max(shift_steps)]
+        x_data = pandas_df.values[:]
 
         # Get class values for each vector
         classes = pd.DataFrame(columns=columns)
         for step in shift_steps:
             # Shift each column by the value of its label
-            classes[str(step)] = pandas_df[label2predict].shift(-step)
+            classes[step] = pandas_df[label2predict].shift(-step)
+
         # Create dataframe with only non NaN values
-        y_data = classes.values[:-max(shift_steps)]
+        y_data = classes.values[:]
 
         # Get current values
-        #y_actual = pandas_df[label2predict].values[:-max(shift_steps)]
-        y_actual = self._original_values[label2predict].values
+        y_actual = pandas_df[label2predict].values
 
         # Get datetimes
-        #_datetime = self._datetime[:-max(shift_steps)]
         _datetime = self._datetime[:len(y_actual)]
 
         # Return.
@@ -116,7 +115,6 @@ class ReadFile(_File):
         self._kwindow = 35
         self._dwindow = 5
         self._rsiwindow = self._kwindow
-        self._original_values = None
 
         # Convert the data to a dataframe
         self._dataframe = self._create_dataframe()
@@ -152,13 +150,13 @@ class ReadFile(_File):
         data = data.drop(['time'], axis=1)
 
         # Drop date column from data
-        self._original_values = data.drop(['date'], axis=1)
+        original_values = data.drop(['date'], axis=1)
 
         # Get date values from data
         dates = general.Dates(data['date'], '%Y.%m.%d')
 
         # Calculate the percentage and real differences between columns
-        difference = math.Difference(self._original_values)
+        difference = math.Difference(original_values)
         num_difference = difference.actual()
         pct_difference = difference.relative()
 
@@ -197,12 +195,13 @@ class ReadFile(_File):
         result['dayofyear'] = dates.dayofyear
 
         # Calculate the Stochastic values
-        stochastic = math.Stochastic(self._original_values, window=self._kwindow)
+        stochastic = math.Stochastic(
+            original_values, window=self._kwindow)
         result['k'] = stochastic.k()
         result['d'] = stochastic.d(window=self._dwindow)
 
         # Calculate the Miscellaneous values
-        miscellaneous = math.Misc(self._original_values)
+        miscellaneous = math.Misc(original_values)
         result['rsi'] = miscellaneous.rsi(window=self._rsiwindow)
 
         # Selectively drop columns
@@ -213,6 +212,10 @@ class ReadFile(_File):
         for _column in colunms2drop:
             continue
             result = result.drop([_column], axis=1)
+
+        # Delete the first row of the dataframe as it has NaN values from the
+        # .diff() and .pct_change() operations
+        result = result.iloc[max(1, self._kwindow + self._dwindow):]
 
         # Return
         return result
@@ -249,11 +252,7 @@ class ReadFile(_File):
 
         """
         # Initialize key variables
-        result = self._create_dataframe()
-
-        # Delete the first row of the dataframe as it has NaN values from the
-        # .diff() and .pct_change() operations
-        result = result.iloc[max(1, self._kwindow + self._dwindow):]
+        result = self._dataframe
 
         # Return
         return result

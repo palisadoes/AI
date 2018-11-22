@@ -4,8 +4,8 @@
 # Standard imports
 import argparse
 import sys
+import os
 import time
-import traceback
 from pprint import pprint
 
 # PIP3 imports.
@@ -38,7 +38,7 @@ class RNNGRU(object):
         """Instantiate the class.
 
         Args:
-            data: Tuple of (x_data, ydata, target_names)
+            data: Tuple of (x_data, y_data, target_names)
             periods: Number of timestamp data points per vector
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
@@ -75,14 +75,14 @@ class RNNGRU(object):
         ###################################
 
         # Get data
-        (x_data, ydata, self._y_current,
+        (x_data, y_data, self._y_current,
          self._datetimes, self._target_names) = data
 
         print('\n> Numpy Data Type: {}'.format(type(x_data)))
         print("> Numpy Data Shape: {}".format(x_data.shape))
         print("> Numpy Data Row[0]: {}".format(x_data[0]))
-        print('> Numpy Targets Type: {}'.format(type(ydata)))
-        print("> Numpy Targets Shape: {}".format(ydata.shape))
+        print('> Numpy Targets Type: {}'.format(type(y_data)))
+        print("> Numpy Targets Shape: {}".format(y_data.shape))
 
         '''
         This is the number of observations (aka. data-points or samples) in
@@ -117,10 +117,10 @@ class RNNGRU(object):
         # Create test and training data
         x_train = x_data[:self.num_train]
         x_test = x_data[self.num_train:]
-        self._y_train = ydata[:self.num_train]
-        self._y_test = ydata[self.num_train:]
+        self._y_train = y_data[:self.num_train]
+        self._y_test = y_data[self.num_train:]
         self._num_x_signals = x_data.shape[1]
-        self._num_y_signals = ydata.shape[1]
+        self._num_y_signals = y_data.shape[1]
 
         print("> Training Minimum Value:", np.min(x_train))
         print("> Training Maximum Value:", np.max(x_train))
@@ -311,7 +311,7 @@ class RNNGRU(object):
         This is the callback for writing checkpoints during training.
         '''
 
-        path_checkpoint = '/tmp/23_checkpoint.keras'
+        path_checkpoint = '/tmp/checkpoint.keras.hdf5'
         callback_checkpoint = ModelCheckpoint(filepath=path_checkpoint,
                                               monitor='val_loss',
                                               verbose=1,
@@ -394,13 +394,8 @@ class RNNGRU(object):
         '''
 
         print('> Loading model weights')
-
-        try:
+        if os.path.exists(path_checkpoint):
             self._model.load_weights(path_checkpoint)
-        except Exception as error:
-            print('\n> Error trying to load checkpoint.\n\n{}'.format(error))
-            traceback.print_exc()
-            sys.exit(0)
 
         # Performance on Test-Set
 
@@ -506,7 +501,35 @@ class RNNGRU(object):
 
         return loss_mean
 
-    def plot_comparison(self, start_idx, length=100, train=True):
+    def plot_train(self, start_idx, length=100):
+        """Plot the predicted and true output-signals.
+
+        Args:
+            start_idx: Start-index for the time-series.
+            length: Sequence-length to process and plot.
+
+        Returns:
+            None
+
+        """
+        # Plot
+        self._plot_comparison(start_idx, length=length, train=True)
+
+    def plot_test(self, start_idx, length=100):
+        """Plot the predicted and true output-signals.
+
+        Args:
+            start_idx: Start-index for the time-series.
+            length: Sequence-length to process and plot.
+
+        Returns:
+            None
+
+        """
+        # Plot
+        self._plot_comparison(start_idx, length=length, train=False)
+
+    def _plot_comparison(self, start_idx, length=100, train=True):
         """Plot the predicted and true output-signals.
 
         Args:
@@ -518,39 +541,43 @@ class RNNGRU(object):
             None
 
         """
+        # Initialize key variables
+        datetimes = {}
+
         # End-index for the sequences.
         end_idx = start_idx + length
 
+        # Variables for date formatting
         days = mdates.DayLocator()   # Every day
         months = mdates.MonthLocator()  # Every month
         months_format = mdates.DateFormatter('%b %Y')
+        days_format = mdates.DateFormatter('%d')
 
         # Assign other variables dependent on the type of data we are plotting
-        if train:
+        if train is True:
             # Use training-data.
             x_values = self._x_train_scaled
             y_true = self._y_train
             shim = 'Train'
 
-            # Only get current values that are a part of the training data
-            current = self._y_current[:self.num_train][start_idx:end_idx]
+            # Datetimes to use for training
+            datetimes[shim] = self._datetimes[
+                :self.num_train][start_idx:end_idx]
+
         else:
             # Use test-data.
             x_values = self._x_test_scaled
             y_true = self._y_test
             shim = 'Test'
 
-            # Only get current values that are a part of the test data
-            current = self._y_current[self.num_train:][start_idx:end_idx]
+            # Datetimes to use for testing
+            datetimes[shim] = self._datetimes[
+                self.num_train:][start_idx:end_idx]
 
         # Select the sequences from the given start-index and
         # of the given length.
         x_values = x_values[start_idx:end_idx]
         y_true = y_true[start_idx:end_idx]
-
-        print('\boo -->', len(self._y_current), len(self._datetimes), len(self._y_train) + len(self._y_test))
-
-        datetimes = self._datetimes[start_idx:end_idx]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
@@ -565,6 +592,26 @@ class RNNGRU(object):
 
         # For each output-signal.
         for signal in range(len(self._target_names)):
+            # Assign other variables dependent on the type of data plot
+            if train is True:
+                # Only get current values that are a part of the training data
+                current = self._y_current[:self.num_train][start_idx:end_idx]
+
+                # The number of datetimes for the 'actual' plot must match
+                # that of current values
+                datetimes['actual'] = self._datetimes[
+                    :self.num_train][start_idx:end_idx]
+
+            else:
+                # Only get current values that are a part of the test data
+                current = self._y_current[
+                    self.num_train:][start_idx:]
+
+                # The number of datetimes for the 'actual' plot must match
+                # that of current values
+                datetimes['actual'] = self._datetimes[
+                    self.num_train:][start_idx:]
+
             # Create a filename
             filename = (
                 '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
@@ -582,10 +629,10 @@ class RNNGRU(object):
 
             # Plot and compare the two signals.
             axis.plot(
-                datetimes, signal_true,
+                datetimes[shim], signal_true,
                 label='Current +{}'.format(self._target_names[signal]))
-            axis.plot(datetimes, signal_pred, label='Prediction')
-            axis.plot(datetimes, current, label='Current')
+            axis.plot(datetimes[shim], signal_pred, label='Prediction')
+            axis.plot(datetimes['actual'], current, label='Current')
 
             # Set plot labels and titles
             axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(
@@ -600,24 +647,39 @@ class RNNGRU(object):
             ax.grid(True)
 
             # Add major gridlines
-            ax.xaxis.grid(which='major', color='black', alpha=0.4)
-            ax.yaxis.grid(which='major', color='black', alpha=0.4)
+            ax.xaxis.grid(which='major', color='black', alpha=0.2)
+            ax.yaxis.grid(which='major', color='black', alpha=0.2)
 
             # Add minor ticks (They must be turned on first)
             ax.minorticks_on()
-            ax.xaxis.grid(which='minor', color='black', alpha=0.2)
-            ax.yaxis.grid(which='minor', color='black', alpha=0.2)
+            ax.xaxis.grid(which='minor', color='black', alpha=0.1)
+            ax.yaxis.grid(which='minor', color='black', alpha=0.1)
 
-            # Format the ticks
+            # Format the tick labels
             ax.xaxis.set_major_locator(months)
             ax.xaxis.set_major_formatter(months_format)
             ax.xaxis.set_minor_locator(days)
 
-            # Plot grey box for warmup-period.
-            if 0 < start_idx < self._warmup_steps:
-                plt.axvspan(
-                    datetimes[start_idx], datetimes[self._warmup_steps],
-                    facecolor='black', alpha=0.15)
+            # Remove tick marks
+            ax.tick_params(axis='both', which='both', length=0)
+
+            # Print day numbers on xaxis for Test data only
+            if train is False:
+                ax.xaxis.set_minor_formatter(days_format)
+                plt.setp(ax.xaxis.get_minorticklabels(), rotation=90)
+
+            # Rotates and right aligns the x labels, and moves the bottom of
+            # the axes up to make room for them
+            fig.autofmt_xdate()
+
+            # Plot grey box for warmup-period if we are working with training
+            # data and the start is within the warmup-period
+            if (0 < start_idx < self._warmup_steps):
+                if train is True:
+                    plt.axvspan(
+                        datetimes[shim][start_idx],
+                        datetimes[shim][self._warmup_steps],
+                        facecolor='black', alpha=0.15)
 
             # Show and save the image
             if self.display is True:
@@ -659,6 +721,7 @@ class RNNGRU(object):
         plt.xlabel('Epoch')
         plt.legend(['Train', 'Test'], loc='upper left')
         plt.show()
+
 
 def main():
     """Generate forecasts.
@@ -831,16 +894,7 @@ def main():
 
     '''
 
-    # rnn.plot_comparison(start_idx=1, length=1000, train=True)
-    # time.sleep(2)
-    '''rnn.plot_comparison(
-        start_idx=rnn.num_train - 1000, length=1000 - 1, train=True)
-    time.sleep(1.1  )
-    rnn.plot_comparison(
-        start_idx=1, length=rnn.num_train - 1, train=True)'''
-
-    rnn.plot_comparison(
-        start_idx=rnn.num_train - 250, length=250, train=True)
+    rnn.plot_train(start_idx=rnn.num_train - 250, length=250)
 
     # Example from Test-Set
 
@@ -862,13 +916,13 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    rnn.plot_comparison(start_idx=1, length=rnn.num_test - 1, train=False)
+    rnn.plot_test(start_idx=rnn.num_test-30, length=rnn.num_test)
 
     # Plot accuracy
     # rnn.plot_accuracy()
 
     # Print duration
-    print("> Duration: {}s".format(duration))
+    print("> Training Duration: {}s".format(duration))
 
 
 if __name__ == "__main__":
