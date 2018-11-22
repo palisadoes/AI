@@ -58,6 +58,8 @@ class _File(object):
         pandas_df = self._dataframe
         targets = {}
         columns = []
+        crop_by = max(shift_steps)
+        # crop_by = 1
         label2predict = 'close'
 
         # Create column labels for dataframe columns
@@ -72,20 +74,19 @@ class _File(object):
             targets[step] = pandas_df[label2predict].shift(-step)
             columns.append(step)
 
-        # Get vectors
-        x_data = pandas_df.values[:]
-
         # Get class values for each vector
         classes = pd.DataFrame(columns=columns)
         for step in shift_steps:
             # Shift each column by the value of its label
             classes[step] = pandas_df[label2predict].shift(-step)
 
-        # Create dataframe with only non NaN values
-        y_data = classes.values[:]
+        # Create class and vector dataframes with only non NaN values
+        # (val_loss won't improve otherwise)
+        y_data = classes.values[:-crop_by]
+        x_data = pandas_df.values[:-crop_by]
 
         # Get current values
-        y_actual = pandas_df[label2predict].values
+        y_actual = pandas_df[label2predict].values[:]
 
         # Get datetimes
         _datetime = self._datetime[:len(y_actual)]

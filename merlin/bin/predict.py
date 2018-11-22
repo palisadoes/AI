@@ -54,7 +54,12 @@ class RNNGRU(object):
         self._epochs = epochs
         self._batch_size = batch_size
         self.display = display
+        path_checkpoint = '/tmp/checkpoint.keras'
         _layers = int(abs(layers))
+
+        # Delete any stale checkpoint file
+        if os.path.exists(path_checkpoint) is True:
+            os.remove(path_checkpoint)
 
         ###################################
         # TensorFlow wizardry
@@ -77,6 +82,11 @@ class RNNGRU(object):
         # Get data
         (x_data, y_data, self._y_current,
          self._datetimes, self._target_names) = data
+
+        #print(x_data)
+        #print('\n')
+        #print(y_data)
+        #sys.exit(0)
 
         print('\n> Numpy Data Type: {}'.format(type(x_data)))
         print("> Numpy Data Shape: {}".format(x_data.shape))
@@ -311,7 +321,6 @@ class RNNGRU(object):
         This is the callback for writing checkpoints during training.
         '''
 
-        path_checkpoint = '/tmp/checkpoint.keras.hdf5'
         callback_checkpoint = ModelCheckpoint(filepath=path_checkpoint,
                                               monitor='val_loss',
                                               verbose=1,
@@ -629,9 +638,13 @@ class RNNGRU(object):
 
             # Plot and compare the two signals.
             axis.plot(
-                datetimes[shim], signal_true,
+                datetimes[shim][:len(signal_true)],
+                signal_true,
                 label='Current +{}'.format(self._target_names[signal]))
-            axis.plot(datetimes[shim], signal_pred, label='Prediction')
+            axis.plot(
+                datetimes[shim][:len(signal_pred)],
+                signal_pred,
+                label='Prediction')
             axis.plot(datetimes['actual'], current, label='Current')
 
             # Set plot labels and titles
@@ -834,7 +847,7 @@ def main():
     else:
         _db = database.ReadFile2(filename)
 
-    data = _db.vector_targets([1, 3])
+    data = _db.vector_targets([3])
 
     # Do training
     rnn = RNNGRU(
