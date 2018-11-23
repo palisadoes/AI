@@ -11,14 +11,14 @@ from merlin import general
 from merlin import math
 
 
-class Data(object):
-    """Super class for file data ingestion."""
+class DataSource(object):
+    """Super class handling data retrieval."""
 
-    def __init__(self, _data, shift_steps):
+    def __init__(self):
         """Intialize the class.
 
         Args:
-            _data: File or DB data object
+            None
 
         Returns:
             None
@@ -30,28 +30,31 @@ class Data(object):
         self._rsiwindow = self._kwindow
         self._ignore_row_count = max(1, self._kwindow + self._dwindow)
 
-        # Initialize key variables
-        self._values = _data.values()
-        self._dates = _data.dates()
-        self._shift_steps = shift_steps
-        self._label2predict = 'close'
-
-        # Process data
-        (self._vectors, self._classes) = self._vector_targets()
-
-    def labels(self):
-        """Get class labels.
+    def values(self):
+        """Process file data.
 
         Args:
             None
 
         Returns:
-            result: list of labels
+            result: DataFrame of values
 
         """
-        # Return
-        result = self._shift_steps
-        return result
+        # Placeholder
+        pass
+
+    def dates(self):
+        """Process file data.
+
+        Args:
+            None
+
+        Returns:
+            result: DataFrame of dates
+
+        """
+        # Placeholder
+        pass
 
     def open(self):
         """Get open values.
@@ -64,7 +67,7 @@ class Data(object):
 
         """
         # Return
-        result = self._values['open'][self._ignore_row_count:]
+        result = self.values()['open'][self._ignore_row_count:]
         return result
 
     def high(self):
@@ -78,7 +81,7 @@ class Data(object):
 
         """
         # Return
-        result = self._values['high'][self._ignore_row_count:]
+        result = self.values()['high'][self._ignore_row_count:]
         return result
 
     def low(self):
@@ -92,7 +95,7 @@ class Data(object):
 
         """
         # Return
-        result = self._values['low'][self._ignore_row_count:]
+        result = self.values()['low'][self._ignore_row_count:]
         return result
 
     def close(self):
@@ -106,7 +109,7 @@ class Data(object):
 
         """
         # Return
-        result = self._values['close'][self._ignore_row_count:]
+        result = self.values()['close'][self._ignore_row_count:]
         return result
 
     def volume(self):
@@ -120,7 +123,71 @@ class Data(object):
 
         """
         # Return
-        result = self._values['volume'][self._ignore_row_count:]
+        result = self.values()['volume'][self._ignore_row_count:]
+        return result
+
+    def dataframe(self):
+        """Create vectors from data.
+
+        Args:
+            shift_steps: List of steps
+
+        Returns:
+            result: dataframe for learning
+
+        """
+        # Calculate the percentage and real differences between columns
+        difference = math.Difference(self.values())
+        num_difference = difference.actual()
+        pct_difference = difference.relative()
+
+        # Create result to return
+        result = pd.DataFrame(columns=[
+            'open', 'high', 'low', 'close',
+            'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
+            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
+            'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
+            'k', 'd', 'rsi'])
+
+        # Add current value columns
+        result['open'] = self.values()['open']
+        result['high'] = self.values()['high']
+        result['low'] = self.values()['low']
+        result['close'] = self.values()['close']
+
+        # Add columns of differences
+        result['num_diff_open'] = num_difference['open']
+        result['num_diff_high'] = num_difference['high']
+        result['num_diff_low'] = num_difference['low']
+        result['num_diff_close'] = num_difference['close']
+        result['pct_diff_open'] = pct_difference['open']
+        result['pct_diff_high'] = pct_difference['high']
+        result['pct_diff_low'] = pct_difference['low']
+        result['pct_diff_close'] = pct_difference['close']
+        result['pct_diff_volume'] = pct_difference['volume']
+
+        # Add date related columns
+        result['day'] = self.dates().day
+        result['weekday'] = self.dates().weekday
+        result['week'] = self.dates().week
+        result['month'] = self.dates().month
+        result['quarter'] = self.dates().quarter
+        result['dayofyear'] = self.dates().dayofyear
+
+        # Calculate the Stochastic values
+        stochastic = math.Stochastic(self.values(), window=self._kwindow)
+        result['k'] = stochastic.k()
+        result['d'] = stochastic.d(window=self._dwindow)
+
+        # Calculate the Miscellaneous values
+        miscellaneous = math.Misc(self.values())
+        result['rsi'] = miscellaneous.rsi(window=self._rsiwindow)
+
+        # Delete the first row of the dataframe as it has NaN values from the
+        # .diff() and .pct_change() operations
+        result = result.iloc[self._ignore_row_count:]
+
+        # Return
         return result
 
     def datetime(self):
@@ -135,164 +202,16 @@ class Data(object):
         """
         # Initialize key variables
         _result = pd.to_datetime(pd.DataFrame({
-            'year': self._dates.year.values.tolist(),
-            'month': self._dates.month.values.tolist(),
-            'day': self._dates.day.values.tolist()})).values
+            'year': self.dates().year.values.tolist(),
+            'month': self.dates().month.values.tolist(),
+            'day': self.dates().day.values.tolist()})).values
         result = _result[self._ignore_row_count:]
 
         # Return
         return result
 
-    def vectors(self):
-        """Create a numpy array of vectors.
 
-        Args:
-            None
-
-        Returns:
-            result: Tuple of numpy array of vectors. (train, test)
-
-        """
-        # Return
-        result = (self._vectors['train'], self._vectors['all'])
-        return result
-
-    def classes(self):
-        """Create a numpy array of classes.
-
-        Args:
-            None
-
-        Returns:
-            result: numpy array of classes
-
-        """
-        # Return
-        result = (self._classes['train'], self._classes['all'])
-        return result
-
-    def _vector_targets(self):
-        """Create vectors and targets from data.
-
-        Args:
-            shift_steps: List of steps
-
-        Returns:
-            result: dataframe for learning
-
-        """
-        # Initialize key variables
-        pandas_df = self._raw_vectors()
-        targets = {}
-        columns = []
-        crop_by = max(self._shift_steps)
-        label2predict = 'close'
-        x_data = {'train': None, 'all': None}
-        y_data = {'train': None, 'all': None}
-
-        # Create column labels for dataframe columns
-        # Create shifted values for learning
-        for step in self._shift_steps:
-            '''
-            Note the negative time-shift!
-
-            We want the future state targets to line up with the timestamp of
-            the last value of each sample set.
-            '''
-            targets[step] = pandas_df[label2predict].shift(-step)
-            columns.append(step)
-
-        # Get class values for each vector
-        classes = pd.DataFrame(columns=columns)
-        for step in self._shift_steps:
-            # Shift each column by the value of its label
-            classes[step] = pandas_df[label2predict].shift(-step)
-
-        # Create class and vector dataframes with only non NaN values
-        # (val_loss won't improve otherwise)
-        y_data['train'] = classes.values[:-crop_by]
-        y_data['all'] = classes.values[:]
-        x_data['train'] = pandas_df.values[:-crop_by]
-        x_data['all'] = pandas_df.values[:]
-
-        # Return
-        return(x_data, y_data)
-
-    def _raw_vectors(self):
-        """Create vectors from data.
-
-        Args:
-            shift_steps: List of steps
-
-        Returns:
-            result: dataframe for learning
-
-        """
-        # Calculate the percentage and real differences between columns
-        difference = math.Difference(self._values)
-        num_difference = difference.actual()
-        pct_difference = difference.relative()
-
-        # Create result to return
-        result = pd.DataFrame(columns=[
-            'open', 'high', 'low', 'close',
-            'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
-            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
-            'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
-            'k', 'd', 'rsi'])
-
-        # Add current value columns
-        result['open'] = self._values['open']
-        result['high'] = self._values['high']
-        result['low'] = self._values['low']
-        result['close'] = self._values['close']
-
-        # Add columns of differences
-        result['num_diff_open'] = num_difference['open']
-        result['num_diff_high'] = num_difference['high']
-        result['num_diff_low'] = num_difference['low']
-        result['num_diff_close'] = num_difference['close']
-        result['pct_diff_open'] = pct_difference['open']
-        result['pct_diff_high'] = pct_difference['high']
-        result['pct_diff_low'] = pct_difference['low']
-        result['pct_diff_close'] = pct_difference['close']
-        result['pct_diff_volume'] = pct_difference['volume']
-
-        # Add date related columns
-        result['day'] = self._dates.day
-        result['weekday'] = self._dates.weekday
-        result['week'] = self._dates.week
-        result['month'] = self._dates.month
-        result['quarter'] = self._dates.quarter
-        result['dayofyear'] = self._dates.dayofyear
-
-        # Calculate the Stochastic values
-        stochastic = math.Stochastic(self._values, window=self._kwindow)
-        result['k'] = stochastic.k()
-        result['d'] = stochastic.d(window=self._dwindow)
-
-        # Calculate the Miscellaneous values
-        miscellaneous = math.Misc(self._values)
-        result['rsi'] = miscellaneous.rsi(window=self._rsiwindow)
-
-        # Selectively drop columns
-        colunms2drop = [
-            'num_diff_open',
-            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
-            'pct_diff_high', 'pct_diff_low', 'pct_diff_close']
-        for _column in colunms2drop:
-            continue
-            result = result.drop([_column], axis=1)
-
-        # Delete the first row of the dataframe as it has NaN values from the
-        # .diff() and .pct_change() operations
-        result = result.iloc[self._ignore_row_count:]
-
-        # Return
-        return result
-
-
-class FileData(object):
+class DataFile(DataSource):
     """Class ingests file data."""
 
     def __init__(self, filename):
@@ -306,6 +225,9 @@ class FileData(object):
             None
 
         """
+        # Setup inheritance
+        DataSource.__init__(self)
+
         # Initialize key variables
         self._filename = filename
 
@@ -363,3 +285,127 @@ class FileData(object):
         # Return
         result = self._dates
         return result
+
+
+class DataGRU(DataFile):
+    """Super class for file data ingestion."""
+
+    def __init__(self, filename, shift_steps):
+        """Intialize the class.
+
+        Args:
+            filename: Name of file
+
+        Returns:
+            None
+
+        """
+        # Setup inheritance
+        DataFile.__init__(self, filename)
+
+        # Initialize key variables
+        self._shift_steps = shift_steps
+        self._label2predict = 'close'
+
+        # Process data
+        (self._vectors, self._classes) = self._vector_targets()
+
+    def labels(self):
+        """Get class labels.
+
+        Args:
+            None
+
+        Returns:
+            result: list of labels
+
+        """
+        # Return
+        result = self._shift_steps
+        return result
+
+    def vectors(self):
+        """Create a numpy array of vectors.
+
+        Args:
+            None
+
+        Returns:
+            result: Tuple of numpy array of vectors. (train, test)
+
+        """
+        # Return
+        result = (self._vectors['train'], self._vectors['all'])
+        return result
+
+    def classes(self):
+        """Create a numpy array of classes.
+
+        Args:
+            None
+
+        Returns:
+            result: numpy array of classes
+
+        """
+        # Return
+        result = (self._classes['train'], self._classes['all'])
+        return result
+
+    def _vector_targets(self):
+        """Create vectors and targets from data.
+
+        Args:
+            shift_steps: List of steps
+
+        Returns:
+            result: dataframe for learning
+
+        """
+        # Initialize key variables
+        targets = {}
+        columns = []
+        crop_by = max(self._shift_steps)
+        label2predict = 'close'
+        x_data = {'train': None, 'all': None}
+        y_data = {'train': None, 'all': None}
+        desired_columns = [
+            'open', 'high', 'low', 'close',
+            'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
+            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
+            'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
+            'k', 'd', 'rsi']
+
+        # Remove all undesirable columns from the dataframe
+        pandas_df = self.dataframe()
+        imported_columns = list(pandas_df)
+        for column in imported_columns:
+            if column not in desired_columns:
+                pandas_df.drop(column, axis=1)
+
+        # Create shifted values for learning
+        for step in self._shift_steps:
+            '''
+            Note the negative time-shift!
+
+            We want the future state targets to line up with the timestamp of
+            the last value of each sample set.
+            '''
+            targets[step] = pandas_df[label2predict].shift(-step)
+            columns.append(step)
+
+        # Get class values for each vector
+        classes = pd.DataFrame(columns=columns)
+        for step in self._shift_steps:
+            # Shift each column by the value of its label
+            classes[step] = pandas_df[label2predict].shift(-step)
+
+        # Create class and vector dataframes with only non NaN values
+        # (val_loss won't improve otherwise)
+        y_data['train'] = classes.values[:-crop_by]
+        y_data['all'] = classes.values[:]
+        x_data['train'] = pandas_df.values[:-crop_by]
+        x_data['all'] = pandas_df.values[:]
+
+        # Return
+        return(x_data, y_data)

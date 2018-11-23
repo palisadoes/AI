@@ -429,14 +429,14 @@ class RNNGRU(object):
         '''
 
         self._model.add(GRU(
-            units=512,
+            units=1024,
             return_sequences=True,
             recurrent_dropout=dropout,
             input_shape=(None, self._training_vector_count,)))
 
         for _ in range(0, _layers):
             self._model.add(GRU(
-                units=512,
+                units=1024,
                 recurrent_dropout=dropout,
                 return_sequences=True))
 
@@ -1036,8 +1036,7 @@ def main():
 
     # Get the data
     lookahead_periods = [1, 3]
-    file_data = database.FileData(filename)
-    training_data = database.Data(file_data, lookahead_periods)
+    training_data = database.DataGRU(filename, lookahead_periods)
     data = ModelVariables(training_data, batch_size=batch_size, epochs=epochs)
 
     # Do training
