@@ -807,7 +807,7 @@ class RNNGRU(object):
                     :num_train][start_idx:end_idx]
 
             else:
-                # Only get current values that are a part of the test data
+                # Only get current values that are a part of the test data.
                 current = self._y_current[
                     num_train:][start_idx:]
 
