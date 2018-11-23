@@ -71,6 +71,18 @@ class ModelVariables(object):
         return self._vectors(train=True)
 
     def vectors_test(self):
+        """Get vectors for validation testing.
+
+        Args:
+            None
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._vectors(train=False, test_validation=True)
+
+    def vectors_test_all(self):
         """Get vectors for testing.
 
         Args:
@@ -80,10 +92,13 @@ class ModelVariables(object):
             result: Training or test vector numpy arrays
 
         """
-        return self._vectors(train=False)
+        return self._vectors(train=False, test_validation=False)
 
-    def _vectors(self, train=True):
+    def _vectors(self, train=True, test_validation=True):
         """Get vectors for learning.
+
+        Note: Neither test nor training data can have NaN values for training
+        to occur. We therefore have to trim the NaN values from the test data.
 
         Args:
             train: Return training vectors if true, else return test vectors
@@ -92,15 +107,21 @@ class ModelVariables(object):
             result: Training or test vector numpy arrays
 
         """
-        # Return
+        # Obtain vector data
         if train is True:
             result = self._data.vectors()[0][:self._training_count]
         else:
-            result = self._data.vectors()[1][self._training_count:]
+            if test_validation is True:
+                result = self._data.vectors()[1][
+                    self._training_count:-max(self._data.labels())]
+            else:
+                result = self._data.vectors()[1][self._training_count:]
+
+        # Return
         return result
 
     def classes_train(self):
-        """Get classes for learning.
+        """Get classes for training.
 
         Args:
             train: Return training classes
@@ -112,7 +133,7 @@ class ModelVariables(object):
         return self._classes(train=True)
 
     def classes_test(self):
-        """Get classes for testing.
+        """Get classes for validation testing.
 
         Args:
             None
@@ -126,6 +147,12 @@ class ModelVariables(object):
     def _classes(self, train=True):
         """Get classes for learning.
 
+        Note: Neither test nor training data can have NaN values for training
+        to occur. We therefore have to trim the NaN values from the test data.
+
+        NaN values occur in the vector numpy arrays. We have to make the number
+        matching class rows to be the same.
+
         Args:
             train: Return training classes if true, else return test classes
 
@@ -137,7 +164,8 @@ class ModelVariables(object):
         if train is True:
             result = self._data.classes()[0][:self._training_count]
         else:
-            result = self._data.classes()[1][self._training_count:]
+            result = self._data.classes()[1][
+                self._training_count:-max(self._data.labels())]
         return result
 
     def close(self):
@@ -275,20 +303,35 @@ class RNNGRU(object):
         # Get data
         self._y_current = self._data.close()
 
-        # Create test and training data
+        # Create training arrays
         x_train = self._data.vectors_train()
-        x_test = self._data.vectors_test()
         self._y_train = self._data.classes_train()
-        self._y_test = self._data.classes_test()
+
+        # Create test arrays for VALIDATION and EVALUATION
+        xv_test = self._data.vectors_test()
+        self._yv_test = self._data.classes_test()
+
         (self.training_rows, self._training_vector_count) = x_train.shape
-        (self.test_rows, _) = x_test.shape
+        (self.test_rows, _) = xv_test.shape
         (_, self._training_class_count) = self._y_train.shape
+
+        # Print stuff
+        print('\n> Numpy Data Type: {}'.format(type(x_train)))
+        print("> Numpy Data Shape: {}".format(x_train.shape))
+        print("> Numpy Data Row[0]: {}".format(x_train[0]))
+        print("> Numpy Data Row[Last]: {}".format(x_train[-1]))
+        print('> Numpy Targets Type: {}'.format(type(self._y_train)))
+        print("> Numpy Targets Shape: {}".format(self._y_train.shape))
 
         print('> Number of Samples: {}'.format(self._y_current.shape[0]))
         print('> Number of Training Samples: {}'.format(x_train.shape[0]))
         print('> Number of Training Classes: {}'.format(
-            self._y_train.shape[0]))
+            self._training_class_count))
         print('> Number of Test Samples: {}'.format(self.test_rows))
+        print("> Training Minimum Value:", np.min(x_train))
+        print("> Training Maximum Value:", np.max(x_train))
+        print('> Number X signals: {}'.format(self._training_vector_count))
+        print('> Number Y signals: {}'.format(self._training_class_count))
 
         # Print epoch related data
         print('> Epochs:', self._data.epochs())
@@ -317,7 +360,7 @@ class RNNGRU(object):
         print('> Scaled Training Maximum Value: {}'.format(
             np.max(self._x_train_scaled)))
 
-        self._x_test_scaled = x_scaler.transform(x_test)
+        self._xv_test_scaled = x_scaler.transform(xv_test)
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -329,7 +372,7 @@ class RNNGRU(object):
 
         self._y_scaler = MinMaxScaler()
         self._y_train_scaled = self._y_scaler.fit_transform(self._y_train)
-        y_test_scaled = self._y_scaler.transform(self._y_test)
+        yv_test_scaled = self._y_scaler.transform(self._yv_test)
 
         # Data Generator
 
@@ -368,8 +411,8 @@ class RNNGRU(object):
         sequence.
         '''
 
-        validation_data = (np.expand_dims(self._x_test_scaled, axis=0),
-                           np.expand_dims(y_test_scaled, axis=0))
+        validation_data = (np.expand_dims(self._xv_test_scaled, axis=0),
+                           np.expand_dims(yv_test_scaled, axis=0))
 
         # Create the Recurrent Neural Network
 
@@ -565,8 +608,8 @@ class RNNGRU(object):
         '''
 
         result = self._model.evaluate(
-            x=np.expand_dims(self._x_test_scaled, axis=0),
-            y=np.expand_dims(y_test_scaled, axis=0))
+            x=np.expand_dims(self._xv_test_scaled, axis=0),
+            y=np.expand_dims(yv_test_scaled, axis=0))
 
         print('> Loss (test-set): {}'.format(result))
 
@@ -727,8 +770,8 @@ class RNNGRU(object):
 
         else:
             # Use test-data.
-            x_values = self._x_test_scaled
-            y_true = self._y_test
+            x_values = self._xv_test_scaled
+            y_true = self._yv_test
             shim = 'Test'
 
             # Datetimes to use for testing

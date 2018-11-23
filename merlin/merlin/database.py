@@ -1,5 +1,8 @@
 """Library to process the ingest of data files."""
 
+# Standard imports
+import sys
+
 # PIP imports
 import pandas as pd
 
@@ -21,17 +24,20 @@ class Data(object):
             None
 
         """
+        # Setup classwide variables
+        self._kwindow = 35
+        self._dwindow = 5
+        self._rsiwindow = self._kwindow
+        self._ignore_row_count = max(1, self._kwindow + self._dwindow)
+
         # Initialize key variables
         self._values = _data.values()
         self._dates = _data.dates()
         self._shift_steps = shift_steps
         self._label2predict = 'close'
-        (self._vectors, self._classes) = self._vector_targets()
 
-        # Setup classwide variables
-        self._kwindow = 35
-        self._dwindow = 5
-        self._rsiwindow = self._kwindow
+        # Process data
+        (self._vectors, self._classes) = self._vector_targets()
 
     def labels(self):
         """Get class labels.
@@ -58,7 +64,7 @@ class Data(object):
 
         """
         # Return
-        result = self._values['open']
+        result = self._values['open'][self._ignore_row_count:]
         return result
 
     def high(self):
@@ -72,7 +78,7 @@ class Data(object):
 
         """
         # Return
-        result = self._values['high']
+        result = self._values['high'][self._ignore_row_count:]
         return result
 
     def low(self):
@@ -86,7 +92,7 @@ class Data(object):
 
         """
         # Return
-        result = self._values['low']
+        result = self._values['low'][self._ignore_row_count:]
         return result
 
     def close(self):
@@ -100,7 +106,21 @@ class Data(object):
 
         """
         # Return
-        result = self._values['close']
+        result = self._values['close'][self._ignore_row_count:]
+        return result
+
+    def volume(self):
+        """Get volume values.
+
+        Args:
+            None
+
+        Returns:
+            result: Series for learning
+
+        """
+        # Return
+        result = self._values['volume'][self._ignore_row_count:]
         return result
 
     def datetime(self):
@@ -114,10 +134,11 @@ class Data(object):
 
         """
         # Initialize key variables
-        result = pd.to_datetime(pd.DataFrame({
+        _result = pd.to_datetime(pd.DataFrame({
             'year': self._dates.year.values.tolist(),
             'month': self._dates.month.values.tolist(),
             'day': self._dates.day.values.tolist()})).values
+        result = _result[self._ignore_row_count:]
 
         # Return
         return result
@@ -161,7 +182,7 @@ class Data(object):
 
         """
         # Initialize key variables
-        pandas_df = self._values
+        pandas_df = self._raw_vectors()
         targets = {}
         columns = []
         crop_by = max(self._shift_steps)
@@ -265,7 +286,7 @@ class Data(object):
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
-        result = result.iloc[max(1, self._kwindow + self._dwindow):]
+        result = result.iloc[self._ignore_row_count:]
 
         # Return
         return result
