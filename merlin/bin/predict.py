@@ -352,15 +352,15 @@ class RNNGRU(object):
         the training-data.
         '''
 
-        x_scaler = MinMaxScaler()
-        self._x_train_scaled = x_scaler.fit_transform(x_train)
+        self._x_scaler = MinMaxScaler()
+        self._x_train_scaled = self._x_scaler.fit_transform(x_train)
 
         print('> Scaled Training Minimum Value: {}'.format(
             np.min(self._x_train_scaled)))
         print('> Scaled Training Maximum Value: {}'.format(
             np.max(self._x_train_scaled)))
 
-        self._xv_test_scaled = x_scaler.transform(xv_test)
+        self._xv_test_scaled = self._x_scaler.transform(xv_test)
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -760,8 +760,8 @@ class RNNGRU(object):
         # Assign other variables dependent on the type of data we are plotting
         if train is True:
             # Use training-data.
-            x_values = self._x_train_scaled
-            y_true = self._y_train
+            x_values = self._x_train_scaled[start_idx:end_idx]
+            y_true = self._y_train[start_idx:end_idx]
             shim = 'Train'
 
             # Datetimes to use for training
@@ -769,19 +769,18 @@ class RNNGRU(object):
                 :num_train][start_idx:end_idx]
 
         else:
+            # Scale the data
+            x_test_scaled = self._x_scaler.transform(
+                self._data.vectors_test_all())
+
             # Use test-data.
-            x_values = self._xv_test_scaled
-            y_true = self._yv_test
+            x_values = x_test_scaled[start_idx:end_idx]
+            y_true = self._yv_test[start_idx:end_idx]
             shim = 'Test'
 
             # Datetimes to use for testing
             datetimes[shim] = self._data.datetime()[
                 num_train:][start_idx:end_idx]
-
-        # Select the sequences from the given start-index and
-        # of the given length.
-        x_values = x_values[start_idx:end_idx]
-        y_true = y_true[start_idx:end_idx]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
