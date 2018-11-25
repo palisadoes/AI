@@ -6,7 +6,7 @@ import sys
 # PIP imports
 import pandas as pd
 import numpy as np
-from ta import trend
+from ta import trend, momentum
 
 # Append custom application libraries
 from merlin import general
@@ -110,7 +110,11 @@ class DataSource(_DataFile):
             'ma_window': 13,
             'vma_window': 2,
             'vma_window_long': 14,
-            'adx_window': 14
+            'adx_window': 14,
+            'macd_fast': 12,
+            'macd_slow': 26,
+            'macd_sign': 9,
+            'proc_window': 5
         }
         self._ignore_row_count = max(
             1,
@@ -118,7 +122,7 @@ class DataSource(_DataFile):
             max(self._globals.values()))
 
         # Create the dataframe to be used by all other methods
-        self._dataframe = self._dataframe()
+        self._dataframe = self.__dataframe()
 
     def open(self):
         """Get open values.
@@ -190,7 +194,7 @@ class DataSource(_DataFile):
         result = self.values()['volume'][self._ignore_row_count:]
         return result
 
-    def _dataframe(self):
+    def __dataframe(self):
         """Create vectors from data.
 
         Args:
@@ -211,9 +215,9 @@ class DataSource(_DataFile):
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
-            'k', 'd', 'rsi', 'adx',
+            'k', 'd', 'rsi', 'adx', 'macd_diff', 'proc',
             'ma_open', 'ma_high', 'ma_low', 'ma_close',
-            'ma_volume', 'ma_volume_long'])
+            'ma_volume', 'ma_volume_long', 'ma_volume_delta'])
 
         # Add current value columns
         result['open'] = self.values()['open']
@@ -254,6 +258,8 @@ class DataSource(_DataFile):
             self._globals['vma_window']).mean()
         result['ma_volume_long'] = result['volume'].rolling(
             self._globals['vma_window_long']).mean()
+        result['ma_volume_delta'] = result[
+            'ma_volume_long'] - result['ma_volume']
 
         # Calculate the Stochastic values
         stochastic = math.Stochastic(
@@ -262,8 +268,15 @@ class DataSource(_DataFile):
         result['d'] = stochastic.d(window=self._globals['dwindow'])
 
         # Calculate the Miscellaneous values
+        '''miscellaneous = math.Misc(self.values())
+        result['rsi'] = miscellaneous.rsi(window=self._globals['rsiwindow'])'''
+        result['rsi'] = momentum.rsi(
+            result['close'],
+            n=self._globals['rsiwindow'],
+            fillna=False)
+
         miscellaneous = math.Misc(self.values())
-        result['rsi'] = miscellaneous.rsi(window=self._globals['rsiwindow'])
+        result['proc'] = miscellaneous.proc(self._globals['proc_window'])
 
         # Calculate ADX
         result['adx'] = trend.adx(
@@ -271,6 +284,13 @@ class DataSource(_DataFile):
             result['low'],
             result['close'],
             n=self._globals['adx_window'])
+
+        # Calculate MACD difference
+        result['macd_diff'] = trend.macd_diff(
+            result['close'],
+            n_fast=self._globals['macd_sign'],
+            n_slow=self._globals['macd_slow'],
+            n_sign=self._globals['macd_sign'])
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
@@ -387,14 +407,14 @@ class DataGRU(DataSource):
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
-            'k', 'd', 'rsi']
+            'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
 
         # Remove all undesirable columns from the dataframe
         pandas_df = self._dataframe
         imported_columns = list(pandas_df)
         for column in imported_columns:
             if column not in desired_columns:
-                pandas_df.drop(column, axis=1)
+                pandas_df = pandas_df.drop(column, axis=1)
 
         # Create shifted values for learning
         for step in self._shift_steps:
@@ -427,11 +447,12 @@ class DataGRU(DataSource):
 class DataDT(DataSource):
     """Prepare data for use by decision tree models."""
 
-    def __init__(self, filename):
+    def __init__(self, filename, actuals=False, steps=0):
         """Intialize the class.
 
         Args:
             filename: Name of file
+            actuals: If True use actual values not 1, 0, -1 wherever possible
 
         Returns:
             None
@@ -441,6 +462,8 @@ class DataDT(DataSource):
         DataSource.__init__(self, filename)
 
         # Setup global variables
+        self._steps = steps
+        self._actuals = actuals
         self._buy = 1
         self._sell = -1
         self._hold = 0
@@ -460,10 +483,24 @@ class DataDT(DataSource):
 
         """
         # Initialize key variables
-        close = self._dataframe['pct_diff_close'].values
-        _result = (close > 0).astype(int) * self._buy
+        close = self._dataframe['pct_diff_close']
+
+        # Shift data and Trim last rows
+        if bool(self._steps) is True:
+            close = close.shift(-abs(self._steps))
+            close = close.iloc[:-abs(self._steps)]
+
+        # Convert DataFrame to Numpy array
+        close = close.values
+        buy = (close > 0).astype(int) * self._buy
+        sell = (close < 0).astype(int) * self._sell
+        _result = buy + sell
+
+        # Reshape Numpy array
         rows = _result.shape[0]
         result = _result.reshape(rows, 1)
+
+        # pandas_df[label2predict].shift(-step)
 
         # Return
         return result
@@ -479,15 +516,31 @@ class DataDT(DataSource):
 
         """
         # Initialize key variables
-        _result = pd.DataFrame(columns=['k', 'd', 'rsi', 'volume', 'adx'])
+        _result = pd.DataFrame(columns=[
+            'k', 'd', 'rsi', 'volume', 'adx', 'proc', 'macd_diff'])
         _result['k'] = self._stochastic_k()
         _result['d'] = self._stochastic_d()
         _result['rsi'] = self._rsi()
         _result['volume'] = self._volume()
         _result['adx'] = self._adx()
-        result = np.asarray(_result)
+        _result['macd_diff'] = self._macd_diff()
+        _result['proc'] = self._proc()
+
+        desired_columns = [
+            'k', 'd', 'rsi', 'volume', 'adx', 'proc', 'macd_diff']
+
+        # Remove all undesirable columns from the dataframe
+        imported_columns = list(_result)
+        for column in imported_columns:
+            if column not in desired_columns:
+                _result = _result.drop(column, axis=1)
+
+        # Trim last row if necessary
+        if bool(self._steps) is True:
+            _result = _result.iloc[:-abs(self._steps)]
 
         # Return
+        result = np.asarray(_result)
         return result
 
     def _stochastic_k(self):
@@ -543,20 +596,23 @@ class DataDT(DataSource):
         else:
             s_value = self._dataframe['rsi'].values
 
-        ma_close = self._dataframe['ma_close'].values
-        high_gt_ma_close = self._dataframe['high'].values > ma_close
-        low_lt_ma_close = self._dataframe['low'].values < ma_close
+        if self._actuals is False:
+            ma_close = self._dataframe['ma_close'].values
+            high_gt_ma_close = self._dataframe['high'].values > ma_close
+            low_lt_ma_close = self._dataframe['low'].values < ma_close
 
-        # Create conditions for decisions
-        sell = (s_value > 90).astype(int) * self._sell
-        buy = (s_value < 10).astype(int) * self._buy
+            # Create conditions for decisions
+            sell = (s_value > 90).astype(int) * self._sell
+            buy = (s_value < 10).astype(int) * self._buy
 
-        # Condition when candle is straddling the moving average
-        straddle = np.logical_and(
-            high_gt_ma_close, low_lt_ma_close).astype(int)
+            # Condition when candle is straddling the moving average
+            straddle = np.logical_and(
+                high_gt_ma_close, low_lt_ma_close).astype(int)
 
-        # Multiply the straddle
-        result = straddle * (sell + buy)
+            # Multiply the straddle
+            result = straddle * (sell + buy)
+        else:
+            result = s_value
 
         # Return
         return result
@@ -602,7 +658,7 @@ class DataDT(DataSource):
         return result
 
     def _adx(self):
-        """Create volume variables.
+        """Create ADX variables.
 
         Args:
             None
@@ -615,7 +671,50 @@ class DataDT(DataSource):
         _adx = self._dataframe['adx'].values
 
         # Evaluate decisions
-        result = (_adx > 25).astype(int) * self._strong
+        if self._actuals is False:
+            result = (_adx > 25).astype(int) * self._strong
+        else:
+            result = _adx
+
+        # Return
+        return result
+
+    def _macd_diff(self):
+        """Create MACD difference variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        _result = self._dataframe['macd_diff'].values
+
+        # Evaluate decisions
+        if self._actuals is False:
+            buy = (_result > 0).astype(int) * self._buy
+            sell = (_result < 0).astype(int) * self._sell
+            result = buy + sell
+        else:
+            result = _result
+
+        # Return
+        return result
+
+    def _proc(self):
+        """Create PROC (Price Rate of Change) values for learning.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        result = self._dataframe['proc'].values
 
         # Return
         return result

@@ -258,7 +258,7 @@ class RNNGRU(object):
 
     def __init__(
             self, data, sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, display=False):
+            layers=1, patience=10, units=512, display=False):
         """Instantiate the class.
 
         Args:
@@ -429,14 +429,14 @@ class RNNGRU(object):
         '''
 
         self._model.add(GRU(
-            units=1024,
+            units=units,
             return_sequences=True,
             recurrent_dropout=dropout,
             input_shape=(None, self._training_vector_count,)))
 
         for _ in range(0, _layers):
             self._model.add(GRU(
-                units=1024,
+                units=units,
                 recurrent_dropout=dropout,
                 return_sequences=True))
 
@@ -977,6 +977,10 @@ def main():
         '-d', '--dropout',
         help='Dropout rate as decimal from 0 to 1. Default 0.5 (or 50%)',
         type=float, default=0.5)
+    parser.add_argument(
+        '-u', '--units',
+        help='Number of units per layer. Default 512',
+        type=int, default=512)
     parser.add_argument(
         '--display',
         help='Display on screen if True. Default False.',

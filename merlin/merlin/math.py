@@ -1,5 +1,7 @@
 """Library to process the ingest of data files."""
 
+import sys
+
 # PIP imports
 import pandas as pd
 
@@ -8,7 +10,7 @@ class Difference(object):
     """Convert Pandas DataFrame to components."""
 
     def __init__(self, data):
-        """Function for intializing the class.
+        """Initialize the class.
 
         Args:
             data: Pandas DataFrame with columns:
@@ -61,7 +63,7 @@ class Stochastic(object):
     """Convert Pandas DataFrame to components."""
 
     def __init__(self, data, window=35):
-        """Function for intializing the class.
+        """Initialize the class.
 
         Args:
             data: Pandas DataFrame with columns:
@@ -126,7 +128,7 @@ class Misc(object):
     """Convert Pandas DataFrame to components."""
 
     def __init__(self, data):
-        """Function for intializing the class.
+        """Initialize the class.
 
         Args:
             data: Pandas DataFrame with columns:
@@ -138,6 +140,40 @@ class Misc(object):
         """
         # Initialize key variables
         self._data = data
+
+    def proc(self, window):
+        """Calculate the PROC (Price Rate of Change) within N days.
+
+        Calculated based on the formula at:
+        https://en.wikipedia.org/wiki/Relative_strength_index
+
+        Args:
+            window: Size of rolling window
+
+        Returns:
+            result: Pandas Series
+
+        """
+        # Initialize key variables
+        close = self._data['close'].values
+        result = [0] * len(close)
+
+        # Get a rolling list of values of size window from closing values
+        _ranges = [
+            close[i: i + window] for i in range(len(close) - (window - 1))]
+
+        # Create a list of the percentage deltas of the start and ending
+        # values in each rolling window
+        for index in range(window, len(close)):
+            first = _ranges[index - window][0]
+            last = _ranges[index - window][window - 1]
+            result[index] = (last - first) / last
+
+        # print('\n\n', _ranges, '\n\n', result, '\n\n')
+        # sys.exit(0)
+
+        # Return
+        return result
 
     def rsi(self, window):
         """Calculate the RSI (Relative Strength Index) within N days.
