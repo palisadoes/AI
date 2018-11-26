@@ -1,7 +1,5 @@
 """Library to process the ingest of data files."""
 
-import sys
-
 # PIP imports
 import pandas as pd
 
