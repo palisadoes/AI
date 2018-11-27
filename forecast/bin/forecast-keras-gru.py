@@ -290,7 +290,7 @@ class RNNGRU(object):
         config.gpu_options.allow_growth = True
 
         # Only allow a total of half the GPU memory to be allocated
-        config.gpu_options.per_process_gpu_memory_fraction = 0.50
+        config.gpu_options.per_process_gpu_memory_fraction = 0.75
 
         # Crash with DeadlineExceeded instead of hanging forever when your
         # queues get full/empty
@@ -941,7 +941,7 @@ def main():
 
     """
     # Initialize key variables
-    periods = 1
+    periods = 255
     ts_start = int(time.time())
 
     # Set logging level - No Tensor flow messages
@@ -1098,7 +1098,7 @@ def main():
 
     '''
 
-    rnn.plot_train(start_idx=rnn.training_rows - 250, length=250)
+    rnn.plot_train(start_idx=0 - (periods * 2), length=(periods * 2))
 
     # Example from Test-Set
 
@@ -1120,7 +1120,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    rnn.plot_test(start_idx=rnn.test_rows-30, length=rnn.test_rows)
+    rnn.plot_test(start_idx=rnn.test_rows-(periods * 2), length=(periods *2))
 
     # Plot accuracy
     # rnn.plot_accuracy()
