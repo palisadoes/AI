@@ -127,8 +127,8 @@ class DataGRU(_DataFile):
         """
         # Initialize key varialbes
         output = {
-            'dow': [],
-            'dom': [],
+            'weekday': [],
+            'day': [],
             'year': [],
             'month': [],
             'hour': [],
@@ -139,16 +139,16 @@ class DataGRU(_DataFile):
 
         # Create result to return
         result = pd.DataFrame(columns=[
-            'year', 'month', 'dow', 'dom', 'timestamp',
+            'year', 'month', 'weekday', 'day', 'timestamp',
             'hour', 'minute', 'second', 'value'])
 
         # Get list of values
         for epoch, value in sorted(self.filedata().items()):
             output['value'].append(value)
             output['timestamp'].append(epoch)
-            output['dom'].append(
+            output['day'].append(
                 int(datetime.fromtimestamp(epoch).strftime('%d')))
-            output['dow'].append(
+            output['weekday'].append(
                 int(datetime.fromtimestamp(epoch).strftime('%w')))
             output['hour'].append(
                 int(datetime.fromtimestamp(epoch).strftime('%H')))
@@ -163,10 +163,10 @@ class DataGRU(_DataFile):
 
         # Add current value columns
         result['value'] = pd.Series(output['value'])
-        result['dom'] = pd.Series(output['dom'])
-        result['dow'] = pd.Series(output['dow'])
-        result['year'] = pd.Series(output['hour'])
-        result['hour'] = pd.Series(output['year'])
+        result['day'] = pd.Series(output['day'])
+        result['weekday'] = pd.Series(output['weekday'])
+        result['year'] = pd.Series(output['year'])
+        result['hour'] = pd.Series(output['hour'])
         result['month'] = pd.Series(output['month'])
         result['minute'] = pd.Series(output['minute'])
         result['second'] = pd.Series(output['second'])
@@ -236,6 +236,11 @@ class DataGRU(_DataFile):
         """
         # Return
         result = (self._vectors['train'], self._vectors['all'])
+
+        '''for item in self._vectors['train']:
+            print(item)
+        sys.exit(0)'''
+
         return result
 
     def classes(self):
@@ -270,7 +275,7 @@ class DataGRU(_DataFile):
         x_data = {'train': None, 'all': None}
         y_data = {'train': None, 'all': None}
         desired_columns = [
-            'month', 'dow', 'dom', 'hour', 'minute', 'value']
+            'weekday', 'day', 'hour', 'minute', 'value']
 
         # Remove all undesirable columns from the dataframe
         pandas_df = self._dataframe

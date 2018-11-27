@@ -290,7 +290,7 @@ class RNNGRU(object):
         config.gpu_options.allow_growth = True
 
         # Only allow a total of half the GPU memory to be allocated
-        config.gpu_options.per_process_gpu_memory_fraction = 0.95
+        config.gpu_options.per_process_gpu_memory_fraction = 0.50
 
         # Crash with DeadlineExceeded instead of hanging forever when your
         # queues get full/empty
@@ -1023,7 +1023,7 @@ def main():
     corresponds to 8 weeks.
     '''
     weeks = args.weeks
-    sequence_length = 5 * periods * weeks
+    sequence_length = 7 * periods * weeks
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
@@ -1039,7 +1039,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [1, 3]
+    lookahead_periods = [1, 3, 288]
     training_data = database.DataGRU(filename, lookahead_periods)
     data = ModelVariables(training_data, batch_size=batch_size, epochs=epochs)
 
