@@ -54,13 +54,17 @@ class RNNGRU(DataGRU):
         self._warmup_steps = warmup_steps
         self._epochs = epochs
         self._batch_size = batch_size
+        self._patience = patience
+        self._sequence_length = sequence_length
+        self._units = units
+        self._dropout = dropout
+        self._layers = int(abs(layers))
         self.display = display
-        path_checkpoint = '/tmp/checkpoint.keras'
-        _layers = int(abs(layers))
+        self._path_checkpoint = '/tmp/checkpoint.keras'
 
         # Delete any stale checkpoint file
-        if os.path.exists(path_checkpoint) is True:
-            os.remove(path_checkpoint)
+        if os.path.exists(self._path_checkpoint) is True:
+            os.remove(self._path_checkpoint)
 
         ###################################
         # TensorFlow wizardry
@@ -154,7 +158,7 @@ class RNNGRU(DataGRU):
 
         self._y_scaler = MinMaxScaler()
         self._y_train_scaled = self._y_scaler.fit_transform(self._y_train)
-        yv_test_scaled = self._y_scaler.transform(self._yv_test)
+        self._yv_test_scaled = self._y_scaler.transform(self._yv_test)
 
         # Data Generator
 
@@ -171,34 +175,18 @@ class RNNGRU(DataGRU):
         print('> Scaled Training Targets Shape: {}'.format(
             self._y_train_scaled.shape))
 
-        # We then create the batch-generator.
+    def model(self):
+        """Create the Recurrent Neural Network.
 
-        generator = self._batch_generator(
-            self._batch_size, sequence_length)
+        Args:
+            None
 
-        # Validation Set
+        Returns:
+            _model: RNN model
 
-        '''
-        The neural network trains quickly so we can easily run many training
-        epochs. But then there is a risk of overfitting the model to the
-        training-set so it does not generalize well to unseen data. We will
-        therefore monitor the model's performance on the test-set after each
-        epoch and only save the model's weights if the performance is improved
-        on the test-set.
-
-        The batch-generator randomly selects a batch of short sequences from
-        the training-data and uses that during training. But for the
-        validation-data we will instead run through the entire sequence from
-        the test-set and measure the prediction accuracy on that entire
-        sequence.
-        '''
-
-        validation_data = (np.expand_dims(self._xv_test_scaled, axis=0),
-                           np.expand_dims(yv_test_scaled, axis=0))
-
-        # Create the Recurrent Neural Network
-
-        self._model = Sequential()
+        """
+        # Create the model object
+        _model = Sequential()
 
         '''
         We can now add a Gated Recurrent Unit (GRU) to the network. This will
@@ -210,16 +198,16 @@ class RNNGRU(DataGRU):
         input-signals (num_x_signals).
         '''
 
-        self._model.add(GRU(
-            units=units,
+        _model.add(GRU(
+            units=self._units,
             return_sequences=True,
-            recurrent_dropout=dropout,
+            recurrent_dropout=self._dropout,
             input_shape=(None, self._training_vector_count,)))
 
-        for _ in range(0, _layers):
-            self._model.add(GRU(
-                units=units,
-                recurrent_dropout=dropout,
+        for _ in range(0, self._layers):
+            _model.add(GRU(
+                units=self._units,
+                recurrent_dropout=self._dropout,
                 return_sequences=True))
 
         '''
@@ -232,7 +220,7 @@ class RNNGRU(DataGRU):
         network using the Sigmoid activation function, which squashes the
         output to be between 0 and 1.'''
 
-        self._model.add(
+        _model.add(
             Dense(self._training_class_count, activation='sigmoid'))
 
         '''
@@ -259,7 +247,7 @@ class RNNGRU(DataGRU):
             # init = RandomUniform(minval=-0.05, maxval=0.05)
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
-            self._model.add(Dense(
+            _model.add(Dense(
                 self._training_class_count,
                 activation='linear',
                 kernel_initializer=init))
@@ -271,7 +259,7 @@ class RNNGRU(DataGRU):
         We then compile the Keras model so it is ready for training.
         '''
         optimizer = RMSprop(lr=1e-3)
-        self._model.compile(
+        _model.compile(
             loss=self._loss_mse_warmup,
             optimizer=optimizer,
             metrics=['accuracy'])
@@ -284,7 +272,48 @@ class RNNGRU(DataGRU):
         the 3 target signals we want to predict.
         '''
         print('> Model Summary:\n')
-        print(self._model.summary())
+        print(_model.summary())
+
+        # Return
+        return _model
+
+    def test(self):
+        """Test the Recurrent Neural Network.
+
+        Args:
+            None
+
+        Returns:
+            _model: RNN model
+
+        """
+        # Initialize key variables
+        patience = self._patience
+        sequence_length = self._sequence_length
+
+        # Create the batch-generator.
+        generator = self._batch_generator(
+            self._batch_size, sequence_length)
+
+        # Validation Set
+
+        '''
+        The neural network trains quickly so we can easily run many training
+        epochs. But then there is a risk of overfitting the model to the
+        training-set so it does not generalize well to unseen data. We will
+        therefore monitor the model's performance on the test-set after each
+        epoch and only save the model's weights if the performance is improved
+        on the test-set.
+
+        The batch-generator randomly selects a batch of short sequences from
+        the training-data and uses that during training. But for the
+        validation-data we will instead run through the entire sequence from
+        the test-set and measure the prediction accuracy on that entire
+        sequence.
+        '''
+
+        validation_data = (np.expand_dims(self._xv_test_scaled, axis=0),
+                           np.expand_dims(self._yv_test_scaled, axis=0))
 
         # Callback Functions
 
@@ -295,7 +324,7 @@ class RNNGRU(DataGRU):
         This is the callback for writing checkpoints during training.
         '''
 
-        callback_checkpoint = ModelCheckpoint(filepath=path_checkpoint,
+        callback_checkpoint = ModelCheckpoint(filepath=self._path_checkpoint,
                                               monitor='val_loss',
                                               verbose=1,
                                               save_weights_only=True,
@@ -360,7 +389,7 @@ class RNNGRU(DataGRU):
 
         print('\n> Starting data training\n')
 
-        self._history = self._model.fit_generator(
+        self.model().fit_generator(
             generator=generator,
             epochs=self._epochs,
             steps_per_epoch=self._epoch_steps,
@@ -377,8 +406,8 @@ class RNNGRU(DataGRU):
         '''
 
         print('> Loading model weights')
-        if os.path.exists(path_checkpoint):
-            self._model.load_weights(path_checkpoint)
+        if os.path.exists(self._path_checkpoint):
+            self._model.load_weights(self._path_checkpoint)
 
         # Performance on Test-Set
 
@@ -391,7 +420,7 @@ class RNNGRU(DataGRU):
 
         result = self._model.evaluate(
             x=np.expand_dims(self._xv_test_scaled, axis=0),
-            y=np.expand_dims(yv_test_scaled, axis=0))
+            y=np.expand_dims(self._yv_test_scaled, axis=0))
 
         print('> Loss (test-set): {}'.format(result))
 
@@ -685,36 +714,6 @@ class RNNGRU(DataGRU):
             # Close figure
             plt.close(fig=fig)
 
-    def plot_accuracy(self):
-        """Plot the predicted and true output-signals.
-
-        Args:
-            None
-
-        Returns:
-            None
-
-        """
-        # Summarize history for accuracy
-        plt.figure(figsize=(15, 5))
-        plt.plot(self._history.history['acc'])
-        plt.plot(self._history.history['val_acc'])
-        plt.title('Model Accuracy')
-        plt.ylabel('Accuracy')
-        plt.xlabel('Epoch')
-        plt.legend(['train', 'test'], loc='upper left')
-        plt.show()
-
-        # Summarize history for loss
-        plt.figure(figsize=(15, 5))
-        plt.plot(self._history.history['loss'])
-        plt.plot(self._history.history['val_loss'])
-        plt.title('Model loss')
-        plt.ylabel('Loss')
-        plt.xlabel('Epoch')
-        plt.legend(['Train', 'Test'], loc='upper left')
-        plt.show()
-
 
 def main():
     """Generate forecasts.
@@ -833,6 +832,7 @@ def main():
         layers=layers,
         patience=patience,
         display=display)
+    rnn.test()
 
     '''
     Calculate the duration
@@ -903,9 +903,6 @@ def main():
     '''
 
     rnn.plot_test(start_idx=rnn.test_rows-30, length=rnn.test_rows)
-
-    # Plot accuracy
-    # rnn.plot_accuracy()
 
     # Print duration
     print("> Training Duration: {}s".format(duration))
