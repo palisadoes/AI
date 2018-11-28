@@ -600,7 +600,7 @@ class RNNGRU(DataGRU):
             # Create a filename
             filename = (
                 '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
-                    self.batch_size(),
+                    self._batch_size,
                     self._epochs,
                     num_train,
                     signal,
