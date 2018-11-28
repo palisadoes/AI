@@ -1,8 +1,5 @@
 """Library to process the ingest of data files."""
 
-# Standard imports
-import sys
-
 # PIP imports
 import pandas as pd
 import numpy as np
@@ -341,51 +338,94 @@ class DataGRU(DataSource):
         self._label2predict = 'close'
 
         # Process data
-        (self._vectors, self._classes) = self._vector_targets()
+        (self._vectors, self._classes) = self._create_vector_classes()
 
-    def labels(self):
-        """Get class labels.
+        # Total number of available vectors
+        num_data = len(self._vectors['all'])
 
-        Args:
-            None
+        # Fraction of vectors to be used for training
+        train_split = 0.9
 
-        Returns:
-            result: list of labels
-
-        """
-        # Return
-        result = self._shift_steps
-        return result
+        # Fraction of vectors to be used for training and testing
+        self._training_count = int(train_split * num_data)
 
     def vectors(self):
-        """Create a numpy array of vectors.
+        """Get vectors for learning.
+
+        Args:
+            train: Return training vectors
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._vectors['all']
+
+    def vectors_train(self):
+        """Get vectors for learning.
+
+        Args:
+            train: Return training vectors
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._vectors_split_test_train(train=True)
+
+    def vectors_test(self):
+        """Get vectors for validation testing.
 
         Args:
             None
 
         Returns:
-            result: Tuple of numpy array of vectors. (train, test)
+            result: Training or test vector numpy arrays
 
         """
-        # Return
-        result = (self._vectors['train'], self._vectors['all'])
-        return result
+        return self._vectors_split_test_train(
+            train=False, test_validation=True)
 
-    def classes(self):
-        """Create a numpy array of classes.
+    def vectors_test_all(self):
+        """Get vectors for testing.
 
         Args:
             None
 
         Returns:
-            result: numpy array of classes
+            result: Training or test vector numpy arrays
 
         """
+        return self._vectors_split_test_train(
+            train=False, test_validation=False)
+
+    def _vectors_split_test_train(self, train=True, test_validation=True):
+        """Get vectors for learning.
+
+        Note: Neither test nor training data can have NaN values for training
+        to occur. We therefore have to trim the NaN values from the test data.
+
+        Args:
+            train: Return training vectors if true, else return test vectors
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        # Obtain vector data
+        if train is True:
+            result = self._vectors['train'][:self._training_count]
+        else:
+            if test_validation is True:
+                result = self._vectors['all'][
+                    self._training_count:-max(self.labels())]
+            else:
+                result = self._vectors['all'][self._training_count:]
+
         # Return
-        result = (self._classes['train'], self._classes['all'])
         return result
 
-    def _vector_targets(self):
+    def _create_vector_classes(self):
         """Create vectors and targets from data.
 
         Args:
@@ -442,6 +482,82 @@ class DataGRU(DataSource):
 
         # Return
         return(x_data, y_data)
+
+    def classes_train(self):
+        """Get classes for training.
+
+        Args:
+            train: Return training classes
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._classes_split_test_train(train=True)
+
+    def classes_test(self):
+        """Get classes for validation testing.
+
+        Args:
+            None
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._classes_split_test_train(train=False)
+
+    def _classes_split_test_train(self, train=True):
+        """Get classes for learning.
+
+        Note: Neither test nor training data can have NaN values for training
+        to occur. We therefore have to trim the NaN values from the test data.
+
+        NaN values occur in the vector numpy arrays. We have to make the number
+        matching class rows to be the same.
+
+        Args:
+            train: Return training classes if true, else return test classes
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        # Return
+        if train is True:
+            result = self._classes['train'][:self._training_count]
+        else:
+            result = self._classes['all'][
+                self._training_count:-max(self.labels())]
+        return result
+
+    def labels(self):
+        """Get class labels.
+
+        Args:
+            None
+
+        Returns:
+            result: list of labels
+
+        """
+        # Return
+        result = self._shift_steps
+        return result
+
+    def classes(self):
+        """Create a numpy array of classes.
+
+        Args:
+            None
+
+        Returns:
+            result: numpy array of classes
+
+        """
+        # Return
+        result = self._classes['all']
+        return result
 
 
 class DataDT(DataSource):

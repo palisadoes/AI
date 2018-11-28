@@ -2,7 +2,6 @@
 """Script to forecast data using RNN AI using GRU feedback."""
 
 # Standard imports
-from __future__ import print_function
 import argparse
 import sys
 import os
@@ -25,15 +24,240 @@ from tensorflow.python.keras.callbacks import (
 from keras import backend
 
 # Merlin imports
-from merlin.database import DataGRU
+from merlin import database
 
 
-class RNNGRU(DataGRU):
+class ModelVariables(object):
     """Process data for ingestion."""
 
     def __init__(
-            self, filename, lookahead_periods, batch_size=64, epochs=20,
-            sequence_length=20, warmup_steps=50, dropout=0,
+            self, data, batch_size=64, epochs=20):
+        """Instantiate the class.
+
+        Args:
+            data: Tuple of (x_data, y_data, target_names)
+            batch_size: Size of batch
+
+        Returns:
+            None
+
+        """
+        # Initialize key variables
+        self._epochs = epochs
+        self._batch_size = batch_size
+
+        # Make data object accessible throughout the class
+        self._data = data
+
+        # Total number of available vectors
+        num_data = len(self._data.vectors()[1])
+
+        # Fraction of vectors to be used for training
+        train_split = 0.9
+
+        # Fraction of vectors to be used for training and testing
+        self._training_count = int(train_split * num_data)
+
+    def vectors_train(self):
+        """Get vectors for learning.
+
+        Args:
+            train: Return training vectors
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._vectors(train=True)
+
+    def vectors_test(self):
+        """Get vectors for validation testing.
+
+        Args:
+            None
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._vectors(train=False, test_validation=True)
+
+    def vectors_test_all(self):
+        """Get vectors for testing.
+
+        Args:
+            None
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._vectors(train=False, test_validation=False)
+
+    def _vectors(self, train=True, test_validation=True):
+        """Get vectors for learning.
+
+        Note: Neither test nor training data can have NaN values for training
+        to occur. We therefore have to trim the NaN values from the test data.
+
+        Args:
+            train: Return training vectors if true, else return test vectors
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        # Obtain vector data
+        if train is True:
+            result = self._data.vectors()[0][:self._training_count]
+        else:
+            if test_validation is True:
+                result = self._data.vectors()[1][
+                    self._training_count:-max(self._data.labels())]
+            else:
+                result = self._data.vectors()[1][self._training_count:]
+
+        # Return
+        return result
+
+    def classes_train(self):
+        """Get classes for training.
+
+        Args:
+            train: Return training classes
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._classes(train=True)
+
+    def classes_test(self):
+        """Get classes for validation testing.
+
+        Args:
+            None
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        return self._classes(train=False)
+
+    def _classes(self, train=True):
+        """Get classes for learning.
+
+        Note: Neither test nor training data can have NaN values for training
+        to occur. We therefore have to trim the NaN values from the test data.
+
+        NaN values occur in the vector numpy arrays. We have to make the number
+        matching class rows to be the same.
+
+        Args:
+            train: Return training classes if true, else return test classes
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        # Return
+        if train is True:
+            result = self._data.classes()[0][:self._training_count]
+        else:
+            result = self._data.classes()[1][
+                self._training_count:-max(self._data.labels())]
+        return result
+
+    def close(self):
+        """Get closing data.
+
+        Args:
+            None
+
+        Returns:
+            result: close numpy array
+
+        """
+        # Return
+        result = self._data.close()
+        return result
+
+    def datetime(self):
+        """Get closing data.
+
+        Args:
+            None
+
+        Returns:
+            result: datetime numpy array
+
+        """
+        # Return
+        result = self._data.datetime()
+        return result
+
+    def labels(self):
+        """Get closing data.
+
+        Args:
+            None
+
+        Returns:
+            result: labels numpy array
+
+        """
+        # Return
+        result = self._data.labels()
+        return result
+
+    def epochs(self):
+        """Get epochs for learning.
+
+        Args:
+            None
+
+        Returns:
+            result: Number of epochs for training
+
+        """
+        # Return
+        result = self._epochs
+        return result
+
+    def batch_size(self):
+        """Get batch_size for learning.
+
+        Args:
+            None
+
+        Returns:
+            result: Number of batch_size for training
+
+        """
+        # Return
+        result = self._batch_size
+        return result
+
+    def epoch_steps(self):
+        """Get number of batch iterations to finish a training epoch.
+
+        Args:
+            None
+
+        Returns:
+            result: Number of batch_size for training
+
+        """
+        # Return
+        result = int(self._training_count / self.batch_size()) + 1
+        return result
+
+
+class RNNGRU(object):
+    """Process data for ingestion."""
+
+    def __init__(
+            self, data, sequence_length=20, warmup_steps=50, dropout=0,
             layers=1, patience=10, units=512, display=False):
         """Instantiate the class.
 
@@ -47,13 +271,9 @@ class RNNGRU(DataGRU):
             None
 
         """
-        # Setup inheritance
-        DataGRU.__init__(self, filename, lookahead_periods)
-
         # Initialize key variables
         self._warmup_steps = warmup_steps
-        self._epochs = epochs
-        self._batch_size = batch_size
+        self._data = data
         self.display = display
         path_checkpoint = '/tmp/checkpoint.keras'
         _layers = int(abs(layers))
@@ -81,22 +301,19 @@ class RNNGRU(DataGRU):
         ###################################
 
         # Get data
-        self._y_current = self.close()
+        self._y_current = self._data.close()
 
         # Create training arrays
-        x_train = self.vectors_train()
-        self._y_train = self.classes_train()
+        x_train = self._data.vectors_train()
+        self._y_train = self._data.classes_train()
 
         # Create test arrays for VALIDATION and EVALUATION
-        xv_test = self.vectors_test()
-        self._yv_test = self.classes_test()
+        xv_test = self._data.vectors_test()
+        self._yv_test = self._data.classes_test()
 
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = xv_test.shape
         (_, self._training_class_count) = self._y_train.shape
-
-        # Define the number of steps per epoch
-        self._epoch_steps = int(self.training_rows / self._batch_size) + 1
 
         # Print stuff
         print('\n> Numpy Data Type: {}'.format(type(x_train)))
@@ -117,9 +334,9 @@ class RNNGRU(DataGRU):
         print('> Number Y signals: {}'.format(self._training_class_count))
 
         # Print epoch related data
-        print('> Epochs:', self._epochs)
-        print('> Batch Size:', self._batch_size)
-        print('> Steps:', self._epoch_steps)
+        print('> Epochs:', self._data.epochs())
+        print('> Batch Size:', self._data.batch_size())
+        print('> Steps:', self._data.epoch_steps())
 
         # Display estimated memory footprint of training data.
         print("> Data size: {:.2f} Bytes".format(x_train.nbytes))
@@ -134,6 +351,7 @@ class RNNGRU(DataGRU):
         Then we detect the range of values from the training-data and scale
         the training-data.
         '''
+
         self._x_scaler = MinMaxScaler()
         self._x_train_scaled = self._x_scaler.fit_transform(x_train)
 
@@ -174,7 +392,7 @@ class RNNGRU(DataGRU):
         # We then create the batch-generator.
 
         generator = self._batch_generator(
-            self._batch_size, sequence_length)
+            self._data.batch_size(), sequence_length)
 
         # Validation Set
 
@@ -362,8 +580,8 @@ class RNNGRU(DataGRU):
 
         self._history = self._model.fit_generator(
             generator=generator,
-            epochs=self._epochs,
-            steps_per_epoch=self._epoch_steps,
+            epochs=self._data.epochs(),
+            steps_per_epoch=self._data.epoch_steps(),
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -547,13 +765,13 @@ class RNNGRU(DataGRU):
             shim = 'Train'
 
             # Datetimes to use for training
-            datetimes[shim] = self.datetime()[
+            datetimes[shim] = self._data.datetime()[
                 :num_train][start_idx:end_idx]
 
         else:
             # Scale the data
             x_test_scaled = self._x_scaler.transform(
-                self.vectors_test_all())
+                self._data.vectors_test_all())
 
             # Use test-data.
             x_values = x_test_scaled[start_idx:end_idx]
@@ -561,7 +779,7 @@ class RNNGRU(DataGRU):
             shim = 'Test'
 
             # Datetimes to use for testing
-            datetimes[shim] = self.datetime()[
+            datetimes[shim] = self._data.datetime()[
                 num_train:][start_idx:end_idx]
 
         # Input-signals for the model.
@@ -576,7 +794,7 @@ class RNNGRU(DataGRU):
         y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
 
         # For each output-signal.
-        for signal in range(len(self.labels())):
+        for signal in range(len(self._data.labels())):
             # Assign other variables dependent on the type of data plot
             if train is True:
                 # Only get current values that are a part of the training data
@@ -584,7 +802,7 @@ class RNNGRU(DataGRU):
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self.datetime()[
+                datetimes['actual'] = self._data.datetime()[
                     :num_train][start_idx:end_idx]
 
             else:
@@ -594,14 +812,14 @@ class RNNGRU(DataGRU):
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self.datetime()[
+                datetimes['actual'] = self._data.datetime()[
                     num_train:][start_idx:]
 
             # Create a filename
             filename = (
                 '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
-                    self.batch_size(),
-                    self._epochs,
+                    self._data.batch_size(),
+                    self._data.epochs(),
                     num_train,
                     signal,
                     int(time.time()),
@@ -620,7 +838,7 @@ class RNNGRU(DataGRU):
             axis.plot(
                 datetimes[shim][:len(signal_true)],
                 signal_true,
-                label='Current +{}'.format(self.labels()[signal]))
+                label='Current +{}'.format(self._data.labels()[signal]))
             axis.plot(
                 datetimes[shim][:len(signal_pred)],
                 signal_pred,
@@ -629,7 +847,7 @@ class RNNGRU(DataGRU):
 
             # Set plot labels and titles
             axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(
-                self.labels()[signal], shim))
+                self._data.labels()[signal], shim))
             axis.set_ylabel('Values')
             axis.legend(
                 bbox_to_anchor=(1.04, 0.5),
@@ -822,13 +1040,13 @@ def main():
 
     # Get the data
     lookahead_periods = [1, 3]
+    training_data = database.DataGRU(filename, lookahead_periods)
+    data = ModelVariables(training_data, batch_size=batch_size, epochs=epochs)
 
     # Do training
     rnn = RNNGRU(
-        filename, lookahead_periods,
+        data,
         sequence_length=sequence_length,
-        epochs=epochs,
-        batch_size=batch_size,
         dropout=dropout,
         layers=layers,
         patience=patience,
