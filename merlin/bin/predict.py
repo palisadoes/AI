@@ -175,7 +175,11 @@ class RNNGRU(DataGRU):
         print('> Scaled Training Targets Shape: {}'.format(
             self._y_train_scaled.shape))
 
-    def model(self):
+
+        # Create RNN model
+        self.model = self._model()
+
+    def _model(self):
         """Create the Recurrent Neural Network.
 
         Args:
@@ -389,7 +393,7 @@ class RNNGRU(DataGRU):
 
         print('\n> Starting data training\n')
 
-        self.model().fit_generator(
+        self.model.fit_generator(
             generator=generator,
             epochs=self._epochs,
             steps_per_epoch=self._epoch_steps,
@@ -407,7 +411,7 @@ class RNNGRU(DataGRU):
 
         print('> Loading model weights')
         if os.path.exists(self._path_checkpoint):
-            self._model.load_weights(self._path_checkpoint)
+            self.model.load_weights(self._path_checkpoint)
 
         # Performance on Test-Set
 
@@ -418,7 +422,7 @@ class RNNGRU(DataGRU):
         array-dimensionality to create a batch with that one sequence.
         '''
 
-        result = self._model.evaluate(
+        result = self.model.evaluate(
             x=np.expand_dims(self._xv_test_scaled, axis=0),
             y=np.expand_dims(self._yv_test_scaled, axis=0))
 
@@ -426,7 +430,7 @@ class RNNGRU(DataGRU):
 
         # If you have several metrics you can use this instead.
         if False:
-            for res, metric in zip(result, self._model.metrics_names):
+            for res, metric in zip(result, self.model.metrics_names):
                 print('{0}: {1:.3e}'.format(metric, res))
 
     def _batch_generator(self, batch_size, sequence_length):
@@ -597,7 +601,7 @@ class RNNGRU(DataGRU):
         x_values = np.expand_dims(x_values, axis=0)
 
         # Use the model to predict the output-signals.
-        y_pred = self._model.predict(x_values)
+        y_pred = self.model.predict(x_values)
 
         # The output of the model is between 0 and 1.
         # Do an inverse map to get it back to the scale
