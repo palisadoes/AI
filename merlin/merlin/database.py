@@ -206,7 +206,8 @@ class DataSource(_DataFile):
         num_difference = difference.actual()
         pct_difference = difference.relative()
 
-        # Create result to return
+        # Create result to return.
+        # Make sure it is float16 for efficient computing
         result = pd.DataFrame(columns=[
             'open', 'high', 'low', 'close', 'volume',
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
@@ -214,7 +215,8 @@ class DataSource(_DataFile):
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
             'k', 'd', 'rsi', 'adx', 'macd_diff', 'proc',
             'ma_open', 'ma_high', 'ma_low', 'ma_close',
-            'ma_volume', 'ma_volume_long', 'ma_volume_delta'])
+            'ma_volume', 'ma_volume_long',
+            'ma_volume_delta']).astype('float16')
 
         # Add current value columns
         result['open'] = self.values()['open']
