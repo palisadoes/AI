@@ -87,13 +87,9 @@ class RNNGRU(DataGRU):
         # Get data
         self._y_current = self.close()
 
-        # Create training arrays
-        x_train = self.vectors_train()
-        self._y_train = self.classes_train()
-
-        # Create test arrays for VALIDATION and EVALUATION
-        xv_test = self.vectors_test()
-        self._yv_test = self.classes_test()
+        # Create test and training arrays for VALIDATION and EVALUATION
+        (x_train, xv_test,
+         self._y_train, self._yv_test) = self.train_test_split(.1)
 
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = xv_test.shape
