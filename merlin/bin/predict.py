@@ -171,7 +171,6 @@ class RNNGRU(DataGRU):
         print('> Scaled Training Targets Shape: {}'.format(
             self._y_train_scaled.shape))
 
-
         # Create RNN model
         self.model = self._model()
 
