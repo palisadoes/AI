@@ -55,7 +55,7 @@ class RNNGRU(DataGRU):
         self._warmup_steps = warmup_steps
         self._display = display
         self._path_checkpoint = (
-            '/tmp/checkpoint-{}.keras'.format(int(time.time)))
+            '/tmp/checkpoint-{}.keras'.format(int(time.time())))
 
         # Initialize parameters
         self.hyperparameters = {
