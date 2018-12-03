@@ -6,6 +6,7 @@ from __future__ import print_function
 import argparse
 import time
 import os
+from pprint import pprint
 
 # PIP3 imports.
 import numpy as np
@@ -276,7 +277,7 @@ class RNNGRU(DataGRU):
         observations, and each observation has 3 signals. This corresponds to
         the 3 target signals we want to predict.
         '''
-        print('> Model Summary:\n')
+        print('\n> Model Summary:\n')
         print(_model.summary())
 
         # Create the batch-generator.
@@ -378,6 +379,8 @@ class RNNGRU(DataGRU):
         those settings.
         '''
 
+        print('\n> Parameters for training\n')
+        pprint(_hyperparameters)
         print('\n> Starting data training\n')
 
         _model.fit_generator(
@@ -460,7 +463,10 @@ class RNNGRU(DataGRU):
         accuracy = mean_absolute_error(self._yv_test, predictions_rescaled)
 
         # Return
-        return {'loss': -accuracy, 'status': STATUS_OK}
+        return {
+            'loss': -accuracy,
+            'status': STATUS_OK,
+            'hyperparameters': params}
 
     def cleanup(self):
         """Release memory and delete checkpoint files.

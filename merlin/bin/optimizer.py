@@ -5,6 +5,7 @@
 from __future__ import print_function
 import argparse
 import time
+from pprint import pprint
 
 # PIP3 imports
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
@@ -49,12 +50,12 @@ def main():
     # Initialize parameters
     space = {
         'units': hp.choice('units', [512, 256]),
-        'dropout': hp.choice('dropout', [0.5]),
-        'layers': hp.choice('layers', [1]),
+        'dropout': hp.choice('dropout', [0.5, 0.4]),
+        'layers': hp.choice('layers', [1, 2]),
         'sequence_length': hp.choice('sequence_length', sequence_lengths),
-        'patience': hp.choice('patience', [1]),
-        'batch_size': hp.choice('batch_size', [250]),
-        'epochs': hp.choice('epochs', [20])
+        'patience': hp.choice('patience', [1, 5]),
+        'batch_size': hp.choice('batch_size', [100, 250]),
+        'epochs': hp.choice('epochs', [20, 30])
     }
 
     # Do training
@@ -66,8 +67,14 @@ def main():
         rnn.objective, space, algo=tpe.suggest, trials=trials, max_evals=100)
 
     # Print results
-    print(best)
-    print(trials.best_trial)
+    print('\n> Best:\n')
+    pprint(best)
+    print('\n> Best Trial:\n')
+    pprint(trials.best_trial)
+
+    best_index = trials.best_trial['misc']['tid']
+    print('\n> Best Trial {}:\n'.format(best_index))
+    pprint(trials.trials[best_index])
 
     # Cleanup
     rnn.cleanup()
@@ -79,7 +86,7 @@ def main():
     duration = int(time.time()) - ts_start
 
     # Print duration
-    print("> Training Duration: {}s".format(duration))
+    print("\n> Training Duration: {}s".format(duration))
 
 
 if __name__ == "__main__":
