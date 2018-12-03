@@ -201,6 +201,9 @@ def main():
 
     rnn.plot_test(model, start_idx=rnn.test_rows-30, length=rnn.test_rows)
 
+    # Cleanup
+    rnn.cleanup()
+
     # Print duration
     print("> Training Duration: {}s".format(duration))
 

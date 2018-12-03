@@ -13,7 +13,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
+from hyperopt import STATUS_OK
 
 # TensorFlow imports
 import tensorflow as tf
@@ -53,8 +53,9 @@ class RNNGRU(DataGRU):
 
         # Initialize key variables
         self._warmup_steps = warmup_steps
-        self.display = display
-        self._path_checkpoint = '/tmp/checkpoint.keras'
+        self._display = display
+        self._path_checkpoint = (
+            '/tmp/checkpoint-{}.keras'.format(int(time.time)))
 
         # Initialize parameters
         self.hyperparameters = {
@@ -99,10 +100,6 @@ class RNNGRU(DataGRU):
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = xv_test.shape
         (_, self._training_class_count) = self._y_train.shape
-
-        # Define the number of steps per epoch
-        self.hyperparameters['epoch_steps'] = int(
-            self.training_rows / self.hyperparameters['batch_size']) + 1
 
         '''
         The neural network works best on values roughly between -1 and 1, so we
@@ -151,7 +148,6 @@ class RNNGRU(DataGRU):
         # Print epoch related data
         print('> Epochs:', self.hyperparameters['epochs'])
         print('> Batch Size:', self.hyperparameters['batch_size'])
-        print('> Steps:', self.hyperparameters['epoch_steps'])
 
         # Display estimated memory footprint of training data.
         print("> Data size: {:.2f} Bytes".format(x_train.nbytes))
@@ -189,6 +185,10 @@ class RNNGRU(DataGRU):
             _hyperparameters = self.hyperparameters
         else:
             _hyperparameters = params
+
+        # Calculate the steps per epoch
+        epoch_steps = int(
+            self.training_rows / _hyperparameters['batch_size']) + 1
 
         # Create the model object
         _model = Sequential()
@@ -383,7 +383,7 @@ class RNNGRU(DataGRU):
         _model.fit_generator(
             generator=generator,
             epochs=_hyperparameters['epochs'],
-            steps_per_epoch=_hyperparameters['epoch_steps'],
+            steps_per_epoch=epoch_steps,
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -433,7 +433,7 @@ class RNNGRU(DataGRU):
             for res, metric in zip(result, _model.metrics_names):
                 print('{0}: {1:.3e}'.format(metric, res))
 
-    def optimizer(self, params=None):
+    def objective(self, params=None):
         """Optimize the Recurrent Neural Network.
 
         Args:
@@ -445,9 +445,11 @@ class RNNGRU(DataGRU):
         """
         model = self.model(params=params)
 
+        # Input-signals for the model.
+        x_values = np.expand_dims(self._xv_test_scaled, axis=0)
+
         # Get the predictions
-        predictions = model.predict(
-            self._x_train_scaled, batch_size=params['batch_size'], verbose=1)
+        predictions = model.predict(x_values, verbose=1)
 
         # The output of the model is between 0 and 1.
         # Do an inverse map to get it back to the scale
@@ -459,6 +461,19 @@ class RNNGRU(DataGRU):
 
         # Return
         return {'loss': -accuracy, 'status': STATUS_OK}
+
+    def cleanup(self):
+        """Release memory and delete checkpoint files.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Delete
+        os.remove(self._path_checkpoint)
 
     def _batch_generator(self, batch_size, sequence_length):
         """Create generator function to create random batches of training-data.
@@ -738,7 +753,7 @@ class RNNGRU(DataGRU):
                         facecolor='black', alpha=0.15)
 
             # Show and save the image
-            if self.display is True:
+            if self._display is True:
                 fig.savefig(filename, bbox_inches='tight')
                 plt.show()
             else:
