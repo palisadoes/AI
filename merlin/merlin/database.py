@@ -362,8 +362,9 @@ class DataGRU(DataSource):
             result: Training or test vector numpy arrays
 
         """
-        return self._vectors_split_test_train(
-            train=False, test_validation=False)
+        # Return
+        result = self._vectors['all'][self._training_count:]
+        return result
 
     def train_test_split(self, test_size=0.33):
         """Create training and test data.
