@@ -45,7 +45,7 @@ def main():
     corresponds to 8 weeks.
     '''
     weeks = 5
-    sequence_lengths = [weeks * 4]
+    sequence_lengths = [weeks * 4, weeks * 12]
 
     # Initialize parameters
     space = {
@@ -59,7 +59,7 @@ def main():
     }
 
     # Do training
-    rnn = RNNGRU(filename, lookahead_periods)
+    rnn = RNNGRU(filename, lookahead_periods, binary=True)
 
     # Run trials
     trials = Trials()

@@ -6,6 +6,7 @@ from __future__ import print_function
 import argparse
 import time
 import os
+import sys
 from pprint import pprint
 
 # PIP3 imports.
@@ -36,7 +37,7 @@ class RNNGRU(DataGRU):
     def __init__(
             self, filename, lookahead_periods, batch_size=64, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, units=512, display=False):
+            layers=1, patience=10, units=512, display=False, binary=False):
         """Instantiate the class.
 
         Args:
@@ -50,11 +51,12 @@ class RNNGRU(DataGRU):
 
         """
         # Setup inheritance
-        DataGRU.__init__(self, filename, lookahead_periods)
+        DataGRU.__init__(self, filename, lookahead_periods, binary=binary)
 
         # Initialize key variables
         self._warmup_steps = warmup_steps
         self._display = display
+        self._binary = binary
         self._path_checkpoint = (
             '/tmp/checkpoint-{}.keras'.format(int(time.time())))
 
@@ -224,7 +226,8 @@ class RNNGRU(DataGRU):
         The output-signals in the data-set have been limited to be between 0
         and 1 using a scaler-object. So we also limit the output of the neural
         network using the Sigmoid activation function, which squashes the
-        output to be between 0 and 1.'''
+        output to be between 0 and 1.
+        '''
 
         _model.add(
             Dense(self._training_class_count, activation='sigmoid'))
@@ -233,11 +236,11 @@ class RNNGRU(DataGRU):
         A problem with using the Sigmoid activation function, is that we can
         now only output values in the same range as the training-data.
 
-        For example, if the training-data only has temperatures between -20
-        and +30 degrees, then the scaler-object will map -20 to 0 and +30 to 1.
-        So if we limit the output of the neural network to be between 0 and 1
-        using the Sigmoid function, this can only be mapped back to temperature
-        values between -20 and +30.
+        For example, if the training-data only has values between -20 and +30,
+        then the scaler-object will map -20 to 0 and +30 to 1. So if we limit
+        the output of the neural network to be between 0 and 1 using the
+        Sigmoid function, this can only be mapped back to values between
+        -20 and +30.
 
         We can use a linear activation function on the output instead. This
         allows for the output to take on arbitrary values. It might work with
@@ -250,7 +253,6 @@ class RNNGRU(DataGRU):
 
         if False:
             # Maybe use lower init-ranges.
-            # init = RandomUniform(minval=-0.05, maxval=0.05)
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
             _model.add(Dense(
@@ -458,9 +460,20 @@ class RNNGRU(DataGRU):
         # Do an inverse map to get it back to the scale
         # of the original data-set.
         predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
+        if bool(self._binary) is True:
+            predictions_rescaled = np.round(predictions_rescaled)
 
         # Get the error value
         accuracy = mean_absolute_error(self._yv_test, predictions_rescaled)
+
+        '''print(np.round(predictions_rescaled))
+        print('\n\n')
+        print(np.round(self._yv_test))
+        print('\n\n')
+        print(predictions_rescaled)
+        print('\n\n')
+        print(self._yv_test)
+        sys.exit()'''
 
         # Return
         return {
@@ -613,6 +626,11 @@ class RNNGRU(DataGRU):
         # Initialize key variables
         datetimes = {}
         num_train = self.training_rows
+
+        # Don't plot if we are looking at binary classes
+        if bool(self._binary) is True:
+            print('> Will not plot charts for binary class values.')
+            return
 
         # End-index for the sequences.
         end_idx = start_idx + length

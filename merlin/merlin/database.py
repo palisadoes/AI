@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from ta import trend, momentum
 from sklearn.model_selection import train_test_split
+import sys
 
 # Append custom application libraries
 from merlin import general
@@ -210,7 +211,7 @@ class DataSource(_DataFile):
         # Create result to return.
         # Make sure it is float16 for efficient computing
         result = pd.DataFrame(columns=[
-            'open', 'high', 'low', 'close', 'volume',
+            'open', 'high', 'low', 'close', 'volume', 'increasing',
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
@@ -268,8 +269,6 @@ class DataSource(_DataFile):
         result['d'] = stochastic.d(window=self._globals['dwindow'])
 
         # Calculate the Miscellaneous values
-        '''miscellaneous = math.Misc(self.values())
-        result['rsi'] = miscellaneous.rsi(window=self._globals['rsiwindow'])'''
         result['rsi'] = momentum.rsi(
             result['close'],
             n=self._globals['rsiwindow'],
@@ -291,6 +290,12 @@ class DataSource(_DataFile):
             n_fast=self._globals['macd_sign'],
             n_slow=self._globals['macd_slow'],
             n_sign=self._globals['macd_sign'])
+
+        # Create series for increasing / decreasing closes
+        _result = result['pct_diff_close'].values
+        _increasing = (_result >= 0).astype(int) * 1
+        _decreasing = (_result < 0).astype(int) * 0
+        result['increasing'] = _increasing + _decreasing
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
@@ -323,7 +328,7 @@ class DataSource(_DataFile):
 class DataGRU(DataSource):
     """Prepare data for use by GRU models."""
 
-    def __init__(self, filename, shift_steps):
+    def __init__(self, filename, shift_steps, binary=False):
         """Intialize the class.
 
         Args:
@@ -338,7 +343,10 @@ class DataGRU(DataSource):
 
         # Initialize key variables
         self._shift_steps = shift_steps
-        self._label2predict = 'close'
+        if bool(binary) is False:
+            self._label2predict = 'close'
+        else:
+            self._label2predict = 'increasing'
 
         # Process data
         (self._vectors, self._classes) = self._create_vector_classes()
@@ -394,10 +402,11 @@ class DataGRU(DataSource):
 
         """
         # Initialize key variables
+        pandas_df = self._dataframe
         targets = {}
         columns = []
         crop_by = max(self._shift_steps)
-        label2predict = 'close'
+        label2predict = self._label2predict
         x_data = {'NoNaNs': None, 'all': None}
         y_data = {'NoNaNs': None, 'all': None}
         desired_columns = [
@@ -406,13 +415,6 @@ class DataGRU(DataSource):
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
-
-        # Remove all undesirable columns from the dataframe
-        pandas_df = self._dataframe
-        imported_columns = list(pandas_df)
-        for column in imported_columns:
-            if column not in desired_columns:
-                pandas_df = pandas_df.drop(column, axis=1)
 
         # Create shifted values for learning
         for step in self._shift_steps:
@@ -430,6 +432,12 @@ class DataGRU(DataSource):
         for step in self._shift_steps:
             # Shift each column by the value of its label
             classes[step] = pandas_df[label2predict].shift(-step)
+
+        # Remove all undesirable columns from the dataframe
+        imported_columns = list(pandas_df)
+        for column in imported_columns:
+            if column not in desired_columns:
+                pandas_df = pandas_df.drop(column, axis=1)
 
         # Create class and vector dataframes with only non NaN values
         # (val_loss won't improve otherwise)
