@@ -18,7 +18,7 @@ def main():
 
     """
     # Initialize key variables
-    periods = 1
+    periods_per_day = 1
     ts_start = int(time.time())
 
     # Set logging level - No Tensor flow messages
@@ -100,7 +100,7 @@ def main():
     corresponds to 8 weeks.
     '''
     weeks = args.weeks
-    sequence_length = 5 * periods * weeks
+    sequence_length = int(5 * periods_per_day * weeks)
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the

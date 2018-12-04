@@ -140,7 +140,7 @@ class DataGRU(_DataFile):
         # Create result to return
         result = pd.DataFrame(columns=[
             'year', 'month', 'weekday', 'day', 'timestamp',
-            'hour', 'minute', 'second', 'value'])
+            'hour', 'minute', 'second', 'value']).astype('float16')
 
         # Get list of values
         for epoch, value in sorted(self.filedata().items()):

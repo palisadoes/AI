@@ -291,8 +291,8 @@ class DataSource(_DataFile):
             n_slow=self._globals['macd_slow'],
             n_sign=self._globals['macd_sign'])
 
-        # Create series for increasing / decreasing closes
-        _result = result['pct_diff_close'].values
+        # Create series for increasing / decreasing closes (Convert NaNs to 0)
+        _result = np.nan_to_num(result['pct_diff_close'].values)
         _increasing = (_result >= 0).astype(int) * 1
         _decreasing = (_result < 0).astype(int) * 0
         result['increasing'] = _increasing + _decreasing
@@ -389,6 +389,16 @@ class DataGRU(DataSource):
             self._vectors['NoNaNs'],
             self._classes['NoNaNs'],
             test_size=test_size)
+
+        '''size = self._vectors['all'].shape[0]
+        training_count = int(size * test_size)
+
+        x_train = self._vectors['NoNaNs'][:training_count]
+        x_test = self._vectors['NoNaNs'][training_count:]
+        y_train = self._classes['NoNaNs'][:training_count]
+        y_test = self._classes['NoNaNs'][training_count:]
+        result = (x_train, x_test, y_train, y_test)'''
+
         return result
 
     def _create_vector_classes(self):

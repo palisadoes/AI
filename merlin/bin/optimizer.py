@@ -34,8 +34,13 @@ def main():
     parser.add_argument(
         '-p', '--periods', help='Lookahead periods.',
         type=int, required=True)
+    parser.add_argument(
+        '--binary',
+        help='Predict up/down versus actual values if True. Default False.',
+        action='store_true')
     args = parser.parse_args()
     filename = args.filename
+    binary = args.binary
     lookahead_periods = [args.periods]
 
     '''
@@ -44,22 +49,24 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = 5
-    sequence_lengths = [weeks * 4, weeks * 12]
+    days_per_week = 5
+    sequence_lengths = [
+        days_per_week * 12,
+        days_per_week * 24]
 
     # Initialize parameters
     space = {
         'units': hp.choice('units', [512, 256]),
         'dropout': hp.choice('dropout', [0.5, 0.4]),
-        'layers': hp.choice('layers', [1, 2]),
+        'layers': hp.choice('layers', [2, 3]),
         'sequence_length': hp.choice('sequence_length', sequence_lengths),
-        'patience': hp.choice('patience', [1, 5]),
+        'patience': hp.choice('patience', [5, 6]),
         'batch_size': hp.choice('batch_size', [100, 250]),
         'epochs': hp.choice('epochs', [20, 30])
     }
 
     # Do training
-    rnn = RNNGRU(filename, lookahead_periods, binary=True)
+    rnn = RNNGRU(filename, lookahead_periods, binary=binary)
 
     # Run trials
     trials = Trials()
