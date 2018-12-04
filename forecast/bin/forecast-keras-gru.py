@@ -52,8 +52,14 @@ def main():
         type=int, default=2)
     parser.add_argument(
         '-d', '--dropout',
-        help='Dropout rate as decimal from 0 to 1. Default 0.5 (or 50%)',
+        help='Dropout rate as fraction from 0 to 1. Default 0.5 (or 50%)',
         type=float, default=0.5)
+    parser.add_argument(
+        '-t', '--test_size',
+        help=(
+            'Test size as decimal fraction of total dataset. '
+            'Default 0.2 (or 20%)'),
+        type=float, default=0.2)
     parser.add_argument(
         '-u', '--units',
         help='Number of units per layer. Default 512',
@@ -68,6 +74,7 @@ def main():
     dropout = args.dropout
     layers = max(0, args.layers - 1)
     patience = args.patience
+    test_size = args.test_size
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -125,6 +132,7 @@ def main():
         epochs=epochs,
         batch_size=batch_size,
         dropout=dropout,
+        test_size=test_size,
         layers=layers,
         patience=patience,
         display=display)

@@ -100,7 +100,7 @@ class RNNGRU(DataGRU):
 
         # Create test and training arrays for VALIDATION and EVALUATION
         (x_train, xv_test,
-         self._y_train, self._yv_test) = self.train_test_split(.1)
+         self._y_train, self._yv_test) = self.train_test_split()
 
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = xv_test.shape
