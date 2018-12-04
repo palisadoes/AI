@@ -28,7 +28,7 @@ from tensorflow.python.keras.callbacks import (
 from keras import backend
 
 # Merlin imports
-from merlin.database import DataGRU
+from forecast.database import DataGRU
 
 
 class RNNGRU(DataGRU):
@@ -57,8 +57,8 @@ class RNNGRU(DataGRU):
 
         # Initialize key variables
         self._warmup_steps = warmup_steps
-        self._binary = binary
         self._display = display
+        self._binary = binary
         self._path_checkpoint = (
             '/tmp/checkpoint-{}.keras'.format(int(time.time())))
 

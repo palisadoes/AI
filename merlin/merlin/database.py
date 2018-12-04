@@ -328,7 +328,7 @@ class DataSource(_DataFile):
 class DataGRU(DataSource):
     """Prepare data for use by GRU models."""
 
-    def __init__(self, filename, shift_steps, binary=False):
+    def __init__(self, filename, shift_steps, test_size=0.33, binary=False):
         """Intialize the class.
 
         Args:
@@ -343,6 +343,7 @@ class DataGRU(DataSource):
 
         # Initialize key variables
         self._shift_steps = shift_steps
+        self._test_size = test_size
         if bool(binary) is False:
             self._label2predict = 'close'
         else:
@@ -350,15 +351,6 @@ class DataGRU(DataSource):
 
         # Process data
         (self._vectors, self._classes) = self._create_vector_classes()
-
-        # Total number of available vectors
-        num_data = len(self._vectors['all'])
-
-        # Fraction of vectors to be used for training
-        train_split = 0.9
-
-        # Fraction of vectors to be used for training and testing
-        self._training_count = int(train_split * num_data)
 
     def vectors_test_all(self):
         """Get vectors for testing.
@@ -370,11 +362,20 @@ class DataGRU(DataSource):
             result: Training or test vector numpy arrays
 
         """
+        # Fraction of vectors to be used for training
+        train_split = 1 - self._test_size
+
+        # Total number of available vectors
+        num_data = len(self._vectors['all'])
+
+        # Fraction of vectors to be used for training and testing
+        training_count = int(train_split * num_data)
+
         # Return
-        result = self._vectors['all'][self._training_count:]
+        result = self._vectors['all'][training_count:]
         return result
 
-    def train_test_split(self, test_size=0.33):
+    def train_test_split(self):
         """Create training and test data.
 
         Args:
@@ -388,17 +389,7 @@ class DataGRU(DataSource):
         result = train_test_split(
             self._vectors['NoNaNs'],
             self._classes['NoNaNs'],
-            test_size=test_size)
-
-        '''size = self._vectors['all'].shape[0]
-        training_count = int(size * test_size)
-
-        x_train = self._vectors['NoNaNs'][:training_count]
-        x_test = self._vectors['NoNaNs'][training_count:]
-        y_train = self._classes['NoNaNs'][:training_count]
-        y_test = self._classes['NoNaNs'][training_count:]
-        result = (x_train, x_test, y_train, y_test)'''
-
+            test_size=self._test_size)
         return result
 
     def _create_vector_classes(self):
