@@ -206,10 +206,10 @@ class DataGRU(_DataFile):
 
         # Create class and vector dataframes with only non NaN values
         # (val_loss won't improve otherwise)
-        y_data['NoNaNs'] = classes.values[:-crop_by]
-        y_data['all'] = classes.values[:]
-        x_data['NoNaNs'] = pandas_df.values[:-crop_by]
-        x_data['all'] = pandas_df.values[:]
+        y_data['NoNaNs'] = classes.values[:-crop_by].astype(np.float32)
+        y_data['all'] = classes.values[:].astype(np.float32)
+        x_data['NoNaNs'] = pandas_df.values[:-crop_by].astype(np.float32)
+        x_data['all'] = pandas_df.values[:].astype(np.float32)
 
         # Return
         return(x_data, y_data)

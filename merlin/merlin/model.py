@@ -138,6 +138,7 @@ class RNNGRU(DataGRU):
         print("> Numpy Data Row[0]: {}".format(x_train[0]))
         print("> Numpy Data Row[Last]: {}".format(x_train[-1]))
         print('> Numpy Targets Type: {}'.format(type(self._y_train)))
+        print("> Numpy Vector Feature Type: {}".format(type(x_train[0][0])))       
         print("> Numpy Targets Shape: {}".format(self._y_train.shape))
 
         print('> Number of Samples: {}'.format(self._y_current.shape[0]))

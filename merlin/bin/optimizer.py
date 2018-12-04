@@ -62,7 +62,7 @@ def main():
         'layers': hp.choice('layers', [2, 3, 4]),
         'sequence_length': hp.choice('sequence_length', sequence_lengths),
         'patience': hp.choice('patience', [5, 10]),
-        'batch_size': hp.choice('batch_size', [100, 250]),
+        'batch_size': hp.choice('batch_size', [500]),
         'epochs': hp.choice('epochs', [25, 50])
     }
 
