@@ -328,7 +328,7 @@ class DataSource(_DataFile):
 class DataGRU(DataSource):
     """Prepare data for use by GRU models."""
 
-    def __init__(self, filename, shift_steps, test_size=0.33, binary=False):
+    def __init__(self, filename, shift_steps, test_size=0.1, binary=False):
         """Intialize the class.
 
         Args:

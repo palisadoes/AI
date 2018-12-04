@@ -58,8 +58,8 @@ def main():
         '-t', '--test_size',
         help=(
             'Test size as decimal fraction of total dataset. '
-            'Default 0.2 (or 20%)'),
-        type=float, default=0.2)
+            'Default 0.1 (or 10%)'),
+        type=float, default=0.1)
     parser.add_argument(
         '-u', '--units',
         help='Number of units per layer. Default 512',
