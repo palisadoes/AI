@@ -96,7 +96,7 @@ class RNNGRU(DataGRU):
         ###################################
 
         # Get data
-        self._y_current = self.close()
+        self._y_current = self.values()
 
         # Create test and training arrays for VALIDATION and EVALUATION
         (x_train, xv_test,
