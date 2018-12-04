@@ -468,14 +468,8 @@ class RNNGRU(DataGRU):
         # Get the error value
         accuracy = mean_absolute_error(self._yv_test, predictions_rescaled)
 
-        '''print(np.round(predictions_rescaled))
-        print('\n\n')
-        print(np.round(self._yv_test))
-        print('\n\n')
-        print(predictions_rescaled)
-        print('\n\n')
-        print(self._yv_test)
-        sys.exit()'''
+        # Free object memory
+        model = None
 
         # Return
         return {

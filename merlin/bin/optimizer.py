@@ -12,6 +12,7 @@ from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 # Merlin imports
 from merlin.model import RNNGRU
+from merlin.general import save_trials
 
 
 def main():
@@ -85,6 +86,9 @@ def main():
 
     # Cleanup
     rnn.cleanup()
+
+    # Write trial results to file
+    save_trials(trials.trials, filename)
 
     '''
     Calculate the duration
