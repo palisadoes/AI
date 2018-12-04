@@ -59,11 +59,11 @@ def main():
     space = {
         'units': hp.choice('units', [512, 256]),
         'dropout': hp.choice('dropout', [0.5, 0.4]),
-        'layers': hp.choice('layers', [2, 3]),
+        'layers': hp.choice('layers', [2, 3, 4]),
         'sequence_length': hp.choice('sequence_length', sequence_lengths),
-        'patience': hp.choice('patience', [5, 6]),
+        'patience': hp.choice('patience', [5, 10]),
         'batch_size': hp.choice('batch_size', [100, 250]),
-        'epochs': hp.choice('epochs', [20, 30])
+        'epochs': hp.choice('epochs', [25, 50])
     }
 
     # Do training

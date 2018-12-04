@@ -13,7 +13,7 @@ class Dates(object):
     """Convert Pandas date series to components."""
 
     def __init__(self, dates, date_format):
-        """Function for intializing the class.
+        """Initialize the class.
 
         Args:
             dates: Pandas series of dates
