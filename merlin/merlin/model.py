@@ -115,6 +115,30 @@ class RNNGRU(DataGRU):
 
         Then we detect the range of values from the training-data and scale
         the training-data.
+
+        From StackOverflow:
+
+        To center the data (make it have zero mean and unit standard error),
+        you subtract the mean and then divide the result by the standard
+        deviation.
+
+            x'=x−μσ
+
+        You do that on the training set of data. But then you have to apply the
+        same transformation to your testing set (e.g. in cross-validation), or
+        to newly obtained examples before forecast. But you have to use the
+        same two parameters μ and σ (values) that you used for centering the
+        training set.
+
+        Hence, every sklearn's transform's fit() just calculates the parameters
+        (e.g. μ and σ in case of StandardScaler) and saves them as an internal
+        objects state. Afterwards, you can call its transform() method to apply
+        the transformation to a particular set of examples.
+
+        fit_transform() joins these two steps and is used for the initial
+        fitting of parameters on the training set x, but it also returns a
+        transformed x'. Internally, it just calls first fit() and then
+        transform() on the same data.
         '''
         self._x_scaler = MinMaxScaler()
         self._x_train_scaled = self._x_scaler.fit_transform(x_train)
@@ -138,7 +162,7 @@ class RNNGRU(DataGRU):
         print("> Numpy Data Row[0]: {}".format(x_train[0]))
         print("> Numpy Data Row[Last]: {}".format(x_train[-1]))
         print('> Numpy Targets Type: {}'.format(type(self._y_train)))
-        print("> Numpy Vector Feature Type: {}".format(type(x_train[0][0])))       
+        print("> Numpy Vector Feature Type: {}".format(type(x_train[0][0])))
         print("> Numpy Targets Shape: {}".format(self._y_train.shape))
 
         print('> Number of Samples: {}'.format(self._y_current.shape[0]))
