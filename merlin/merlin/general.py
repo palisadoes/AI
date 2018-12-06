@@ -76,6 +76,10 @@ def train_validation_test_split(vectors, classes, test_size):
     train_test_split in sklearn.model_selection does this randomly and is
     not suited for time-series data. It also doesn't create a validation-set
 
+    At some point we may want to try Walk Forward Validation methods:
+
+    https://machinelearningmastery.com/backtest-machine-learning-models-time-series-forecasting/
+
     Args:
         vectors: Numpy array of vectors
         classes: Numpy array of classes
