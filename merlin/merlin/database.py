@@ -4,8 +4,6 @@
 import pandas as pd
 import numpy as np
 from ta import trend, momentum
-from sklearn.model_selection import train_test_split
-import sys
 
 # Append custom application libraries
 from merlin import general
@@ -375,8 +373,12 @@ class DataGRU(DataSource):
         result = self._vectors['all'][training_count:]
         return result
 
-    def train_test_split(self):
-        """Create training and test data.
+    def train_validation_test_split(self):
+        """Create contiguous (not random) training and test data.
+
+        train_test_split in sklearn.model_selection does this randomly and is
+        not suited for time-series data. It also doesn't create a
+        validation-set
 
         Args:
             None
@@ -386,10 +388,10 @@ class DataGRU(DataSource):
 
         """
         # Return
-        result = train_test_split(
-            self._vectors['NoNaNs'],
-            self._classes['NoNaNs'],
-            test_size=self._test_size)
+        vectors = self._vectors['NoNaNs']
+        classes = self._classes['NoNaNs']
+        result = general.train_validation_test_split(
+            vectors, classes, self._test_size)
         return result
 
     def _create_vector_classes(self):
