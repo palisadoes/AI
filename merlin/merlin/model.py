@@ -32,7 +32,13 @@ from merlin.database import DataGRU
 
 
 class RNNGRU(DataGRU):
-    """Process data for ingestion."""
+    """Process data for ingestion.
+
+    Roughly based on:
+
+    https://github.com/Hvass-Labs/TensorFlow-Tutorials/blob/master/23_Time-Series-Prediction.ipynb
+
+    """
 
     def __init__(
             self, filename, lookahead_periods, batch_size=64, epochs=20,
