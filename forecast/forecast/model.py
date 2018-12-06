@@ -214,7 +214,7 @@ class RNNGRU(DataGRU):
             recurrent_dropout=_hyperparameters['dropout'],
             input_shape=(None, self._training_vector_count,)))
 
-        for _ in range(0, _hyperparameters['layers']):
+        for _ in range(1, _hyperparameters['layers']):
             _model.add(GRU(
                 units=_hyperparameters['units'],
                 recurrent_dropout=_hyperparameters['dropout'],
