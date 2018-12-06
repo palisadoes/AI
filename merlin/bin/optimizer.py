@@ -5,6 +5,7 @@
 from __future__ import print_function
 import argparse
 import time
+import sys
 from pprint import pprint
 
 # PIP3 imports
@@ -55,10 +56,11 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    days_per_week = 5
+    periods_per_day = 1
+    days_per_week = 7
     sequence_lengths = [
-        days_per_week * 12,
-        days_per_week * 24]
+        periods_per_day * days_per_week * 12,
+        periods_per_day * days_per_week * 24]
 
     # Initialize parameters
     space = {
@@ -73,6 +75,13 @@ def main():
 
     # Do training
     rnn = RNNGRU(filename, lookahead_periods, binary=binary)
+
+    # Test for stationarity
+    if rnn.stationary() is False:
+        print(
+            'Data appears to be a random walk and is not suitable '
+            'for forecasting.')
+        sys.exit(0)
 
     # Run trials
     trials = Trials()

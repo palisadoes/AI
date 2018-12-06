@@ -33,9 +33,9 @@ def main():
         '-b', '--batch-size', help='Size of batch. Default 500.',
         type=int, default=500)
     parser.add_argument(
-        '-w', '--weeks',
-        help='Number of weeks of data to consider when learning. Default 53.',
-        type=int, default=53)
+        '-d', '--days',
+        help='Number of days of data to consider when learning. Default 365.',
+        type=float, default=365)
     parser.add_argument(
         '-e', '--epochs',
         help='Number of epoch iterations to use. Default 20.',
@@ -51,7 +51,7 @@ def main():
         help='Number of GRU layers to use.',
         type=int, default=2)
     parser.add_argument(
-        '-d', '--dropout',
+        '-o', '--dropout',
         help='Dropout rate as fraction from 0 to 1. Default 0.5 (or 50%)',
         type=float, default=0.5)
     parser.add_argument(
@@ -106,8 +106,8 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    weeks = args.weeks
-    sequence_length = int(7 * periods_per_day * weeks)
+    days = args.days
+    sequence_length = int(periods_per_day * days)
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
@@ -123,7 +123,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [1, 3]
+    lookahead_periods = [3]
 
     # Do training
     rnn = RNNGRU(

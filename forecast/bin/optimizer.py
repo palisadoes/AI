@@ -5,6 +5,7 @@
 from __future__ import print_function
 import argparse
 import time
+import sys
 from pprint import pprint
 
 # PIP3 imports
@@ -12,6 +13,7 @@ from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 # Merlin imports
 from forecast.model import RNNGRU
+from forecast.general import save_trials
 
 
 def main():
@@ -32,6 +34,10 @@ def main():
         '-f', '--filename', help='Name of CSV file to read.',
         type=str, required=True)
     parser.add_argument(
+        '-m', '--max_evals',
+        help=('Maximum number of experiments before stopping. Default 500'),
+        type=int, default=500)
+    parser.add_argument(
         '-p', '--periods', help='Lookahead periods.',
         type=int, required=True)
     parser.add_argument(
@@ -41,6 +47,7 @@ def main():
     args = parser.parse_args()
     filename = args.filename
     binary = args.binary
+    max_evals = args.max_evals
     lookahead_periods = [args.periods]
 
     '''
@@ -49,33 +56,39 @@ def main():
     one hour, so 24 x 7 time-steps corresponds to a week, and 24 x 7 x 8
     corresponds to 8 weeks.
     '''
-    days_per_week = 5
+    periods_per_day = 288
+    days_per_week = 1
     sequence_lengths = [
-        days_per_week * 12,
-        days_per_week * 24]
+        periods_per_day * days_per_week * 1]
 
     # Initialize parameters
     space = {
-        'units': hp.choice('units', [512, 256]),
-        'dropout': hp.choice('dropout', [0.5, 0.4]),
-        'layers': hp.choice('layers', [2, 3]),
+        'units': hp.choice('units', list(range(25, 255, 5))),
+        'dropout': hp.choice('dropout', [0.5]),
+        'layers': hp.choice('layers', [1]),
         'sequence_length': hp.choice('sequence_length', sequence_lengths),
-        'patience': hp.choice('patience', [5, 6]),
-        'batch_size': hp.choice('batch_size', [100, 250]),
-        'epochs': hp.choice('epochs', [20, 30])
+        'patience': hp.choice('patience', [5]),
+        'batch_size': hp.choice('batch_size', [500]),
+        'epochs': hp.choice('epochs', [30])
     }
 
     # Do training
     rnn = RNNGRU(filename, lookahead_periods, binary=binary)
 
+    # Test for stationarity
+    if rnn.stationary() is False:
+        print(
+            'Data appears to be a random walk and is not suitable '
+            'for forecasting.')
+        sys.exit(0)
+
     # Run trials
     trials = Trials()
-    best = fmin(
-        rnn.objective, space, algo=tpe.suggest, trials=trials, max_evals=100)
+    _ = fmin(
+        rnn.objective, space,
+        algo=tpe.suggest, trials=trials, max_evals=max_evals)
 
     # Print results
-    print('\n> Best:\n')
-    pprint(best)
     print('\n> Best Trial:\n')
     pprint(trials.best_trial)
 
@@ -85,6 +98,9 @@ def main():
 
     # Cleanup
     rnn.cleanup()
+
+    # Write trial results to file
+    save_trials(trials.trials, filename)
 
     '''
     Calculate the duration

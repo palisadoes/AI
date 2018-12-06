@@ -3,10 +3,8 @@
 
 # Standard imports
 from __future__ import print_function
-import argparse
 import time
 import os
-import sys
 from pprint import pprint
 
 # PIP3 imports.
@@ -16,6 +14,7 @@ from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from hyperopt import STATUS_OK
+from statsmodels.tsa.stattools import adfuller
 
 # TensorFlow imports
 import tensorflow as tf
@@ -102,7 +101,7 @@ class RNNGRU(DataGRU):
         ###################################
 
         # Get data
-        self._y_current = self.close()
+        self._y_current = self.values()
 
         # Create test and training arrays for VALIDATION and EVALUATION
         (x_train, x_validation,
@@ -525,6 +524,39 @@ class RNNGRU(DataGRU):
         # Delete
         os.remove(self._path_checkpoint)
 
+    def stationary(self):
+        """Evaluate wether the timeseries is stationary.
+
+        non-stationary timeseries are probably random walks and not
+        suitable for forecasting.
+
+        Args:
+            None
+
+        Returns:
+            state: True if stationary
+
+        """
+        # Initialize key variables
+        state = False
+        values = []
+
+        # statistical test
+        result = adfuller(self._y_current)
+        adf = result[0]
+        print('> Stationarity Test:')
+        print('  ADF Statistic: {:.3f}'.format(adf))
+        print('  p-value: {:.3f}'.format(result[1]))
+        print('  Critical Values:')
+        for key, value in result[4].items():
+            print('\t{}: {:.3f}'.format(key, value))
+            values.append(value)
+
+        # Return
+        if adf < min(values):
+            state = True
+        return state
+
     def _batch_generator(self, batch_size, sequence_length):
         """Create generator function to create random batches of training-data.
 
@@ -695,7 +727,7 @@ class RNNGRU(DataGRU):
 
             # Datetimes to use for testing
             datetimes[shim] = self.datetime()[
-                num_train:][start_idx:end_idx]
+                -self.test_rows-1:][start_idx:end_idx]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
@@ -728,7 +760,7 @@ class RNNGRU(DataGRU):
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
                 datetimes['actual'] = self.datetime()[
-                    num_train:][start_idx:]
+                    -self.test_rows:][start_idx:]
 
             # Create a filename
             filename = (

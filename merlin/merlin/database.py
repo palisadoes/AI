@@ -54,7 +54,7 @@ class _DataFile(object):
         # Return
         return (_values, _dates)
 
-    def values(self):
+    def _file_values(self):
         """Process file data.
 
         Args:
@@ -132,7 +132,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self.values()['open'][self._ignore_row_count:]
+        result = self._file_values()['open'][self._ignore_row_count:]
         return result
 
     def high(self):
@@ -146,7 +146,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self.values()['high'][self._ignore_row_count:]
+        result = self._file_values()['high'][self._ignore_row_count:]
         return result
 
     def low(self):
@@ -160,7 +160,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self.values()['low'][self._ignore_row_count:]
+        result = self._file_values()['low'][self._ignore_row_count:]
         return result
 
     def close(self):
@@ -174,7 +174,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self.values()['close'][self._ignore_row_count:]
+        result = self._file_values()['close'][self._ignore_row_count:]
         return result
 
     def volume(self):
@@ -188,7 +188,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self.values()['volume'][self._ignore_row_count:]
+        result = self._file_values()['volume'][self._ignore_row_count:]
         return result
 
     def __dataframe(self):
@@ -202,7 +202,7 @@ class DataSource(_DataFile):
 
         """
         # Calculate the percentage and real differences between columns
-        difference = math.Difference(self.values())
+        difference = math.Difference(self._file_values())
         num_difference = difference.actual()
         pct_difference = difference.relative()
 
@@ -219,11 +219,11 @@ class DataSource(_DataFile):
             'ma_volume_delta']).astype('float16')
 
         # Add current value columns
-        result['open'] = self.values()['open']
-        result['high'] = self.values()['high']
-        result['low'] = self.values()['low']
-        result['close'] = self.values()['close']
-        result['volume'] = self.values()['volume']
+        result['open'] = self._file_values()['open']
+        result['high'] = self._file_values()['high']
+        result['low'] = self._file_values()['low']
+        result['close'] = self._file_values()['close']
+        result['volume'] = self._file_values()['volume']
 
         # Add columns of differences
         result['num_diff_open'] = num_difference['open']
@@ -262,7 +262,7 @@ class DataSource(_DataFile):
 
         # Calculate the Stochastic values
         stochastic = math.Stochastic(
-            self.values(), window=self._globals['kwindow'])
+            self._file_values(), window=self._globals['kwindow'])
         result['k'] = stochastic.k()
         result['d'] = stochastic.d(window=self._globals['dwindow'])
 
@@ -272,7 +272,7 @@ class DataSource(_DataFile):
             n=self._globals['rsiwindow'],
             fillna=False)
 
-        miscellaneous = math.Misc(self.values())
+        miscellaneous = math.Misc(self._file_values())
         result['proc'] = miscellaneous.proc(self._globals['proc_window'])
 
         # Calculate ADX
@@ -349,6 +349,20 @@ class DataGRU(DataSource):
 
         # Process data
         (self._vectors, self._classes) = self._create_vector_classes()
+
+    def values(self):
+        """Get values that we are aiming to predict.
+
+        Args:
+            None
+
+        Returns:
+            result: Series for learning
+
+        """
+        # Return
+        result = self._dataframe[self._label2predict]
+        return result
 
     def vectors_test_all(self):
         """Get vectors for testing.

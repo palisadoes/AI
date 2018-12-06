@@ -188,6 +188,9 @@ class DataGRU(_DataFile):
         desired_columns = [
             'weekday', 'day', 'hour', 'minute', 'value']
 
+        # Trim vectors
+        desired_columns = ['value']
+
         # Create shifted values for learning
         for step in self._shift_steps:
             '''
