@@ -690,7 +690,7 @@ class RNNGRU(DataGRU):
 
             # Use test-data.
             x_values = x_test_scaled[start_idx:end_idx]
-            y_true = self._y_validation[start_idx:end_idx]
+            y_true = self._y_test[start_idx:end_idx]
             shim = 'Test'
 
             # Datetimes to use for testing

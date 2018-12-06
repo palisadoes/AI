@@ -33,6 +33,10 @@ def main():
         '-f', '--filename', help='Name of CSV file to read.',
         type=str, required=True)
     parser.add_argument(
+        '-m', '--max_evals',
+        help=('Maximum number of experiments before stopping. Default 500'),
+        type=int, default=500)
+    parser.add_argument(
         '-p', '--periods', help='Lookahead periods.',
         type=int, required=True)
     parser.add_argument(
@@ -42,6 +46,7 @@ def main():
     args = parser.parse_args()
     filename = args.filename
     binary = args.binary
+    max_evals = args.max_evals
     lookahead_periods = [args.periods]
 
     '''
@@ -71,12 +76,11 @@ def main():
 
     # Run trials
     trials = Trials()
-    best = fmin(
-        rnn.objective, space, algo=tpe.suggest, trials=trials, max_evals=100)
+    _ = fmin(
+        rnn.objective, space,
+        algo=tpe.suggest, trials=trials, max_evals=max_evals)
 
     # Print results
-    print('\n> Best:\n')
-    pprint(best)
     print('\n> Best Trial:\n')
     pprint(trials.best_trial)
 

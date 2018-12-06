@@ -99,11 +99,12 @@ class RNNGRU(DataGRU):
         self._y_current = self.values()
 
         # Create test and training arrays for VALIDATION and EVALUATION
-        (x_train, xv_test,
-         self._y_train, self._yv_test) = self.train_test_split()
+        (x_train, x_validation,
+         _x_test, self._y_train,
+         self._y_validation, self._y_test) = self.train_validation_test_split()
 
         (self.training_rows, self._training_vector_count) = x_train.shape
-        (self.test_rows, _) = xv_test.shape
+        (self.test_rows, _) = _x_test.shape
         (_, self._training_class_count) = self._y_train.shape
 
         '''
@@ -115,10 +116,35 @@ class RNNGRU(DataGRU):
 
         Then we detect the range of values from the training-data and scale
         the training-data.
+
+        From StackOverflow:
+
+        To center the data (make it have zero mean and unit standard error),
+        you subtract the mean and then divide the result by the standard
+        deviation.
+
+            x'=x−μσ
+
+        You do that on the training set of data. But then you have to apply the
+        same transformation to your testing set (e.g. in cross-validation), or
+        to newly obtained examples before forecast. But you have to use the
+        same two parameters μ and σ (values) that you used for centering the
+        training set.
+
+        Hence, every sklearn's transform's fit() just calculates the parameters
+        (e.g. μ and σ in case of StandardScaler) and saves them as an internal
+        objects state. Afterwards, you can call its transform() method to apply
+        the transformation to a particular set of examples.
+
+        fit_transform() joins these two steps and is used for the initial
+        fitting of parameters on the training set x, but it also returns a
+        transformed x'. Internally, it just calls first fit() and then
+        transform() on the same data.
         '''
         self._x_scaler = MinMaxScaler()
         self._x_train_scaled = self._x_scaler.fit_transform(x_train)
-        self._xv_test_scaled = self._x_scaler.transform(xv_test)
+        self._x_validation_scaled = self._x_scaler.transform(x_validation)
+        self._x_test_scaled = self._x_scaler.transform(_x_test)
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -130,7 +156,9 @@ class RNNGRU(DataGRU):
 
         self._y_scaler = MinMaxScaler()
         self._y_train_scaled = self._y_scaler.fit_transform(self._y_train)
-        self._yv_test_scaled = self._y_scaler.transform(self._yv_test)
+        self._y_validation_scaled = self._y_scaler.transform(
+            self._y_validation)
+        self._y_test_scaled = self._y_scaler.transform(self._y_test)
 
         # Print stuff
         print('\n> Numpy Data Type: {}'.format(type(x_train)))
@@ -306,8 +334,8 @@ class RNNGRU(DataGRU):
         sequence.
         '''
 
-        validation_data = (np.expand_dims(self._xv_test_scaled, axis=0),
-                           np.expand_dims(self._yv_test_scaled, axis=0))
+        validation_data = (np.expand_dims(self._x_validation_scaled, axis=0),
+                           np.expand_dims(self._y_validation_scaled, axis=0))
 
         # Callback Functions
 
@@ -423,15 +451,15 @@ class RNNGRU(DataGRU):
         # Performance on Test-Set
 
         '''
-        We can now evaluate the model's performance on the test-set. This
-        function expects a batch of data, but we will just use one long
+        We can now evaluate the model's performance on the validation-set.
+        This function expects a batch of data, but we will just use one long
         time-series for the test-set, so we just expand the
         array-dimensionality to create a batch with that one sequence.
         '''
 
         result = _model.evaluate(
-            x=np.expand_dims(self._xv_test_scaled, axis=0),
-            y=np.expand_dims(self._yv_test_scaled, axis=0))
+            x=np.expand_dims(self._x_test_scaled, axis=0),
+            y=np.expand_dims(self._y_test_scaled, axis=0))
 
         print('> Loss (test-set): {}'.format(result))
 
@@ -453,7 +481,7 @@ class RNNGRU(DataGRU):
         model = self.model(params=params)
 
         # Input-signals for the model.
-        x_values = np.expand_dims(self._xv_test_scaled, axis=0)
+        x_values = np.expand_dims(self._x_test_scaled, axis=0)
 
         # Get the predictions
         predictions = model.predict(x_values, verbose=1)
@@ -466,14 +494,14 @@ class RNNGRU(DataGRU):
             predictions_rescaled = np.round(predictions_rescaled)
 
         # Get the error value
-        accuracy = mean_absolute_error(self._yv_test, predictions_rescaled)
+        accuracy = mean_absolute_error(self._y_test, predictions_rescaled)
 
         # Free object memory
         model = None
 
         # Return
         return {
-            'loss': -accuracy,
+            'loss': (accuracy * -1),
             'status': STATUS_OK,
             'hyperparameters': params}
 
@@ -655,7 +683,7 @@ class RNNGRU(DataGRU):
 
             # Use test-data.
             x_values = x_test_scaled[start_idx:end_idx]
-            y_true = self._yv_test[start_idx:end_idx]
+            y_true = self._y_test[start_idx:end_idx]
             shim = 'Test'
 
             # Datetimes to use for testing
