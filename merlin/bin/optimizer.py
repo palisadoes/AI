@@ -64,7 +64,7 @@ def main():
 
     # Initialize parameters
     space = {
-        'units': hp.choice('units', list(range(25, 1005, 5))),
+        'units': hp.choice('units', list(range(500, 505, 5))),
         'dropout': hp.choice('dropout', [0.5]),
         'layers': hp.choice('layers', [1]),
         'sequence_length': hp.choice('sequence_length', sequence_lengths),
@@ -79,7 +79,7 @@ def main():
     # Test for stationarity
     if rnn.stationary() is False:
         print(
-            'Data appears to be a random walk and is not suitable '
+            '> Data appears to be a random walk and is not suitable '
             'for forecasting.')
         sys.exit(0)
 

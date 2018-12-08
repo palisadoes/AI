@@ -68,7 +68,12 @@ def main():
         '--display',
         help='Display on screen if True. Default False.',
         action='store_true')
+    parser.add_argument(
+        '--binary',
+        help='Predict up/down versus actual values if True. Default False.',
+        action='store_true')
     args = parser.parse_args()
+    binary = args.binary
     filename = args.filename
     display = args.display
     dropout = args.dropout
@@ -123,7 +128,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [1, 3]
+    lookahead_periods = [1]
 
     # Do training
     rnn = RNNGRU(
@@ -134,10 +139,16 @@ def main():
         dropout=dropout,
         test_size=test_size,
         layers=layers,
+        binary=binary,
         patience=patience,
         display=display)
+    rnn.stationary()
     model = rnn.model()
-    rnn.evaluate(model)
+    metrics = rnn.evaluate(model)
+
+    # Print metrics
+    print('> Model Metric Names {}'.format(model.metrics_names))
+    print('> Model Metrics {}'.format(metrics))
 
     '''
     Calculate the duration

@@ -5,6 +5,7 @@
 from __future__ import print_function
 import time
 import os
+import sys
 from pprint import pprint
 
 # PIP3 imports.
@@ -28,6 +29,7 @@ from keras import backend
 
 # Merlin imports
 from merlin.database import DataGRU
+from merlin import general
 
 
 class RNNGRU(DataGRU):
@@ -468,6 +470,7 @@ class RNNGRU(DataGRU):
             y=np.expand_dims(self._y_test_scaled, axis=0))
 
         print('> Loss (test-set): {}'.format(result))
+        print('> Metric Names: {}'.format(_model.metrics_names))
 
         # If you have several metrics you can use this instead.
         if False:
@@ -496,8 +499,14 @@ class RNNGRU(DataGRU):
         # Do an inverse map to get it back to the scale
         # of the original data-set.
         predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
+        print('------------------------------')
+        print(min(predictions_rescaled), max(predictions_rescaled))
+        print('------------------------------')
+
         if bool(self._binary) is True:
-            predictions_rescaled = np.round(predictions_rescaled)
+            # predictions_rescaled = np.round(predictions_rescaled)
+            # predictions_rescaled = general.binary_accuracy(predictions_rescaled)
+            pass
 
         # Get the error value
         accuracy = mean_absolute_error(self._y_test, predictions_rescaled)
@@ -555,6 +564,7 @@ class RNNGRU(DataGRU):
         # Return
         if adf < min(values):
             state = True
+        print('  Stationarity: {}'.format(state))
         return state
 
     def _batch_generator(self, batch_size, sequence_length):
@@ -755,7 +765,7 @@ class RNNGRU(DataGRU):
             else:
                 # Only get current values that are a part of the test data.
                 current = self._y_current[
-                    num_train:][start_idx:]
+                    -self.test_rows:][start_idx:]
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values

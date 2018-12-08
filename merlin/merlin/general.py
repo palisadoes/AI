@@ -4,6 +4,7 @@
 import time
 import csv
 import os
+import sys
 
 # PIP imports
 import pandas as pd
@@ -107,4 +108,33 @@ def train_validation_test_split(vectors, classes, test_size):
 
     # Return
     result = (x_train, x_validation, x_test, y_train, y_validation, y_test)
+    return result
+
+
+def binary_accuracy(predictions, limit=0.3):
+    """Save trial results to file.
+
+    Args:
+        trials: List of trial results dicts
+
+    Returns:
+        result: Numpy arrary of results
+
+    """
+    higher = (predictions > 1 - limit).astype(int) * 1
+    lower = (predictions < limit).astype(int) * 0
+
+    above_lower_bound = (predictions > limit).astype(int) * -1
+    below_upper_bound = (predictions < 1 - limit).astype(int) * -1
+    undetermined = above_lower_bound * below_upper_bound
+
+    result = higher + lower + undetermined
+    print(higher, '\n')
+    print(lower, '\n')
+    print(undetermined)
+    items = []
+    for item in predictions:
+        items.append(item)
+    print(items)
+    sys.exit(0)
     return result

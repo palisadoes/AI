@@ -1,9 +1,5 @@
 """Library to process the ingest of data files."""
 
-# Standard imports
-from copy import deepcopy
-import sys
-
 # PIP imports
 import pandas as pd
 import numpy as np
@@ -105,7 +101,6 @@ class DataSource(_DataFile):
 
         # Setup classwide variables
         self._globals = {
-            'sliding_window': 250,
             'kwindow': 35,
             'dwindow': 5,
             'rsiwindow': 35,
@@ -124,7 +119,7 @@ class DataSource(_DataFile):
             max(self._globals.values()))
 
         # Create the dataframe to be used by all other methods
-        (self._dataframe, self._new_vectors) = self.__dataframe()
+        self._dataframe = self.__dataframe()
 
     def open(self):
         """Get open values.
@@ -137,8 +132,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['open'][
-            self._ignore_row_count:-self._globals['proc_window']]
+        result = self._file_values()['open'][self._ignore_row_count:]
         return result
 
     def high(self):
@@ -152,8 +146,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['high'][
-            self._ignore_row_count:-self._globals['proc_window']]
+        result = self._file_values()['high'][self._ignore_row_count:]
         return result
 
     def low(self):
@@ -167,8 +160,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['low'][
-            self._ignore_row_count:-self._globals['proc_window']]
+        result = self._file_values()['low'][self._ignore_row_count:]
         return result
 
     def close(self):
@@ -182,8 +174,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['close'][
-            self._ignore_row_count:-self._globals['proc_window']]
+        result = self._file_values()['close'][self._ignore_row_count:]
         return result
 
     def volume(self):
@@ -197,8 +188,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['volume'][
-            self._ignore_row_count:-self._globals['proc_window']]
+        result = self._file_values()['volume'][self._ignore_row_count:]
         return result
 
     def __dataframe(self):
@@ -305,26 +295,12 @@ class DataSource(_DataFile):
         _decreasing = (_result < 0).astype(int) * 0
         result['increasing'] = _increasing + _decreasing
 
-        '''
-        result['increasing'] = np.nan_to_num(result['pct_diff_close'].values)
-        print(result['increasing'])
-        sys.exit(0)
-        '''
-
-        # Create sliding window
-        slide = self._globals['sliding_window']
-        list_ = result['close'].values.tolist()
-        vectors = pd.DataFrame(np.array(
-            [list_[i:i+slide] for i in range(0, len(list_), 1)][:-slide]))
-        vectors = vectors.iloc[self._ignore_row_count:]
-
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
-        result = result.iloc[
-            self._ignore_row_count:-self._globals['sliding_window']]
+        result = result.iloc[self._ignore_row_count:]
 
         # Return
-        return (result, vectors)
+        return result
 
     def datetime(self):
         """Create a numpy array of datetimes.
@@ -443,7 +419,7 @@ class DataGRU(DataSource):
 
         """
         # Initialize key variables
-        pandas_df = deepcopy(self._dataframe)
+        pandas_df = self._dataframe
         crop_by = max(self._shift_steps)
         label2predict = self._label2predict
         x_data = {'NoNaNs': None, 'all': None}
@@ -454,6 +430,11 @@ class DataGRU(DataSource):
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
+
+        desired_columns = [
+            'num_diff_open',
+            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
+            'pct_diff_high', 'pct_diff_low', 'pct_diff_close']
 
         # Get class values for each vector
         classes = pd.DataFrame(columns=self._shift_steps)
@@ -471,9 +452,8 @@ class DataGRU(DataSource):
         # (val_loss won't improve otherwise)
         y_data['NoNaNs'] = classes.values[:-crop_by].astype(np.float32)
         y_data['all'] = classes.values[:].astype(np.float32)
-        x_data['NoNaNs'] = self._new_vectors.values[
-            :-crop_by].astype(np.float32)
-        x_data['all'] = self._new_vectors.values[:].astype(np.float32)
+        x_data['NoNaNs'] = pandas_df.values[:-crop_by].astype(np.float32)
+        x_data['all'] = pandas_df.values[:].astype(np.float32)
 
         # Return
         return(x_data, y_data)

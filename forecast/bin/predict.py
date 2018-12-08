@@ -123,7 +123,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [3]
+    lookahead_periods = [288]
 
     # Do training
     rnn = RNNGRU(
@@ -207,7 +207,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    rnn.plot_test(model, start_idx=rnn.test_rows-30, length=rnn.test_rows)
+    rnn.plot_test(model, start_idx=0, length=rnn.test_rows-288)
 
     # Cleanup
     rnn.cleanup()
