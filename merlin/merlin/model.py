@@ -19,13 +19,16 @@ from statsmodels.tsa.stattools import adfuller
 
 # TensorFlow imports
 import tensorflow as tf
-from tensorflow.python.keras.models import Sequential
-from tensorflow.python.keras.layers import Dense, GRU
-from tensorflow.python.keras.optimizers import RMSprop
-from tensorflow.python.keras.initializers import RandomUniform
-from tensorflow.python.keras.callbacks import (
+
+# Keras imports
+from keras.models import Sequential
+from keras.layers import Dense, GRU
+from keras.optimizers import RMSprop
+from keras.initializers import RandomUniform
+from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 from keras import backend
+from keras_contrib.layers.normalization import InstanceNormalization
 
 # Merlin imports
 from merlin.database import DataGRU
@@ -259,19 +262,22 @@ class RNNGRU(DataGRU):
         '''
 
         _model.add(GRU(
-            units=_hyperparameters['units'],
+            _hyperparameters['units'],
             return_sequences=True,
             recurrent_dropout=_hyperparameters['dropout'],
             input_shape=(None, self._training_vector_count,)))
+        _model.add(InstanceNormalization())
 
         for _ in range(1, _hyperparameters['layers']):
             _model.add(GRU(
-                units=_hyperparameters['units'],
+                _hyperparameters['units'],
                 recurrent_dropout=_hyperparameters['dropout'],
                 return_sequences=True))
+            _model.add(InstanceNormalization())
 
         '''
-        The GRU outputs a batch of sequences of 512 values. We want to predict
+        The GRU outputs a batchfrom keras_contrib.layers.advanced_activations import PELU
+ of sequences of 512 values. We want to predict
         3 output-signals, so we add a fully-connected (or dense) layer which
         maps 512 values down to only 3 values.
 
