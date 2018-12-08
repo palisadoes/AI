@@ -388,6 +388,32 @@ class DataGRU(DataSource):
         result = self._dataframe[self._label2predict]
         return result
 
+    def vectors(self):
+        """Get all vectors for testing.
+
+        Args:
+            None
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        # Return
+        return self._vectors['NoNaNs']
+
+    def classes(self):
+        """Get all vectors for testing.
+
+        Args:
+            None
+
+        Returns:
+            result: Training or test vector numpy arrays
+
+        """
+        # Return
+        return self._classes['NoNaNs']
+
     def vectors_test_all(self):
         """Get vectors for testing.
 

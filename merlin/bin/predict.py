@@ -77,9 +77,10 @@ def main():
     filename = args.filename
     display = args.display
     dropout = args.dropout
-    layers = max(0, args.layers - 1)
+    layers = max(0, args.layers)
     patience = args.patience
     test_size = args.test_size
+    units = args.units
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -139,16 +140,13 @@ def main():
         dropout=dropout,
         test_size=test_size,
         layers=layers,
+        units=units,
         binary=binary,
         patience=patience,
         display=display)
     rnn.stationary()
     model = rnn.model()
-    metrics = rnn.evaluate(model)
-
-    # Print metrics
-    print('> Model Metric Names {}'.format(model.metrics_names))
-    print('> Model Metrics {}'.format(metrics))
+    rnn.evaluate(model)
 
     '''
     Calculate the duration

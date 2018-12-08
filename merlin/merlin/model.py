@@ -149,9 +149,17 @@ class RNNGRU(DataGRU):
         transform() on the same data.
         '''
         self._x_scaler = MinMaxScaler()
-        self._x_train_scaled = self._x_scaler.fit_transform(x_train)
+        _ = self._x_scaler.fit_transform(self.vectors())
+        self._x_train_scaled = self._x_scaler.transform(x_train)
         self._x_validation_scaled = self._x_scaler.transform(x_validation)
         self._x_test_scaled = self._x_scaler.transform(_x_test)
+
+        '''print(np.amin(self._x_train_scaled), np.amax(self._x_train_scaled))
+        print(np.amin(self._x_train_scaled), np.amax(self._x_train_scaled))
+        print(np.amin(self._x_test_scaled), np.amax(self._x_test_scaled))
+
+        print('\n', _x_test, '\n')
+        print('\n', self._x_test_scaled, '\n')'''
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -162,10 +170,16 @@ class RNNGRU(DataGRU):
         '''
 
         self._y_scaler = MinMaxScaler()
-        self._y_train_scaled = self._y_scaler.fit_transform(self._y_train)
+        _ = self._y_scaler.fit_transform(self.classes())
+        self._y_train_scaled = self._y_scaler.transform(self._y_train)
         self._y_validation_scaled = self._y_scaler.transform(
             self._y_validation)
         self._y_test_scaled = self._y_scaler.transform(self._y_test)
+
+        '''print(np.amin(self._y_train_scaled), np.amax(self._y_train_scaled))
+        print(np.amin(self._y_train_scaled), np.amax(self._y_train_scaled))
+        print(np.amin(self._y_test_scaled), np.amax(self._y_test_scaled))
+        sys.exit()'''
 
         # Print stuff
         print('\n> Numpy Data Type: {}'.format(type(x_train)))
@@ -469,7 +483,7 @@ class RNNGRU(DataGRU):
             x=np.expand_dims(self._x_test_scaled, axis=0),
             y=np.expand_dims(self._y_test_scaled, axis=0))
 
-        print('> Loss (test-set): {}'.format(result))
+        print('> Metrics (test-set): {}'.format(result))
         print('> Metric Names: {}'.format(_model.metrics_names))
 
         # If you have several metrics you can use this instead.
@@ -499,9 +513,6 @@ class RNNGRU(DataGRU):
         # Do an inverse map to get it back to the scale
         # of the original data-set.
         predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
-        print('------------------------------')
-        print(min(predictions_rescaled), max(predictions_rescaled))
-        print('------------------------------')
 
         if bool(self._binary) is True:
             # predictions_rescaled = np.round(predictions_rescaled)
