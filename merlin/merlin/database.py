@@ -105,7 +105,6 @@ class DataSource(_DataFile):
 
         # Setup classwide variables
         self._globals = {
-            'sliding_window': 250,
             'kwindow': 35,
             'dwindow': 5,
             'rsiwindow': 35,
@@ -124,7 +123,7 @@ class DataSource(_DataFile):
             max(self._globals.values()))
 
         # Create the dataframe to be used by all other methods
-        (self._dataframe, self._new_vectors) = self.__dataframe()
+        self._dataframe = self.__dataframe()
 
     def open(self):
         """Get open values.
@@ -311,20 +310,19 @@ class DataSource(_DataFile):
         sys.exit(0)
         '''
 
-        # Create sliding window
+        '''# Create sliding window
         slide = self._globals['sliding_window']
         list_ = result['close'].values.tolist()
         vectors = pd.DataFrame(np.array(
             [list_[i:i+slide] for i in range(0, len(list_), 1)][:-slide]))
-        vectors = vectors.iloc[self._ignore_row_count:]
+        vectors = vectors.iloc[self._ignore_row_count:]'''
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
-        result = result.iloc[
-            self._ignore_row_count:-self._globals['sliding_window']]
+        result = result.iloc[self._ignore_row_count:]
 
         # Return
-        return (result, vectors)
+        return result
 
     def datetime(self):
         """Create a numpy array of datetimes.
@@ -497,9 +495,8 @@ class DataGRU(DataSource):
         # (val_loss won't improve otherwise)
         y_data['NoNaNs'] = classes.values[:-crop_by].astype(np.float32)
         y_data['all'] = classes.values[:].astype(np.float32)
-        x_data['NoNaNs'] = self._new_vectors.values[
-            :-crop_by].astype(np.float32)
-        x_data['all'] = self._new_vectors.values[:].astype(np.float32)
+        x_data['NoNaNs'] = pandas_df.values[:-crop_by].astype(np.float32)
+        x_data['all'] = pandas_df.values[:].astype(np.float32)
 
         # Return
         return(x_data, y_data)

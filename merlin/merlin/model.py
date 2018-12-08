@@ -515,7 +515,7 @@ class RNNGRU(DataGRU):
         predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
 
         if bool(self._binary) is True:
-            # predictions_rescaled = np.round(predictions_rescaled)
+            predictions_rescaled = np.round(predictions_rescaled)
             # predictions_rescaled = general.binary_accuracy(predictions_rescaled)
             pass
 
