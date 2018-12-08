@@ -28,7 +28,6 @@ from keras.initializers import RandomUniform
 from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 from keras import backend
-from keras_contrib.layers.normalization import InstanceNormalization
 
 # Merlin imports
 from merlin.database import DataGRU
@@ -266,14 +265,12 @@ class RNNGRU(DataGRU):
             return_sequences=True,
             recurrent_dropout=_hyperparameters['dropout'],
             input_shape=(None, self._training_vector_count,)))
-        _model.add(InstanceNormalization())
 
         for _ in range(1, _hyperparameters['layers']):
             _model.add(GRU(
                 _hyperparameters['units'],
                 recurrent_dropout=_hyperparameters['dropout'],
                 return_sequences=True))
-            _model.add(InstanceNormalization())
 
         '''
         The GRU outputs a batchfrom keras_contrib.layers.advanced_activations import PELU
