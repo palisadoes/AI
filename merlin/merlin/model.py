@@ -273,8 +273,8 @@ class RNNGRU(DataGRU):
                 return_sequences=True))
 
         '''
-        The GRU outputs a batchfrom keras_contrib.layers.advanced_activations import PELU
- of sequences of 512 values. We want to predict
+        The GRU outputs a batchfrom keras_contrib.layers.advanced_activations
+        of sequences of 512 values. We want to predict
         3 output-signals, so we add a fully-connected (or dense) layer which
         maps 512 values down to only 3 values.
 
@@ -491,8 +491,8 @@ class RNNGRU(DataGRU):
 
         # If you have several metrics you can use this instead.
         if False:
-            for res, metric in zip(result, _model.metrics_names):
-                print('{0}: {1:.3e}'.format(metric, res))
+            for _value, _metric in zip(result, _model.metrics_names):
+                print('{0}: {1:.3e}'.format(_metric, _value))
 
     def objective(self, params=None):
         """Optimize the Recurrent Neural Network.
@@ -518,7 +518,7 @@ class RNNGRU(DataGRU):
         predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
 
         if bool(self._binary) is True:
-            predictions_rescaled = np.round(predictions_rescaled)
+            # predictions_rescaled = np.round(predictions_rescaled)
             # predictions_rescaled = general.binary_accuracy(predictions_rescaled)
             pass
 
@@ -532,6 +532,7 @@ class RNNGRU(DataGRU):
         return {
             'loss': (accuracy * -1),
             'status': STATUS_OK,
+            'estimated_accuracy': accuracy,
             'hyperparameters': params}
 
     def cleanup(self):

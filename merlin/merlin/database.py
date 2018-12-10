@@ -115,6 +115,7 @@ class DataSource(_DataFile):
             'macd_fast': 12,
             'macd_slow': 26,
             'macd_sign': 9,
+            'week': 5,
             'proc_window': 5
         }
         self._ignore_row_count = max(
@@ -223,8 +224,10 @@ class DataSource(_DataFile):
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
             'k', 'd', 'rsi', 'adx', 'macd_diff', 'proc',
-            'ma_open', 'ma_high', 'ma_low', 'ma_close',
+            'ma_open', 'ma_high', 'ma_low', 'ma_close', 'ma_std_close',
             'ma_volume', 'ma_volume_long',
+            'amplitude', 'amplitude_medium', 'amplitude_long',
+            'volume_amplitude', 'volume_amplitude_long',
             'ma_volume_delta']).astype('float16')
 
         # Add current value columns
@@ -262,12 +265,43 @@ class DataSource(_DataFile):
             self._globals['ma_window']).mean()
         result['ma_close'] = result['close'].rolling(
             self._globals['ma_window']).mean()
+        result['ma_std_close'] = result['close'].rolling(
+            self._globals['ma_window']).std()
+        result['std_pct_diff_close'] = result['pct_diff_close'].rolling(
+            self._globals['ma_window']).std()
         result['ma_volume'] = result['volume'].rolling(
             self._globals['vma_window']).mean()
         result['ma_volume_long'] = result['volume'].rolling(
             self._globals['vma_window_long']).mean()
         result['ma_volume_delta'] = result[
             'ma_volume_long'] - result['ma_volume']
+
+        # Rolling ranges
+        result['amplitude'] = result['high'] - result['low']
+
+        _min = result['low'].rolling(
+            self._globals['week']).min()
+        _max = result['high'].rolling(
+            self._globals['week']).min()
+        result['amplitude_medium'] = abs(_min - _max)
+
+        _min = result['low'].rolling(
+            2 * self._globals['week']).min()
+        _max = result['high'].rolling(
+            2 * self._globals['week']).min()
+        result['amplitude_long'] = abs(_min - _max)
+
+        _min = result['volume'].rolling(
+            self._globals['week']).min()
+        _max = result['volume'].rolling(
+            self._globals['week']).min()
+        result['volume_amplitude'] = abs(_min - _max)
+
+        _min = result['volume'].rolling(
+            2 * self._globals['week']).min()
+        _max = result['volume'].rolling(
+            2 * self._globals['week']).min()
+        result['volume_amplitude_long'] = abs(_min - _max)
 
         # Calculate the Stochastic values
         stochastic = math.Stochastic(
@@ -477,6 +511,9 @@ class DataGRU(DataSource):
             'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
+            'std_pct_diff_close', 'ma_std_close',
+            'amplitude', 'amplitude_medium', 'amplitude_long',
+            'volume_amplitude', 'volume_amplitude_long',
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
 
         # Get class values for each vector
