@@ -1,13 +1,19 @@
 """Library to process the ingest of data files."""
 
 # Standard imports
+from __future__ import print_function
 from copy import deepcopy
 import sys
 
 # PIP imports
 import pandas as pd
 import numpy as np
-from ta import trend, momentum
+from ta import trend, momentum, volatility
+from statsmodels.graphics.tsaplots import plot_acf
+
+from matplotlib import pyplot as plt
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.feature_selection import RFE
 
 # Append custom application libraries
 from merlin import general
@@ -227,7 +233,10 @@ class DataSource(_DataFile):
             'ma_open', 'ma_high', 'ma_low', 'ma_close', 'ma_std_close',
             'ma_volume', 'ma_volume_long',
             'amplitude', 'amplitude_medium', 'amplitude_long',
+            'std_pct_diff_close', 'ma_std_close',
             'volume_amplitude', 'volume_amplitude_long',
+            'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
+            'bollinger_hband_indicator',
             'ma_volume_delta']).astype('float16')
 
         # Add current value columns
@@ -265,10 +274,6 @@ class DataSource(_DataFile):
             self._globals['ma_window']).mean()
         result['ma_close'] = result['close'].rolling(
             self._globals['ma_window']).mean()
-        result['ma_std_close'] = result['close'].rolling(
-            self._globals['ma_window']).std()
-        result['std_pct_diff_close'] = result['pct_diff_close'].rolling(
-            self._globals['ma_window']).std()
         result['ma_volume'] = result['volume'].rolling(
             self._globals['vma_window']).mean()
         result['ma_volume_long'] = result['volume'].rolling(
@@ -276,31 +281,41 @@ class DataSource(_DataFile):
         result['ma_volume_delta'] = result[
             'ma_volume_long'] - result['ma_volume']
 
+        # Standard deviation related
+        result['ma_std_close'] = result['close'].rolling(
+            self._globals['ma_window']).std()
+        result['std_pct_diff_close'] = result['pct_diff_close'].rolling(
+            self._globals['ma_window']).std()
+        result['bollinger_lband'] = volatility.bollinger_lband(result['close'])
+        result['bollinger_hband'] = volatility.bollinger_lband(result['close'])
+        result['bollinger_lband_indicator'] = volatility.bollinger_lband_indicator(result['close'])
+        result['bollinger_hband_indicator'] = volatility.bollinger_hband_indicator(result['close'])
+
         # Rolling ranges
         result['amplitude'] = result['high'] - result['low']
 
         _min = result['low'].rolling(
             self._globals['week']).min()
         _max = result['high'].rolling(
-            self._globals['week']).min()
+            self._globals['week']).max()
         result['amplitude_medium'] = abs(_min - _max)
 
         _min = result['low'].rolling(
             2 * self._globals['week']).min()
         _max = result['high'].rolling(
-            2 * self._globals['week']).min()
+            2 * self._globals['week']).max()
         result['amplitude_long'] = abs(_min - _max)
 
         _min = result['volume'].rolling(
             self._globals['week']).min()
         _max = result['volume'].rolling(
-            self._globals['week']).min()
+            self._globals['week']).max()
         result['volume_amplitude'] = abs(_min - _max)
 
         _min = result['volume'].rolling(
             2 * self._globals['week']).min()
         _max = result['volume'].rolling(
-            2 * self._globals['week']).min()
+            2 * self._globals['week']).max()
         result['volume_amplitude_long'] = abs(_min - _max)
 
         # Calculate the Stochastic values
@@ -337,19 +352,6 @@ class DataSource(_DataFile):
         _increasing = (_result >= 0).astype(int) * 1
         _decreasing = (_result < 0).astype(int) * 0
         result['increasing'] = _increasing + _decreasing
-
-        '''
-        result['increasing'] = np.nan_to_num(result['pct_diff_close'].values)
-        print(result['increasing'])
-        sys.exit(0)
-        '''
-
-        '''# Create sliding window
-        slide = self._globals['sliding_window']
-        list_ = result['close'].values.tolist()
-        vectors = pd.DataFrame(np.array(
-            [list_[i:i+slide] for i in range(0, len(list_), 1)][:-slide]))
-        vectors = vectors.iloc[self._ignore_row_count:]'''
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
@@ -405,6 +407,93 @@ class DataGRU(DataSource):
 
         # Process data
         (self._vectors, self._classes) = self._create_vector_classes()
+
+    def autocorrelation(self):
+        """Plot autocorrelation.
+
+        Source -
+            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
+
+        Args:
+            None
+
+        Returns:
+            None: Series for learning
+
+        """
+        # Do the plotting
+        plot_acf(self.values())
+        plt.show()
+
+    def feature_importance(self):
+        """Plot feature importance.
+
+        Source -
+            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
+
+        Args:
+            None
+
+        Returns:
+            None: Series for learning
+
+        """
+        # Split into input and output
+        data = self._dataframe
+        vectors = data.values
+        classes = self.values()
+
+        # Fit random forest model
+        model = RandomForestRegressor(n_estimators=500, random_state=1)
+        model.fit(vectors, classes)
+
+        # Show importance scores
+        print('> Feature Importances:\n')
+        print(model.feature_importances_)
+
+        # Plot importance scores
+        names = data.columns.values[:]
+        ticks = [i for i in range(len(names))]
+        plt.bar(ticks, model.feature_importances_)
+        plt.xticks(ticks, names, rotation=-90)
+        plt.show()
+
+    def feature_selection(self, features=4):
+        """Plot feature selection.
+
+        Source -
+            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
+
+        Args:
+            None
+
+        Returns:
+            None: Series for learning
+
+        """
+        # Split into input and output
+        data = self._dataframe
+        vectors = data.values
+        classes = self.values()
+
+        # Perform feature selection
+        rfe = RFE(RandomForestRegressor(
+            n_estimators=500, random_state=1), features)
+        fit = rfe.fit(vectors, classes)
+
+        # Report selected features
+        print('> Selected Features:')
+        names = data.columns.values[:]
+        for i in range(len(fit.support_)):
+            if fit.support_[i]:
+                print('\t', names[i])
+
+        # Plot feature rank
+        names = data.columns.values[:]
+        ticks = [i for i in range(len(names))]
+        plt.bar(ticks, fit.ranking_)
+        plt.xticks(ticks, names, rotation=-90)
+        plt.show()
 
     def values(self):
         """Get values that we are aiming to predict.
@@ -512,6 +601,8 @@ class DataGRU(DataSource):
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
             'std_pct_diff_close', 'ma_std_close',
+            'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
+            'bollinger_hband_indicator',
             'amplitude', 'amplitude_medium', 'amplitude_long',
             'volume_amplitude', 'volume_amplitude_long',
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']

@@ -5,10 +5,12 @@
 from __future__ import print_function
 import argparse
 import time
+import sys
 
 
 # Merlin imports
 from merlin.model import RNNGRU
+from merlin.database import DataGRU
 
 
 def main():
@@ -58,8 +60,8 @@ def main():
         '-t', '--test_size',
         help=(
             'Test size as decimal fraction of total dataset. '
-            'Default 0.1 (or 10%)'),
-        type=float, default=0.1)
+            'Default 0.2 (or 20%)'),
+        type=float, default=0.2)
     parser.add_argument(
         '-u', '--units',
         help='Number of units per layer. Default 512',
@@ -129,11 +131,20 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [1]
+    lookahead_periods = [3]
+
+    _data = DataGRU(
+        filename, lookahead_periods,
+        test_size=test_size, binary=binary)
+
+    _data.autocorrelation()
+    _data.feature_importance()
+    _data.feature_selection(10)
+    sys.exit(0)
 
     # Do training
     rnn = RNNGRU(
-        filename, lookahead_periods,
+        _data,
         sequence_length=sequence_length,
         epochs=epochs,
         batch_size=batch_size,

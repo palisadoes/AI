@@ -44,7 +44,7 @@ class RNNGRU(DataGRU):
     """
 
     def __init__(
-            self, filename, lookahead_periods, batch_size=64, epochs=20,
+            self, _data, batch_size=64, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0, test_size=0.33,
             layers=1, patience=10, units=512, display=False, binary=False):
         """Instantiate the class.
@@ -59,11 +59,6 @@ class RNNGRU(DataGRU):
             None
 
         """
-        # Setup inheritance
-        DataGRU.__init__(
-            self, filename, lookahead_periods,
-            test_size=test_size, binary=binary)
-
         # Initialize key variables
         self._warmup_steps = warmup_steps
         self._binary = binary
@@ -105,12 +100,15 @@ class RNNGRU(DataGRU):
         ###################################
 
         # Get data
-        self._y_current = self.values()
+        self._y_current = _data.values()
 
         # Create test and training arrays for VALIDATION and EVALUATION
-        (x_train, x_validation,
-         _x_test, self._y_train,
-         self._y_validation, self._y_test) = self.train_validation_test_split()
+        (x_train,
+         x_validation,
+         _x_test,
+         self._y_train,
+         self._y_validation,
+         self._y_test) = _data.train_validation_test_split()
 
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = _x_test.shape
@@ -151,7 +149,7 @@ class RNNGRU(DataGRU):
         transform() on the same data.
         '''
         self._x_scaler = MinMaxScaler()
-        _ = self._x_scaler.fit_transform(self.vectors())
+        _ = self._x_scaler.fit_transform(_data.vectors())
         self._x_train_scaled = self._x_scaler.transform(x_train)
         self._x_validation_scaled = self._x_scaler.transform(x_validation)
         self._x_test_scaled = self._x_scaler.transform(_x_test)
@@ -172,7 +170,7 @@ class RNNGRU(DataGRU):
         '''
 
         self._y_scaler = MinMaxScaler()
-        _ = self._y_scaler.fit_transform(self.classes())
+        _ = self._y_scaler.fit_transform(_data.classes())
         self._y_train_scaled = self._y_scaler.transform(self._y_train)
         self._y_validation_scaled = self._y_scaler.transform(
             self._y_validation)

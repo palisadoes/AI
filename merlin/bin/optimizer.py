@@ -13,6 +13,7 @@ from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 # Merlin imports
 from merlin.model import RNNGRU
+from merlin.database import DataGRU
 from merlin.general import save_trials
 
 
@@ -44,10 +45,17 @@ def main():
         '--binary',
         help='Predict up/down versus actual values if True. Default False.',
         action='store_true')
+    parser.add_argument(
+        '-t', '--test_size',
+        help=(
+            'Test size as decimal fraction of total dataset. '
+            'Default 0.2 (or 20%)'),
+        type=float, default=0.2)
     args = parser.parse_args()
     filename = args.filename
     binary = args.binary
     max_evals = args.max_evals
+    test_size = args.test_size
     lookahead_periods = [args.periods]
 
     '''
@@ -73,8 +81,12 @@ def main():
         'epochs': hp.choice('epochs', [1000])
     }
 
+    _data = DataGRU(
+        filename, lookahead_periods,
+        test_size=test_size, binary=binary)
+
     # Do training
-    rnn = RNNGRU(filename, lookahead_periods, binary=binary)
+    rnn = RNNGRU(_data)
 
     # Test for stationarity
     if rnn.stationary() is False:
