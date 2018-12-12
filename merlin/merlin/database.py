@@ -129,6 +129,13 @@ class DataSource(_DataFile):
             self._globals['kwindow'] + self._globals['dwindow'],
             max(self._globals.values()))
 
+        # Sentiment values
+        self._buy = 1
+        self._sell = -1
+        self._hold = 0
+        self._strong = 1
+        self._weak = 0
+
         # Create the dataframe to be used by all other methods
         self._dataframe = self.__dataframe()
 
@@ -233,6 +240,7 @@ class DataSource(_DataFile):
             'ma_open', 'ma_high', 'ma_low', 'ma_close', 'ma_std_close',
             'ma_volume', 'ma_volume_long',
             'amplitude', 'amplitude_medium', 'amplitude_long',
+            'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i', 'volume_i',
             'std_pct_diff_close', 'ma_std_close',
             'volume_amplitude', 'volume_amplitude_long',
             'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
@@ -353,6 +361,18 @@ class DataSource(_DataFile):
         _decreasing = (_result < 0).astype(int) * 0
         result['increasing'] = _increasing + _decreasing
 
+        # Other indicators
+        result['k_i'] = self._stochastic_indicator(
+            result['k'], result['high'], result['low'], result['ma_close'])
+        result['d_i'] = self._stochastic_indicator(
+            result['d'], result['high'], result['low'], result['ma_close'])
+        result['rsi_i'] = self._stochastic_indicator(
+            result['rsi'], result['high'], result['low'], result['ma_close'])
+        result['adx_i'] = self._adx_indicator(result['adx'])
+        result['macd_diff_i'] = self._macd_diff_indicator(result['macd_diff'])
+        result['volume_i'] = self._volume_indicator(
+            result['ma_volume'], result['ma_volume_long'])
+
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
         result = result.iloc[self._ignore_row_count:]
@@ -376,6 +396,96 @@ class DataSource(_DataFile):
             'month': self.dates().month.values.tolist(),
             'day': self.dates().day.values.tolist()})).values
         result = _result[self._ignore_row_count:]
+
+        # Return
+        return result
+
+    def _stochastic_indicator(self, s_value, high, low, ma_close):
+        """Create stochastic D variables.
+
+        Args:
+            selector:
+                True = Calculate stochastic K values
+                False = Calculate stochastic D values
+                None = Calculate RSI values
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        ma_close = ma_close.values
+        high_gt_ma_close = high.values > ma_close
+        low_lt_ma_close = low.values < ma_close
+
+        # Create conditions for decisions
+        sell = (s_value > 90).astype(int) * self._sell
+        buy = (s_value < 10).astype(int) * self._buy
+
+        # Condition when candle is straddling the moving average
+        straddle = np.logical_and(
+            high_gt_ma_close, low_lt_ma_close).astype(int)
+
+        # Multiply the straddle
+        result = straddle * (sell + buy)
+
+        # Return
+        return result
+
+    def _volume_indicator(self, _short, _long):
+        """Create volume variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        _short = _short.values
+        _long = _long.values
+
+        # Create conditions for decisions
+        sell = (_short > _long).astype(int) * self._sell
+        buy = (_long >= _short).astype(int) * self._buy
+
+        # Evaluate decisions
+        result = buy + sell
+
+        # Return
+        return result
+
+    def _adx_indicator(self, _adx):
+        """Create ADX variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Evaluate decisions
+        result = (_adx > 25).astype(int) * self._strong
+
+        # Return
+        return result
+
+    def _macd_diff_indicator(self, macd):
+        """Create MACD difference variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Evaluate decisions
+        buy = (macd > 0).astype(int) * self._buy
+        sell = (macd < 0).astype(int) * self._sell
+        result = buy + sell
 
         # Return
         return result
@@ -604,6 +714,7 @@ class DataGRU(DataSource):
             'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
             'bollinger_hband_indicator',
             'amplitude', 'amplitude_medium', 'amplitude_long',
+            'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i', 'volume_i',
             'volume_amplitude', 'volume_amplitude_long',
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
 
