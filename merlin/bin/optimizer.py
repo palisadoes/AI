@@ -13,7 +13,7 @@ from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 # Merlin imports
 from merlin.model import RNNGRU
-from merlin.database import DataGRU
+from merlin.database import DataGRU, DataFile
 from merlin.general import save_trials
 
 
@@ -65,9 +65,8 @@ def main():
     corresponds to 8 weeks.
     '''
     periods_per_day = 1
-    days_per_week = 7
+    days_per_week = 5
     sequence_lengths = [
-        periods_per_day * days_per_week * 12,
         periods_per_day * days_per_week * 24]
 
     # Initialize parameters
@@ -81,8 +80,12 @@ def main():
         'epochs': hp.choice('epochs', [1000])
     }
 
+    # Get data from file
+    datafile = DataFile(filename)
+
+    # Process data for GRU vector, class creation
     _data = DataGRU(
-        filename, lookahead_periods,
+        datafile, lookahead_periods,
         test_size=test_size, binary=binary)
 
     # Do training
@@ -113,6 +116,7 @@ def main():
     rnn.cleanup()
 
     # Write trial results to file
+    print('\n> Saving results to {}'.format(filename))
     save_trials(trials.trials, filename)
 
     '''

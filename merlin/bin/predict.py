@@ -10,7 +10,7 @@ import sys
 
 # Merlin imports
 from merlin.model import RNNGRU
-from merlin.database import DataGRU
+from merlin.database import DataGRU, DataFile
 
 
 def main():
@@ -133,14 +133,19 @@ def main():
     # Get the data
     lookahead_periods = [3]
 
+    # Get data from file
+    datafile = DataFile(filename)
+
+    # Process data for GRU vector, class creation
     _data = DataGRU(
-        filename, lookahead_periods,
+        datafile, lookahead_periods,
         test_size=test_size, binary=binary)
 
-    _data.autocorrelation()
+    '''_data.autocorrelation()
     _data.feature_importance()
-    _data.feature_selection(10)
-    sys.exit(0)
+    features = _data.suggested_features(count=10, display=True)
+    print(features)
+    sys.exit(0)'''
 
     # Do training
     rnn = RNNGRU(

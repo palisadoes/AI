@@ -4,6 +4,7 @@
 from __future__ import print_function
 from copy import deepcopy
 import sys
+import multiprocessing
 
 # PIP imports
 import pandas as pd
@@ -20,7 +21,7 @@ from merlin import general
 from merlin import math
 
 
-class _DataFile(object):
+class DataFile(object):
     """Class ingests file data."""
 
     def __init__(self, filename):
@@ -38,9 +39,9 @@ class _DataFile(object):
         self._filename = filename
 
         # Get data from file
-        (self._values, self._dates) = self._data()
+        (self._df_values, self._df_dates) = self._df_data()
 
-    def _data(self):
+    def _df_data(self):
         """Process file data.
 
         Args:
@@ -64,7 +65,7 @@ class _DataFile(object):
         # Return
         return (_values, _dates)
 
-    def _file_values(self):
+    def ohlcv(self):
         """Process file data.
 
         Args:
@@ -75,7 +76,7 @@ class _DataFile(object):
 
         """
         # Return
-        result = self._values
+        result = self._df_values
         return result
 
     def dates(self):
@@ -89,14 +90,14 @@ class _DataFile(object):
 
         """
         # Return
-        result = self._dates
+        result = self._df_dates
         return result
 
 
-class DataSource(_DataFile):
+class Data(object):
     """Super class handling data retrieval."""
 
-    def __init__(self, filename):
+    def __init__(self, dataobject, binary=False):
         """Intialize the class.
 
         Args:
@@ -106,8 +107,15 @@ class DataSource(_DataFile):
             None
 
         """
-        # Setup inheritance
-        _DataFile.__init__(self, filename)
+        # Initialize key variables
+        if bool(binary) is False:
+            self._label2predict = 'close'
+        else:
+            self._label2predict = 'increasing'
+
+        # Get data
+        self._ohlcv = dataobject.ohlcv()
+        self._dates = dataobject.dates()
 
         # Setup classwide variables
         self._globals = {
@@ -150,7 +158,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['open'][
+        result = self._ohlcv['open'][
             self._ignore_row_count:-self._globals['proc_window']]
         return result
 
@@ -165,7 +173,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['high'][
+        result = self._ohlcv['high'][
             self._ignore_row_count:-self._globals['proc_window']]
         return result
 
@@ -180,7 +188,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['low'][
+        result = self._ohlcv['low'][
             self._ignore_row_count:-self._globals['proc_window']]
         return result
 
@@ -195,7 +203,7 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['close'][
+        result = self._ohlcv['close'][
             self._ignore_row_count:-self._globals['proc_window']]
         return result
 
@@ -210,9 +218,119 @@ class DataSource(_DataFile):
 
         """
         # Return
-        result = self._file_values()['volume'][
+        result = self._ohlcv['volume'][
             self._ignore_row_count:-self._globals['proc_window']]
         return result
+
+    def values(self):
+        """Get values that we are aiming to predict.
+
+        Args:
+            None
+
+        Returns:
+            result: Series for learning
+
+        """
+        # Return
+        result = self._dataframe[self._label2predict]
+        return result
+
+    def autocorrelation(self):
+        """Plot autocorrelation.
+
+        Source -
+            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
+
+        Args:
+            None
+
+        Returns:
+            None: Series for learning
+
+        """
+        # Do the plotting
+        plot_acf(self.values())
+        plt.show()
+
+    def feature_importance(self):
+        """Plot feature importance.
+
+        Source -
+            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
+
+        Args:
+            None
+
+        Returns:
+            None: Series for learning
+
+        """
+        # Split into input and output
+        data = self._dataframe
+        vectors = data.values
+        classes = self.values()
+
+        # Fit random forest model
+        model = RandomForestRegressor(n_estimators=500, random_state=1)
+        model.fit(vectors, classes)
+
+        # Show importance scores
+        print('> Feature Importances:\n')
+        print(model.feature_importances_)
+
+        # Plot importance scores
+        names = data.columns.values[:]
+        ticks = [i for i in range(len(names))]
+        plt.bar(ticks, model.feature_importances_)
+        plt.xticks(ticks, names, rotation=-90)
+        plt.show()
+
+    def suggested_features(self, count=4, display=False):
+        """Plot feature selection.
+
+        Source -
+            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
+
+        Args:
+            None
+
+        Returns:
+            None: Series for learning
+
+        """
+        # initialize key variables
+        features = []
+        cpu_cores = multiprocessing.cpu_count()
+
+        # Split into input and output
+        data = self._dataframe
+        vectors = data.values
+        classes = self.values()
+
+        # Perform feature selection
+        rfe = RFE(RandomForestRegressor(
+            n_estimators=500, random_state=1, n_jobs=cpu_cores - 2), count)
+        fit = rfe.fit(vectors, classes)
+
+        # Report selected features
+        print('> Selected Features:')
+        dataframe_header = data.columns.values[:]
+        for i in range(len(fit.support_)):
+            if fit.support_[i]:
+                feature = dataframe_header[i]
+                features.append(feature)
+                print('\t', feature)
+
+        # Plot feature rank
+        if bool(display) is True:
+            ticks = [i for i in range(len(dataframe_header))]
+            plt.bar(ticks, fit.ranking_)
+            plt.xticks(ticks, dataframe_header, rotation=-90)
+            plt.show()
+
+        # Returns
+        return features
 
     def __dataframe(self):
         """Create vectors from data.
@@ -225,7 +343,7 @@ class DataSource(_DataFile):
 
         """
         # Calculate the percentage and real differences between columns
-        difference = math.Difference(self._file_values())
+        difference = math.Difference(self._ohlcv)
         num_difference = difference.actual()
         pct_difference = difference.relative()
 
@@ -241,18 +359,18 @@ class DataSource(_DataFile):
             'ma_volume', 'ma_volume_long',
             'amplitude', 'amplitude_medium', 'amplitude_long',
             'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i', 'volume_i',
-            'std_pct_diff_close', 'ma_std_close',
+            'std_pct_diff_close',
             'volume_amplitude', 'volume_amplitude_long',
             'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
             'bollinger_hband_indicator',
             'ma_volume_delta']).astype('float16')
 
         # Add current value columns
-        result['open'] = self._file_values()['open']
-        result['high'] = self._file_values()['high']
-        result['low'] = self._file_values()['low']
-        result['close'] = self._file_values()['close']
-        result['volume'] = self._file_values()['volume']
+        result['open'] = self._ohlcv['open']
+        result['high'] = self._ohlcv['high']
+        result['low'] = self._ohlcv['low']
+        result['close'] = self._ohlcv['close']
+        result['volume'] = self._ohlcv['volume']
 
         # Add columns of differences
         result['num_diff_open'] = num_difference['open']
@@ -266,12 +384,12 @@ class DataSource(_DataFile):
         result['pct_diff_volume'] = pct_difference['volume']
 
         # Add date related columns
-        result['day'] = self.dates().day
-        result['weekday'] = self.dates().weekday
-        result['week'] = self.dates().week
-        result['month'] = self.dates().month
-        result['quarter'] = self.dates().quarter
-        result['dayofyear'] = self.dates().dayofyear
+        result['day'] = self._dates.day
+        result['weekday'] = self._dates.weekday
+        result['week'] = self._dates.week
+        result['month'] = self._dates.month
+        result['quarter'] = self._dates.quarter
+        result['dayofyear'] = self._dates.dayofyear
 
         # Moving averages
         result['ma_open'] = result['open'].rolling(
@@ -328,7 +446,7 @@ class DataSource(_DataFile):
 
         # Calculate the Stochastic values
         stochastic = math.Stochastic(
-            self._file_values(), window=self._globals['kwindow'])
+            self._ohlcv, window=self._globals['kwindow'])
         result['k'] = stochastic.k()
         result['d'] = stochastic.d(window=self._globals['dwindow'])
 
@@ -338,7 +456,7 @@ class DataSource(_DataFile):
             n=self._globals['rsiwindow'],
             fillna=False)
 
-        miscellaneous = math.Misc(self._file_values())
+        miscellaneous = math.Misc(self._ohlcv)
         result['proc'] = miscellaneous.proc(self._globals['proc_window'])
 
         # Calculate ADX
@@ -366,7 +484,7 @@ class DataSource(_DataFile):
             result['k'], result['high'], result['low'], result['ma_close'])
         result['d_i'] = self._stochastic_indicator(
             result['d'], result['high'], result['low'], result['ma_close'])
-        result['rsi_i'] = self._stochastic_indicator(
+        result['rsi_i'] = self._rsi_indicator(
             result['rsi'], result['high'], result['low'], result['ma_close'])
         result['adx_i'] = self._adx_indicator(result['adx'])
         result['macd_diff_i'] = self._macd_diff_indicator(result['macd_diff'])
@@ -392,22 +510,23 @@ class DataSource(_DataFile):
         """
         # Initialize key variables
         _result = pd.to_datetime(pd.DataFrame({
-            'year': self.dates().year.values.tolist(),
-            'month': self.dates().month.values.tolist(),
-            'day': self.dates().day.values.tolist()})).values
+            'year': self._dates.year.values.tolist(),
+            'month': self._dates.month.values.tolist(),
+            'day': self._dates.day.values.tolist()})).values
         result = _result[self._ignore_row_count:]
 
         # Return
         return result
 
     def _stochastic_indicator(self, s_value, high, low, ma_close):
-        """Create stochastic D variables.
+        """Create stochastic indicator.
 
         Args:
             selector:
-                True = Calculate stochastic K values
-                False = Calculate stochastic D values
-                None = Calculate RSI values
+                s_value: Either a stochastic K or D value pd.Series
+                high: High value pd.Series
+                low: Low value pd.Series
+                ma_close: pd.Series moving average of the close
 
         Returns:
             result: Numpy array for learning
@@ -415,36 +534,126 @@ class DataSource(_DataFile):
         """
         # Initialize key variables
         ma_close = ma_close.values
-        high_gt_ma_close = high.values > ma_close
-        low_lt_ma_close = low.values < ma_close
 
-        # Create conditions for decisions
-        sell = (s_value > 90).astype(int) * self._sell
-        buy = (s_value < 10).astype(int) * self._buy
+        # Sell criteria
+        high_gt_ma_close = (
+            high.values.astype(int) > ma_close.astype(int)).astype(int)
+        sell_indicator = (s_value > 90).astype(int) * self._sell
+        sell = sell_indicator * high_gt_ma_close
 
-        # Condition when candle is straddling the moving average
-        straddle = np.logical_and(
-            high_gt_ma_close, low_lt_ma_close).astype(int)
-
-        # Multiply the straddle
-        result = straddle * (sell + buy)
+        # Buy criteria
+        low_lt_ma_close = (
+            low.values.astype(int) < ma_close.astype(int)).astype(int)
+        buy_indicator = (s_value < 10).astype(int) * self._buy
+        buy = buy_indicator * low_lt_ma_close
 
         # Return
+        result = buy + sell
         return result
 
-    def _volume_indicator(self, _short, _long):
-        """Create volume variables.
+    def _stochastic_indicator_2(self, k_series, d_series, high, low, ma_close):
+        """Create stochastic indicator.
 
         Args:
-            None
+            selector:
+                stochastic_value: Either a stochastic K or D value pd.Series
+                high: High value pd.Series
+                low: Low value pd.Series
+                ma_close: pd.Series moving average of the close
 
         Returns:
             result: Numpy array for learning
 
         """
         # Initialize key variables
-        _short = _short.values
-        _long = _long.values
+        upper_limit = 90
+        lower_limit = 10
+        ma_close = ma_close.values
+
+        # Sell criteria
+        high_gt_ma_close = (
+            high.values.astype(int) > ma_close.astype(int)).astype(int)
+        '''k_sell_indicator = (
+            k_series.values > upper_limit).astype(int) * self._sell
+        sell = k_sell_indicator * high_gt_ma_close'''
+
+        d_gt_k = (d_series.values > k_series.values).astype(int)
+        d_gt_upper = (d_series.values > upper_limit).astype(int)
+        d_in_sell_zone = d_gt_upper * d_gt_k
+        sell = (d_in_sell_zone * high_gt_ma_close) * self._sell
+
+        # Buy criteria
+        low_lt_ma_close = (
+            low.values.astype(int) < ma_close.astype(int)).astype(int)
+        '''k_buy_indicator = (
+            k_series.values < lower_limit).astype(int) * self._buy
+        buy = k_buy_indicator * low_lt_ma_close'''
+
+        k_gt_d = (d_series.values < k_series.values).astype(int)
+        d_lt_lower = (d_series.values < lower_limit).astype(int)
+        d_in_buy_zone = d_lt_lower * k_gt_d
+        buy = (d_in_buy_zone * low_lt_ma_close) * self._buy
+
+        # Return
+        result = buy + sell
+        return result
+
+    def _rsi_indicator(self, rsi_series, high, low, ma_close):
+        """Create rsi indicator.
+
+        Args:
+            selector:
+                rsi_series: Either a rsi K or D value pd.Series
+                high: High value pd.Series
+                low: Low value pd.Series
+                ma_close: pd.Series moving average of the close
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        upper_limit = 70
+        lower_limit = 30
+        ma_close = ma_close.values
+
+        # Sell criteria
+        high_gt_ma_close = (
+            high.values.astype(int) > ma_close.astype(int)).astype(int)
+        sell_indicator = (
+            rsi_series.values > upper_limit).astype(int) * self._sell
+        sell = sell_indicator * high_gt_ma_close
+
+        # Buy criteria
+        low_lt_ma_close = (
+            low.values.astype(int) < ma_close.astype(int)).astype(int)
+        buy_indicator = (
+            rsi_series.values < lower_limit).astype(int) * self._buy
+        buy = buy_indicator * low_lt_ma_close
+
+        # Return
+        result = buy + sell
+        return result
+
+    def _volume_indicator(self, _short, _long):
+        """Give indication of sell or buy action.
+
+        Based on whether the long and short volume moving averages cross.
+
+        Short > Long: Sell
+        Long > Short: Buy
+
+        Args:
+            _short: Short term volume moving average pd.Series
+            _long: Long term volume moving average pd.Series
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        _short = _short.values.astype(int)
+        _long = _long.values.astype(int)
 
         # Create conditions for decisions
         sell = (_short > _long).astype(int) * self._sell
@@ -457,10 +666,12 @@ class DataSource(_DataFile):
         return result
 
     def _adx_indicator(self, _adx):
-        """Create ADX variables.
+        """Create ADX indicator.
+
+        If the ADX value is > 25, then we have strong activity
 
         Args:
-            None
+            _adx: Current ADX pd.Series
 
         Returns:
             result: Numpy array for learning
@@ -473,10 +684,10 @@ class DataSource(_DataFile):
         return result
 
     def _macd_diff_indicator(self, macd):
-        """Create MACD difference variables.
+        """Create MACD difference variable as an indicator.
 
         Args:
-            None
+            macd: Current MACD pd.Series
 
         Returns:
             result: Numpy array for learning
@@ -491,10 +702,10 @@ class DataSource(_DataFile):
         return result
 
 
-class DataGRU(DataSource):
+class DataGRU(Data):
     """Prepare data for use by GRU models."""
 
-    def __init__(self, filename, shift_steps, test_size=0.1, binary=False):
+    def __init__(self, dataobject, shift_steps, test_size=0.1, binary=False):
         """Intialize the class.
 
         Args:
@@ -505,119 +716,14 @@ class DataGRU(DataSource):
 
         """
         # Setup inheritance
-        DataSource.__init__(self, filename)
+        Data.__init__(self, dataobject, binary=binary)
 
         # Initialize key variables
         self._shift_steps = shift_steps
         self._test_size = test_size
-        if bool(binary) is False:
-            self._label2predict = 'close'
-        else:
-            self._label2predict = 'increasing'
 
         # Process data
         (self._vectors, self._classes) = self._create_vector_classes()
-
-    def autocorrelation(self):
-        """Plot autocorrelation.
-
-        Source -
-            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
-
-        Args:
-            None
-
-        Returns:
-            None: Series for learning
-
-        """
-        # Do the plotting
-        plot_acf(self.values())
-        plt.show()
-
-    def feature_importance(self):
-        """Plot feature importance.
-
-        Source -
-            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
-
-        Args:
-            None
-
-        Returns:
-            None: Series for learning
-
-        """
-        # Split into input and output
-        data = self._dataframe
-        vectors = data.values
-        classes = self.values()
-
-        # Fit random forest model
-        model = RandomForestRegressor(n_estimators=500, random_state=1)
-        model.fit(vectors, classes)
-
-        # Show importance scores
-        print('> Feature Importances:\n')
-        print(model.feature_importances_)
-
-        # Plot importance scores
-        names = data.columns.values[:]
-        ticks = [i for i in range(len(names))]
-        plt.bar(ticks, model.feature_importances_)
-        plt.xticks(ticks, names, rotation=-90)
-        plt.show()
-
-    def feature_selection(self, features=4):
-        """Plot feature selection.
-
-        Source -
-            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
-
-        Args:
-            None
-
-        Returns:
-            None: Series for learning
-
-        """
-        # Split into input and output
-        data = self._dataframe
-        vectors = data.values
-        classes = self.values()
-
-        # Perform feature selection
-        rfe = RFE(RandomForestRegressor(
-            n_estimators=500, random_state=1), features)
-        fit = rfe.fit(vectors, classes)
-
-        # Report selected features
-        print('> Selected Features:')
-        names = data.columns.values[:]
-        for i in range(len(fit.support_)):
-            if fit.support_[i]:
-                print('\t', names[i])
-
-        # Plot feature rank
-        names = data.columns.values[:]
-        ticks = [i for i in range(len(names))]
-        plt.bar(ticks, fit.ranking_)
-        plt.xticks(ticks, names, rotation=-90)
-        plt.show()
-
-    def values(self):
-        """Get values that we are aiming to predict.
-
-        Args:
-            None
-
-        Returns:
-            result: Series for learning
-
-        """
-        # Return
-        result = self._dataframe[self._label2predict]
-        return result
 
     def vectors(self):
         """Get all vectors for testing.
@@ -718,6 +824,9 @@ class DataGRU(DataSource):
             'volume_amplitude', 'volume_amplitude_long',
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
 
+        # Try automated feature selection
+        desired_columns = self.suggested_features(count=10)
+
         # Get class values for each vector
         classes = pd.DataFrame(columns=self._shift_steps)
         for step in self._shift_steps:
@@ -732,10 +841,10 @@ class DataGRU(DataSource):
 
         # Create class and vector dataframes with only non NaN values
         # (val_loss won't improve otherwise)
-        y_data['NoNaNs'] = classes.values[:-crop_by].astype(np.float32)
-        y_data['all'] = classes.values[:].astype(np.float32)
-        x_data['NoNaNs'] = pandas_df.values[:-crop_by].astype(np.float32)
-        x_data['all'] = pandas_df.values[:].astype(np.float32)
+        y_data['NoNaNs'] = classes.values[:-crop_by]
+        y_data['all'] = classes.values[:]
+        x_data['NoNaNs'] = pandas_df.values[:-crop_by]
+        x_data['all'] = pandas_df.values[:]
 
         # Return
         return(x_data, y_data)
@@ -755,10 +864,10 @@ class DataGRU(DataSource):
         return result
 
 
-class DataDT(DataSource):
+class DataDT(Data):
     """Prepare data for use by decision tree models."""
 
-    def __init__(self, filename, actuals=False, steps=0):
+    def __init__(self, dataobject, actuals=False, steps=0):
         """Intialize the class.
 
         Args:
@@ -770,7 +879,7 @@ class DataDT(DataSource):
 
         """
         # Setup inheritance
-        DataSource.__init__(self, filename)
+        Data.__init__(self, dataobject)
 
         # Setup global variables
         self._steps = steps
