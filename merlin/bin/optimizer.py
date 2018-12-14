@@ -116,7 +116,6 @@ def main():
     rnn.cleanup()
 
     # Write trial results to file
-    print('\n> Saving results to {}'.format(filename))
     save_trials(trials.trials, filename)
 
     '''

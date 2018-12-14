@@ -34,7 +34,7 @@ from merlin.database import DataGRU
 from merlin import general
 
 
-class RNNGRU(DataGRU):
+class RNNGRU(object):
     """Process data for ingestion.
 
     Roughly based on:
@@ -65,6 +65,7 @@ class RNNGRU(DataGRU):
         self._display = display
         self._path_checkpoint = (
             '/tmp/checkpoint-{}.keras'.format(int(time.time())))
+        self._data = _data
 
         # Initialize parameters
         self.hyperparameters = {
@@ -100,7 +101,7 @@ class RNNGRU(DataGRU):
         ###################################
 
         # Get data
-        self._y_current = _data.values()
+        self._y_current = self._data.values()
 
         # Create test and training arrays for VALIDATION and EVALUATION
         (x_train,
@@ -108,7 +109,7 @@ class RNNGRU(DataGRU):
          _x_test,
          self._y_train,
          self._y_validation,
-         self._y_test) = _data.train_validation_test_split()
+         self._y_test) = self._data.train_validation_test_split()
 
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = _x_test.shape
@@ -149,7 +150,7 @@ class RNNGRU(DataGRU):
         transform() on the same data.
         '''
         self._x_scaler = MinMaxScaler()
-        _ = self._x_scaler.fit_transform(_data.vectors())
+        _ = self._x_scaler.fit_transform(self._data.vectors())
         self._x_train_scaled = self._x_scaler.transform(x_train)
         self._x_validation_scaled = self._x_scaler.transform(x_validation)
         self._x_test_scaled = self._x_scaler.transform(_x_test)
@@ -170,7 +171,7 @@ class RNNGRU(DataGRU):
         '''
 
         self._y_scaler = MinMaxScaler()
-        _ = self._y_scaler.fit_transform(_data.classes())
+        _ = self._y_scaler.fit_transform(self._data.classes())
         self._y_train_scaled = self._y_scaler.transform(self._y_train)
         self._y_validation_scaled = self._y_scaler.transform(
             self._y_validation)
@@ -735,13 +736,13 @@ class RNNGRU(DataGRU):
             shim = 'Train'
 
             # Datetimes to use for training
-            datetimes[shim] = self.datetime()[
+            datetimes[shim] = self._data.datetime()[
                 :num_train][start_idx:end_idx]
 
         else:
             # Scale the data
             x_test_scaled = self._x_scaler.transform(
-                self.vectors_test_all())
+                self._data.vectors_test_all())
 
             # Use test-data.
             x_values = x_test_scaled[start_idx:end_idx]
@@ -749,7 +750,7 @@ class RNNGRU(DataGRU):
             shim = 'Test'
 
             # Datetimes to use for testing
-            datetimes[shim] = self.datetime()[
+            datetimes[shim] = self._data.datetime()[
                 -self.test_rows-1:][start_idx:end_idx]
 
         # Input-signals for the model.
@@ -764,7 +765,7 @@ class RNNGRU(DataGRU):
         y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
 
         # For each output-signal.
-        for signal in range(len(self.labels())):
+        for signal in range(len(self._data.labels())):
             # Assign other variables dependent on the type of data plot
             if train is True:
                 # Only get current values that are a part of the training data
@@ -772,7 +773,7 @@ class RNNGRU(DataGRU):
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self.datetime()[
+                datetimes['actual'] = self._data.datetime()[
                     :num_train][start_idx:end_idx]
 
             else:
@@ -782,7 +783,7 @@ class RNNGRU(DataGRU):
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self.datetime()[
+                datetimes['actual'] = self._data.datetime()[
                     -self.test_rows:][start_idx:]
 
             # Create a filename
@@ -808,7 +809,7 @@ class RNNGRU(DataGRU):
             axis.plot(
                 datetimes[shim][:len(signal_true)],
                 signal_true,
-                label='Current +{}'.format(self.labels()[signal]))
+                label='Current +{}'.format(self._data.labels()[signal]))
             axis.plot(
                 datetimes[shim][:len(signal_pred)],
                 signal_pred,
@@ -817,7 +818,7 @@ class RNNGRU(DataGRU):
 
             # Set plot labels and titles
             axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(
-                self.labels()[signal], shim))
+                self._data.labels()[signal], shim))
             axis.set_ylabel('Values')
             axis.legend(
                 bbox_to_anchor=(1.04, 0.5),

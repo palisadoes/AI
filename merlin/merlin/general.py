@@ -70,6 +70,9 @@ def save_trials(trials, input_filename):
             # Write data
             writer.writerow(hyperparameters)
 
+    # State what we are doing
+    print('\n> Saving results to {}'.format(filename))
+
 
 def train_validation_test_split(vectors, classes, test_size):
     """Create contiguous (not random) training and test data.

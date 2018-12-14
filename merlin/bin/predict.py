@@ -141,11 +141,12 @@ def main():
         datafile, lookahead_periods,
         test_size=test_size, binary=binary)
 
-    '''_data.autocorrelation()
-    _data.feature_importance()
-    features = _data.suggested_features(count=10, display=True)
-    print(features)
-    sys.exit(0)'''
+    if binary is True:
+        _data.autocorrelation()
+        _data.feature_importance()
+        features = _data.suggested_features(count=10, display=True)
+        print(features)
+        sys.exit(0)
 
     # Do training
     rnn = RNNGRU(
@@ -209,8 +210,8 @@ def main():
     has a lot of noise compared to the smoothness of the original signal.
 
     '''
-
-    rnn.plot_train(model, start_idx=rnn.training_rows - 250, length=250)
+    offset = 250
+    rnn.plot_train(model, start_idx=rnn.training_rows - offset, length=offset)
 
     # Example from Test-Set
 
@@ -232,7 +233,8 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    rnn.plot_test(model, start_idx=rnn.test_rows-30, length=rnn.test_rows)
+    offset = 30
+    rnn.plot_test(model, start_idx=rnn.test_rows - offset, length=offset)
 
     # Cleanup
     rnn.cleanup()
