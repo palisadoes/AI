@@ -485,34 +485,45 @@ class RNNGRU(object):
         '''
 
         if self._binary is False:
-            result = _model.evaluate(
-                x=np.expand_dims(self._x_test_scaled, axis=0),
-                y=np.expand_dims(self._y_test_scaled, axis=0))
+            x_scaled = self._x_test_scaled
+            y_scaled = self._y_test_scaled
         else:
             # Get the filtered vectors and classes
             (filtered_vectors,
              filtered_classes) = self._data.stochastic_vectors_classes()
 
-            print('> Filtered Vectors Shape: ', filtered_vectors.shape)
-            print('> Filtered Classes Shape: ', filtered_classes.shape)
-
             # Scale and then evaluate
-            x_filtered_scaled = self._x_scaler.transform(filtered_vectors)
-            y_filtered_scaled = self._y_scaler.transform(filtered_classes)
-            result = _model.evaluate(
-                x=np.expand_dims(x_filtered_scaled, axis=0),
-                y=np.expand_dims(y_filtered_scaled, axis=0))
+            x_scaled = self._x_scaler.transform(filtered_vectors)
+            y_scaled = self._y_scaler.transform(filtered_classes)
 
-        # print('> Metrics (test-set): {}'.format(result))
-        # print('> Metric Names: {}'.format(_model.metrics_names))
+        # Evaluate the MSE accuracy
+        result = _model.evaluate(
+            x=np.expand_dims(x_scaled, axis=0),
+            y=np.expand_dims(y_scaled, axis=0))
 
         # If you have several metrics you can use this instead.
         print('> Metrics (test-set):')
         for _value, _metric in zip(result, _model.metrics_names):
             print('\t{}: {:.5f}'.format(_metric, _value))
 
-        # Print predictions and actuals:
+        if self._binary is True:
+            # Input-signals for the model.
+            x_values = np.expand_dims(x_scaled, axis=0)
 
+            # Get the predictions
+            predictions_scaled = _model.predict(x_values, verbose=1)
+
+            # The output of the model is between 0 and 1.
+            # Do an inverse map to get it back to the scale
+            # of the original data-set.
+            predictions = self._y_scaler.inverse_transform(
+                predictions_scaled[0])
+
+            # Print meaningful human accuracy values
+            print(
+                '> Human accuracy {:.5f} %'
+                ''.format(general.binary_accuracy(
+                    predictions, filtered_classes) * 100))
 
     def objective(self, params=None):
         """Optimize the Recurrent Neural Network.
@@ -541,36 +552,27 @@ class RNNGRU(object):
         x_values = np.expand_dims(scaled_vectors, axis=0)
 
         # Get the predictions
-        predictions = model.predict(x_values, verbose=1)
+        predictions_scaled = model.predict(x_values, verbose=1)
 
         # The output of the model is between 0 and 1.
         # Do an inverse map to get it back to the scale
         # of the original data-set.
-        predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
-
-        print('> Type: ', type(scaled_vectors), type(test_classes))
-        print('> Predictions Type: ', type(predictions_rescaled))
-        print('\n> Predictions:\n', predictions_rescaled.tolist())
-
-        if bool(self._binary) is True:
-            predictions_rescaled = general.to_buy_sell(predictions_rescaled)
-            print('=x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x=')
-            print('> Predictions Type (Integerized): ', type(predictions_rescaled))
+        predictions = self._y_scaler.inverse_transform(
+            predictions_scaled[0])
 
         # Get the error value
-        accuracy = mean_absolute_error(test_classes, predictions_rescaled)
-
-        print('> Accuracy: {0:.2f}'.format(accuracy))
-        print('\n> Predictions (rounded):\n', predictions_rescaled.tolist())
-        print('\n> Actuals:\n', test_classes.tolist())
-        print('\n> Type Actuals:\n', type(test_classes))
-
-        print('But wait, there\'s more!')
-        print(type(test_classes[0][0]))
-        print(type(predictions_rescaled[0][0]))
+        accuracy = mean_absolute_error(test_classes, predictions)
 
         # Free object memory
         # model = None
+
+        # Print meaningful human accuracy values
+        if self._binary is True:
+            # Print predictions and actuals:
+            print(
+                '> Human accuracy {:.5f} %'
+                ''.format(general.binary_accuracy(
+                    predictions, test_classes) * 100))
 
         # Return
         return {

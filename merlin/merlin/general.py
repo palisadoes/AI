@@ -175,7 +175,31 @@ def _split(rows, test_size):
     return (rows_train, rows_validation)
 
 
-def binary_accuracy(predictions, limit=0.3):
+def binary_accuracy(predictions, actuals):
+    """Save trial results to file.
+
+    Args:
+        trials: List of trial results dicts
+
+    Returns:
+        result: Float of accuracy
+
+    """
+    # Calculate average accuracy
+    _predictions = to_buy_sell(predictions.flatten().tolist())
+    _actuals = actuals.flatten().tolist()
+    sameness = (_actuals == _predictions).astype(int).tolist()
+    result = sum(sameness)/len(sameness)
+
+    # Print accuracy result lists to aid visualization of the data
+    print('> Actuals: {}'.format(_actuals))
+    print('> Predicted: {}'.format(_predictions))
+
+    # Return
+    return result
+
+
+def _binary_accuracy(predictions, limit=0.3):
     """Save trial results to file.
 
     Args:

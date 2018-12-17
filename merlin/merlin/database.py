@@ -959,9 +959,14 @@ class DataGRU(Data):
             result: Tuple (filtered vectors, corresponding filtered classes)
 
         """
-        # Return
-        vectors = self._dataframe
-        classes = self._dataclasses
+        # Split into input and output
+        _vectors = self._dataframe
+        _classes = self._dataclasses
+
+        # Get rid of the NaNs in the vectors and classes
+        (vectors, classes) = _no_nans(_vectors, _classes, self._shift_steps)
+
+        # Get test vectors
         (test_vectors, test_classes) = general.test_vectors_classes(
             vectors, classes, self._test_size)
 
