@@ -4,12 +4,13 @@
 from __future__ import print_function
 from copy import deepcopy
 import sys
+import time
 import multiprocessing
 
 # PIP imports
 import pandas as pd
 import numpy as np
-from ta import trend, momentum, volatility
+from ta import trend, momentum, volatility, volume
 from statsmodels.graphics.tsaplots import plot_acf
 
 from matplotlib import pyplot as plt
@@ -21,8 +22,25 @@ from merlin import general
 from merlin import math
 
 
-class DataFile(object):
-    """Class ingests file data."""
+class DataIngest(object):
+    """Parent class for ingesting data."""
+
+    def __init__(self):
+        """Intialize the class.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
+        # Initialize key variables
+        pass
+
+
+class DataFile(DataIngest):
+    """Class ingests data from files."""
 
     def __init__(self, filename):
         """Intialize the class.
@@ -35,6 +53,9 @@ class DataFile(object):
             None
 
         """
+        # Refer to parent class
+        DataIngest.__init__(self)
+
         # Initialize key variables
         self._filename = filename
 
@@ -42,7 +63,7 @@ class DataFile(object):
         (self._df_values, self._df_dates) = self._df_data()
 
     def _df_data(self):
-        """Process file data.
+        """Ingest data from file.
 
         Args:
             None
@@ -66,7 +87,7 @@ class DataFile(object):
         return (_values, _dates)
 
     def ohlcv(self):
-        """Process file data.
+        """Create dataframe with open, high, low, close, and volume columns.
 
         Args:
             None
@@ -80,7 +101,7 @@ class DataFile(object):
         return result
 
     def dates(self):
-        """Process file data.
+        """Create dataframe of dates from file.
 
         Args:
             None
@@ -95,13 +116,22 @@ class DataFile(object):
 
 
 class Data(object):
-    """Super class handling data retrieval."""
+    """Class for processing data retrieval.
+
+    The primary aim of this class is to create training, validation and test
+    data for use by other machine learning classes.
+
+    """
 
     def __init__(self, dataobject, shift_steps, binary=False):
         """Intialize the class.
 
         Args:
-            None
+            dataobject: DataIngest object
+            shift_steps: List of time-steps to shift the target-data to create
+                future expected series values for prediction.
+            binary: Process data for predicting boolean up / down movement vs
+                actual values if True
 
         Returns:
             None
@@ -114,13 +144,13 @@ class Data(object):
         if bool(self._binary) is False:
             self._label2predict = 'close'
         else:
-            self._label2predict = 'increasing_masked'
+            self._label2predict = 'increasing'
 
-        # Get data
+        # Get data from the DataIngest
         self._ohlcv = dataobject.ohlcv()
         self._dates = dataobject.dates()
 
-        # Setup classwide variables
+        # Setup classwide variables to be used by indicators
         self._globals = {
             'kwindow': 35,
             'dwindow': 5,
@@ -135,19 +165,26 @@ class Data(object):
             'week': 5,
             'proc_window': 5
         }
+
+        '''
+        Define the number of rows at the beginning of the master dataframe to
+        be ignored. Many of the indicator functions create NaN values at the
+        beginning of the pd.Series they return. These NaNs in the data can
+        cause errors and therefore must be removed.
+        '''
         self._ignore_row_count = max(
             1,
             self._globals['kwindow'] + self._globals['dwindow'],
             max(self._globals.values()))
 
-        # Sentiment values
+        # Sentiment values used by some indicator functions
         self._buy = 1
         self._sell = -1
         self._hold = 0
         self._strong = 1
         self._weak = 0
 
-        # Create the dataframe to be used by all other methods
+        # Create the master dataframes to be used by all other methods
         (self._dataframe, self._dataclasses) = self.__dataframe()
 
     def open(self):
@@ -240,7 +277,7 @@ class Data(object):
         return result
 
     def autocorrelation(self):
-        """Plot autocorrelation.
+        """Plot autocorrelation of data.
 
         Source -
             https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
@@ -267,7 +304,7 @@ class Data(object):
         plt.show()
 
     def feature_importance(self):
-        """Plot feature importance.
+        """Plot feature importance of data.
 
         Source -
             https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
@@ -310,7 +347,7 @@ class Data(object):
         plt.show()
 
     def suggested_features(self, count=4, display=False):
-        """Plot feature selection.
+        """Get a suggested list of features to use.
 
         Source -
             https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
@@ -319,11 +356,12 @@ class Data(object):
             None
 
         Returns:
-            None: Series for learning
+            features: list of features to use.
 
         """
         # Initialize key variables
         features = []
+        ts_start = time.time()
         cpu_cores = multiprocessing.cpu_count()
 
         # Split into input and output
@@ -336,10 +374,18 @@ class Data(object):
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
 
+        # Print status
+        print('> Calculating Suggested Features')
+
         # Perform feature selection
         rfe = RFE(RandomForestRegressor(
             n_estimators=500, random_state=1, n_jobs=cpu_cores - 2), count)
         fit = rfe.fit(vectors.values, classes_1d)
+
+        # More status
+        print(
+            '> Suggested Features Calculation duration: {0:.2f}'
+            ''.format(time.time() - ts_start))
 
         # Report selected features
         print('> Selected Features:')
@@ -362,10 +408,10 @@ class Data(object):
         return features
 
     def __dataframe(self):
-        """Create vectors from data.
+        """Create an comprehensive list of  from data.
 
         Args:
-            shift_steps: List of steps
+            None
 
         Returns:
             result: dataframe for learning
@@ -381,15 +427,18 @@ class Data(object):
         result = pd.DataFrame(columns=[
             'open', 'high', 'low', 'close', 'volume', 'increasing',
             'increasing_masked',
-            'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
+            'weekday', 'day', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
-            'k', 'd', 'rsi', 'adx', 'macd_diff', 'proc',
+            'k', 'd', 'rsi', 'adx', 'macd_diff', 'proc', 'k_d',
             'ma_open', 'ma_high', 'ma_low', 'ma_close', 'ma_std_close',
             'ma_volume', 'ma_volume_long',
             'amplitude', 'amplitude_medium', 'amplitude_long',
             'stoch_i', 'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i',
-            'volume_i',
+            'volume_i', 'force_index', 'negative_volume_index',
+            'ease_of_movement', 'acc_dist_index', 'on_balance_volume',
+            'on_balance_volume_mean',
+            'volume_price_trend',
             'std_pct_diff_close',
             'vol_amplitude', 'vol_amplitude_long',
             'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
@@ -420,7 +469,7 @@ class Data(object):
         result['week'] = self._dates.week
         result['month'] = self._dates.month
         result['quarter'] = self._dates.quarter
-        result['dayofyear'] = self._dates.dayofyear
+        # result['dayofyear'] = self._dates.dayofyear
 
         # Moving averages
         result['ma_open'] = result['open'].rolling(
@@ -475,11 +524,23 @@ class Data(object):
             2 * self._globals['week']).max()
         result['vol_amplitude_long'] = abs(_min - _max)
 
+        # Volume metrics
+        result['force_index'] = volume.force_index(
+            result['close'], result['volume'])
+        result['negative_volume_index'] = volume.negative_volume_index(
+            result['close'], result['volume'])
+        result['ease_of_movement'] = volume.ease_of_movement(
+            result['high'], result['low'], result['close'], result['volume'])
+        result['acc_dist_index'] = volume.acc_dist_index(
+            result['high'], result['low'], result['close'], result['volume'])
+        result['on_balance_volume'] = volume.on_balance_volume(
+            result['close'], result['volume'])
+        result['on_balance_volume_mean'] = volume.on_balance_volume(
+            result['close'], result['volume'])
+        result['volume_price_trend'] = volume.volume_price_trend(
+            result['close'], result['volume'])
+
         # Calculate the Stochastic values
-        '''stochastic = math.Stochastic(
-            self._ohlcv, window=self._globals['kwindow'])
-        result['k'] = stochastic.k()
-        result['d'] = stochastic.d(window=self._globals['dwindow'])'''
         result['k'] = momentum.stoch(
             result['high'],
             result['low'],
@@ -522,6 +583,9 @@ class Data(object):
         _decreasing = (_result < 0).astype(int) * self._sell
         result['increasing'] = _increasing + _decreasing
 
+        # Stochastic subtraciton
+        result['k_d'] = pd.Series(result['k'].values - result['d'].values)
+
         # Other indicators
         result['k_i'] = self._stochastic_indicator(
             result['k'], result['high'], result['low'], result['ma_close'])
@@ -542,8 +606,6 @@ class Data(object):
             result['increasing'].to_frame(),
             result['stoch_i'],
             as_integer=True).values
-        '''print(result['increasing_masked'].values.tolist())
-        sys.exit(0)'''
 
         # Get class values for each vector
         classes = pd.DataFrame(columns=self._shift_steps)
@@ -551,22 +613,10 @@ class Data(object):
             # Shift each column by the value of its label
             classes[step] = result[self._label2predict].shift(-step)
 
-        # Apply a mask to the dataframe if we are doing a binary evaluation
-        if self._binary is True:
-            # result = _mask(result, result['stoch_i'])
-            # classes = _mask(classes, result['stoch_i'], as_integer=True)
-            # print(classes.values[:,0].tolist())
-            # sys.exit(0)
-            pass
-
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
         result = result.iloc[self._ignore_row_count:]
         classes = classes.iloc[self._ignore_row_count:]
-
-        '''print(classes.values[:,0].tolist())
-        print('boo')
-        sys.exit(0)'''
 
         # Return
         return result, classes
@@ -594,12 +644,18 @@ class Data(object):
     def _stochastic_indicator(self, s_value, high, low, _ma_close):
         """Create stochastic indicator.
 
+        Return a pd.Series where the values are:
+            -1 : Close is higher than the moving average AND
+                the s_value > upper_limit
+            1  : Close is lower than the moving average AND
+                the s_value < lower_limit
+            0  : All other cases
+
         Args:
-            selector:
-                s_value: Either a stochastic K or D value pd.Series
-                high: High value pd.Series
-                low: Low value pd.Series
-                _ma_close: pd.Series moving average of the close
+            s_value: Either a stochastic K or D value pd.Series
+            high: High value pd.Series
+            low: Low value pd.Series
+            _ma_close: pd.Series moving average of the close
 
         Returns:
             result: Numpy array for learning
@@ -628,12 +684,20 @@ class Data(object):
             self, _k_series, _d_series, high, low, _ma_close):
         """Create stochastic indicator.
 
+        Return a pd.Series where the values are:
+            -1 : Close is higher than the moving average AND
+                    the stochastic D (moving average) > stochastic K AND
+                    the stochastic D (moving average) > upper_limit
+            1 : Close is lower than the moving average AND
+                    the stochastic D (moving average) < stochastic K AND
+                    the stochastic D (moving average) < lower_limit
+            0  : All other cases
+
         Args:
-            selector:
-                stochastic_value: Either a stochastic K or D value pd.Series
-                high: High value pd.Series
-                low: Low value pd.Series
-                ma_close: pd.Series moving average of the close
+            stochastic_value: Either a stochastic K or D value pd.Series
+            high: High value pd.Series
+            low: Low value pd.Series
+            ma_close: pd.Series moving average of the close
 
         Returns:
             result: Numpy array for learning
@@ -669,12 +733,18 @@ class Data(object):
     def _rsi_indicator(self, _rsi_series, high, low, _ma_close):
         """Create rsi indicator.
 
+        Return a pd.Series where the values are:
+            -1 : Close is higher than the moving average AND
+                the s_value > upper_limit
+            1  : Close is lower than the moving average AND
+                the s_value < lower_limit
+            0  : All other cases
+
         Args:
-            selector:
-                _rsi_series: Either a rsi K or D value pd.Series
-                high: High value pd.Series
-                low: Low value pd.Series
-                ma_close: pd.Series moving average of the close
+            _rsi_series: pd.Series of RSI values
+            high: High value pd.Series
+            low: Low value pd.Series
+            ma_close: pd.Series moving average of the close
 
         Returns:
             result: Numpy array for learning
@@ -709,8 +779,10 @@ class Data(object):
 
         Based on whether the long and short volume moving averages cross.
 
-        Short > Long: Sell
-        Long > Short: Buy
+        Return a pd.Series where the values are:
+
+        -1 : Short > Long = Sell
+        1  : Long > Short = Buy
 
         Args:
             _short: Short term volume moving average pd.Series
@@ -737,7 +809,12 @@ class Data(object):
     def _adx_indicator(self, _adx):
         """Create ADX indicator.
 
-        If the ADX value is > 25, then we have strong activity
+        If the ADX value is > 25, then we have strong activity.
+
+        Return a pd.Series where the values are:
+
+        1 : When _adx > 25
+        0 : When _adx <= 25
 
         Args:
             _adx: Current ADX pd.Series
@@ -755,6 +832,11 @@ class Data(object):
     def _macd_diff_indicator(self, macd):
         """Create MACD difference variable as an indicator.
 
+        Return a pd.Series where the values are:
+
+        1 : When macd > 0
+        0 : When macd <= 0
+
         Args:
             macd: Current MACD pd.Series
 
@@ -764,7 +846,7 @@ class Data(object):
         """
         # Evaluate decisions
         buy = (macd > 0).astype(int) * self._buy
-        sell = (macd < 0).astype(int) * self._sell
+        sell = (macd <= 0).astype(int) * self._sell
         result = (buy + sell).astype(int)
 
         # Return
@@ -791,7 +873,9 @@ class DataGRU(Data):
         self._test_size = test_size
 
         # Process data
-        (self._vectors, self._classes) = self._create_vector_classes()
+        (self._vectors,
+         self._classes,
+         self._filtered_columns) = self._create_vector_classes()
 
     def vectors(self):
         """Get all vectors for testing.
@@ -800,20 +884,20 @@ class DataGRU(Data):
             None
 
         Returns:
-            result: Training or test vector numpy arrays
+            result: pd.DataFrame of all feature vectors
 
         """
         # Return
         return self._vectors['NoNaNs']
 
     def classes(self):
-        """Get all vectors for testing.
+        """Get all classes for testing.
 
         Args:
             None
 
         Returns:
-            result: Training or test vector numpy arrays
+            result: pd.DataFrame of all classes
 
         """
         # Return
@@ -822,11 +906,13 @@ class DataGRU(Data):
     def vectors_test_all(self):
         """Get vectors for testing.
 
+        Also include any NaN values there may have been due to shifting
+
         Args:
             None
 
         Returns:
-            result: Training or test vector numpy arrays
+            result: pd.DataFrame of all feature vectors
 
         """
         # Fraction of vectors to be used for training
@@ -859,72 +945,86 @@ class DataGRU(Data):
         # Return
         vectors = self._vectors['NoNaNs']
         classes = self._classes['NoNaNs']
-
-        '''print('\n\n\n')
-        print(vectors)
-        print('\n\n\n')
-        print(classes[:,0].tolist())
-        sys.exit(0)'''
-
         result = general.train_validation_test_split(
             vectors, classes, self._test_size)
+        return result
+
+    def stochastic_vectors_classes(self):
+        """Create test vectors and classes filtered by ['stoch_i'] values.
+
+        Args:
+            None
+
+        Returns:
+            result: Tuple (filtered vectors, corresponding filtered classes)
+
+        """
+        # Return
+        vectors = self._dataframe
+        classes = self._dataclasses
+        (test_vectors, test_classes) = general.test_vectors_classes(
+            vectors, classes, self._test_size)
+
+        # Filter by stoch_i
+        filtered_indices = test_vectors[
+            np.round(test_vectors.stoch_i) != 0].index.values
+        filtered_vectors = test_vectors.loc[filtered_indices]
+        filtered_classes = test_classes.loc[filtered_indices]
+
+        # Remove all undesirable columns from the dataframe
+        dataframe = _filtered_dataframe(
+            filtered_vectors, self._filtered_columns)
+
+        # Return
+        result = (dataframe.values, filtered_classes.values)
         return result
 
     def _create_vector_classes(self):
         """Create vectors and targets from data.
 
         Args:
-            shift_steps: List of steps
+            None
 
         Returns:
             result: dataframe for learning
 
         """
         # Initialize key variables
-        pandas_df = deepcopy(self._dataframe)
         classes = deepcopy(self._dataclasses)
-
-        '''print(pandas_df)
-        print('\n\n')
-        print(self._dataclasses)
-        print('\n\n')
-        print(pandas_df['increasing'])
-        sys.exit(0)'''
-
         x_data = {'NoNaNs': None, 'all': None}
         y_data = {'NoNaNs': None, 'all': None}
-        desired_columns = [
+        filtered_columns = [
             'open', 'high', 'low', 'close',
-            'weekday', 'day', 'dayofyear', 'quarter', 'month', 'num_diff_open',
+            'weekday', 'day', 'quarter', 'month', 'num_diff_open',
             'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
             'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
             'std_pct_diff_close', 'ma_std_close',
             'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
             'bollinger_hband_indicator',
             'amplitude', 'amplitude_medium', 'amplitude_long',
-            'stoch_i', 'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i',
+            'stoch_i', 'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i', 'k_d'
             'volume_i', 'increasing_masked', 'increasing',
+            'force_index', 'negative_volume_index', 'ease_of_movement',
+            'acc_dist_index', 'on_balance_volume', 'on_balance_volume_mean',
+            'volume_price_trend',
             'vol_amplitude', 'vol_amplitude_long',
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
 
         # Try automated feature selection
-        desired_columns = self.suggested_features(count=20)
+        filtered_columns = self.suggested_features(count=20)
 
         # Remove all undesirable columns from the dataframe
-        imported_columns = list(pandas_df)
-        for column in imported_columns:
-            if column not in desired_columns:
-                pandas_df = pandas_df.drop(column, axis=1)
+        dataframe = _filtered_dataframe(self._dataframe, filtered_columns)
 
         # Create class and vector dataframes with only non NaN values
         # (val_loss won't improve otherwise)
         (x_data['NoNaNs'], y_data['NoNaNs']) = _no_nans(
-            pandas_df, classes, self._shift_steps, to_series=True)
+            dataframe, classes, self._shift_steps, to_series=True)
         y_data['all'] = classes.values[:]
-        x_data['all'] = pandas_df.values[:]
+        x_data['all'] = dataframe.values[:]
 
         # Return
-        return (x_data, y_data)
+        return (x_data, y_data, filtered_columns)
 
     def labels(self):
         """Get class labels.
@@ -1021,13 +1121,13 @@ class DataDT(Data):
         _result['macd_diff'] = self._macd_diff()
         _result['proc'] = self._proc()
 
-        desired_columns = [
+        filtered_columns = [
             'k', 'd', 'rsi', 'volume', 'adx', 'proc', 'macd_diff']
 
         # Remove all undesirable columns from the dataframe
         imported_columns = list(_result)
         for column in imported_columns:
-            if column not in desired_columns:
+            if column not in filtered_columns:
                 _result = _result.drop(column, axis=1)
 
         # Trim last row if necessary
@@ -1220,7 +1320,10 @@ def _mask(dataframe, mask_series, as_integer=False):
 
     Args:
         dataframe: Dataframe
-        mask_series: pd.Series to use for masking
+        mask_series: pd.Series to use for masking. Where the pd.Series value
+            is non-zero, the mask to be applied is 1 (one), else it is
+            0 (zero). Zero values are used to eliminate unwanted values via
+            multiplication.
 
     Returns:
         result: numpy array of timestamps
@@ -1239,19 +1342,18 @@ def _mask(dataframe, mask_series, as_integer=False):
             result[heading] = result[heading] * mask
         else:
             result[heading] = np.array(result[heading] * mask).astype(int)
-            '''print('hello')
-            print(result[heading])
-            sys.exit(0)'''
 
     # Return
     return result
 
 
 def _create_classes(series, shift_steps):
-    """Apply a mask to the dataframe.
+    """Create classes from pd.Series.
 
     Args:
-        dataframe: Dataframe
+        series: pd.Series of values to predict
+        shift_steps: List of time-steps to shift the target-data to create
+            future expected series values for prediction.
 
     Returns:
         result: numpy array of timestamps
@@ -1269,11 +1371,13 @@ def _create_classes(series, shift_steps):
 
 def _no_nans(
         _vectors, _classes, shift_steps, to_series=False):
-    """Apply a mask to the dataframe.
+    """Trim classes and vector dataframes of NaN values due to future steps.
 
     Args:
         _vectors: pd.DataFrame of vectors
         _classes: pd.DataFrame of classes
+        shift_steps: List of time-steps to shift the target-data to create
+            future expected series values for prediction.
 
     Returns:
         result: numpy array of timestamps
@@ -1293,4 +1397,28 @@ def _no_nans(
 
     # Return
     result = (vectors, classes)
+    return result
+
+
+def _filtered_dataframe(dataframe, filtered_columns):
+    """Remove undesirable columns from a dataframe.
+
+    Args:
+        _dataframe: DataFrame to filter
+        filtered_columns: Column names to use for filtering
+
+    Returns:
+        result: DataFrame for learning
+
+    """
+    # Initialize key variables
+    result = deepcopy(dataframe)
+
+    # Remove all undesirable columns from the dataframe
+    imported_columns = list(result)
+    for column in imported_columns:
+        if column not in filtered_columns:
+            result = result.drop(column, axis=1)
+
+    # Return
     return result

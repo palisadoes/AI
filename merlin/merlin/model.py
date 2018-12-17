@@ -6,6 +6,7 @@ from __future__ import print_function
 import time
 import os
 import sys
+from copy import deepcopy
 from pprint import pprint
 
 # PIP3 imports.
@@ -30,7 +31,6 @@ from keras.callbacks import (
 from keras import backend
 
 # Merlin imports
-from merlin.database import DataGRU
 from merlin import general
 
 
@@ -45,7 +45,7 @@ class RNNGRU(object):
 
     def __init__(
             self, _data, batch_size=64, epochs=20,
-            sequence_length=20, warmup_steps=50, dropout=0, test_size=0.33,
+            sequence_length=20, warmup_steps=50, dropout=0,
             layers=1, patience=10, units=512, display=False, binary=False):
         """Instantiate the class.
 
@@ -54,7 +54,10 @@ class RNNGRU(object):
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
             warmup_steps:
+            display: Show charts of results if True
+            binary: Process data for predicting boolean up / down movement vs
 
+                actual values if True
         Returns:
             None
 
@@ -481,17 +484,35 @@ class RNNGRU(object):
         array-dimensionality to create a batch with that one sequence.
         '''
 
-        result = _model.evaluate(
-            x=np.expand_dims(self._x_test_scaled, axis=0),
-            y=np.expand_dims(self._y_test_scaled, axis=0))
+        if self._binary is False:
+            result = _model.evaluate(
+                x=np.expand_dims(self._x_test_scaled, axis=0),
+                y=np.expand_dims(self._y_test_scaled, axis=0))
+        else:
+            # Get the filtered vectors and classes
+            (filtered_vectors,
+             filtered_classes) = self._data.stochastic_vectors_classes()
 
-        print('> Metrics (test-set): {}'.format(result))
-        print('> Metric Names: {}'.format(_model.metrics_names))
+            print('> Filtered Vectors Shape: ', filtered_vectors.shape)
+            print('> Filtered Classes Shape: ', filtered_classes.shape)
+
+            # Scale and then evaluate
+            x_filtered_scaled = self._x_scaler.transform(filtered_vectors)
+            y_filtered_scaled = self._y_scaler.transform(filtered_classes)
+            result = _model.evaluate(
+                x=np.expand_dims(x_filtered_scaled, axis=0),
+                y=np.expand_dims(y_filtered_scaled, axis=0))
+
+        # print('> Metrics (test-set): {}'.format(result))
+        # print('> Metric Names: {}'.format(_model.metrics_names))
 
         # If you have several metrics you can use this instead.
-        if False:
-            for _value, _metric in zip(result, _model.metrics_names):
-                print('{0}: {1:.3e}'.format(_metric, _value))
+        print('> Metrics (test-set):')
+        for _value, _metric in zip(result, _model.metrics_names):
+            print('\t{}: {:.5f}'.format(_metric, _value))
+
+        # Print predictions and actuals:
+
 
     def objective(self, params=None):
         """Optimize the Recurrent Neural Network.
@@ -505,8 +526,19 @@ class RNNGRU(object):
         """
         model = self.model(params=params)
 
+        if bool(self._binary) is False:
+            scaled_vectors = self._x_test_scaled
+            test_classes = self._y_test
+        else:
+            # Get the filtered vectors and classes
+            (filtered_vectors,
+             test_classes) = self._data.stochastic_vectors_classes()
+
+            # Scale and then evaluate
+            scaled_vectors = self._x_scaler.transform(filtered_vectors)
+
         # Input-signals for the model.
-        x_values = np.expand_dims(self._x_test_scaled, axis=0)
+        x_values = np.expand_dims(scaled_vectors, axis=0)
 
         # Get the predictions
         predictions = model.predict(x_values, verbose=1)
@@ -516,16 +548,29 @@ class RNNGRU(object):
         # of the original data-set.
         predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
 
+        print('> Type: ', type(scaled_vectors), type(test_classes))
+        print('> Predictions Type: ', type(predictions_rescaled))
+        print('\n> Predictions:\n', predictions_rescaled.tolist())
+
         if bool(self._binary) is True:
-            # predictions_rescaled = np.round(predictions_rescaled)
-            # predictions_rescaled = general.binary_accuracy(predictions_rescaled)
-            pass
+            predictions_rescaled = general.to_buy_sell(predictions_rescaled)
+            print('=x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x= =x-_-x=')
+            print('> Predictions Type (Integerized): ', type(predictions_rescaled))
 
         # Get the error value
-        accuracy = mean_absolute_error(self._y_test, predictions_rescaled)
+        accuracy = mean_absolute_error(test_classes, predictions_rescaled)
+
+        print('> Accuracy: {0:.2f}'.format(accuracy))
+        print('\n> Predictions (rounded):\n', predictions_rescaled.tolist())
+        print('\n> Actuals:\n', test_classes.tolist())
+        print('\n> Type Actuals:\n', type(test_classes))
+
+        print('But wait, there\'s more!')
+        print(type(test_classes[0][0]))
+        print(type(predictions_rescaled[0][0]))
 
         # Free object memory
-        model = None
+        # model = None
 
         # Return
         return {

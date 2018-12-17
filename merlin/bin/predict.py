@@ -141,12 +141,13 @@ def main():
         datafile, lookahead_periods,
         test_size=test_size, binary=binary)
 
-    if binary is True:
-        _data.autocorrelation()
-        _data.feature_importance()
-        features = _data.suggested_features(count=10, display=True)
-        print(features)
-        sys.exit(0)
+    if False:
+        if binary is True:
+            _data.autocorrelation()
+            _data.feature_importance()
+            features = _data.suggested_features(count=10, display=True)
+            print(features)
+            sys.exit(0)
 
     # Do training
     rnn = RNNGRU(
@@ -155,7 +156,6 @@ def main():
         epochs=epochs,
         batch_size=batch_size,
         dropout=dropout,
-        test_size=test_size,
         layers=layers,
         units=units,
         binary=binary,

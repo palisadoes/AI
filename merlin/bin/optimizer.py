@@ -67,11 +67,12 @@ def main():
     periods_per_day = 1
     days_per_week = 5
     sequence_lengths = [
+        periods_per_day * days_per_week * 12,
         periods_per_day * days_per_week * 24]
 
     # Initialize parameters
     space = {
-        'units': hp.choice('units', list(range(500, 505, 5))),
+        'units': hp.choice('units', list(range(500, 525, 25))),
         'dropout': hp.choice('dropout', [0.5]),
         'layers': hp.choice('layers', [1]),
         'sequence_length': hp.choice('sequence_length', sequence_lengths),
@@ -89,14 +90,14 @@ def main():
         test_size=test_size, binary=binary)
 
     # Do training
-    rnn = RNNGRU(_data)
+    rnn = RNNGRU(_data, binary=binary)
 
     # Test for stationarity
     if rnn.stationary() is False:
         print(
             '> Data appears to be a random walk and is not suitable '
             'for forecasting.')
-        sys.exit(0)
+        # sys.exit(0)
 
     # Run trials
     trials = Trials()

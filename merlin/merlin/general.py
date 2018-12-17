@@ -8,6 +8,7 @@ import sys
 
 # PIP imports
 import pandas as pd
+import numpy as np
 
 
 class Dates(object):
@@ -75,7 +76,7 @@ def save_trials(trials, input_filename):
 
 
 def train_validation_test_split(vectors, classes, test_size):
-    """Create contiguous (not random) training and test data.
+    """Create contiguous (not random) training, validation and test data.
 
     train_test_split in sklearn.model_selection does this randomly and is
     not suited for time-series data. It also doesn't create a validation-set
@@ -93,25 +94,85 @@ def train_validation_test_split(vectors, classes, test_size):
         result: Training or test vector numpy arrays
 
     """
+    # Make sure we have the correct type of vectors and classes
+    '''if isinstance(vectors, np.ndarray) is False or isinstance(
+            classes, np.ndarray) is False:
+        print('Arguments must of type numpy.ndarray (1)')
+        sys.exit(0)'''
+
     # Initialize key variables
-    num_data = vectors.shape[0]
-    num_test = int(test_size * num_data)
-    num_validation = int(test_size * num_data)
-    num_train = num_data - (num_test + num_validation)
+    (rows_train, rows_validation) = _split(vectors.shape[0], test_size)
 
-    # Split vectors
-    x_train = vectors[:num_train]
-    x_validation = vectors[num_train:num_train + num_validation]
-    x_test = vectors[num_train + num_validation:]
+    # Split training
+    x_train = vectors[:rows_train]
+    y_train = classes[:rows_train]
 
-    # Split classes
-    y_train = classes[:num_train]
-    y_validation = classes[num_train:num_train + num_validation]
-    y_test = classes[num_train + num_validation:]
+    # Split validation
+    x_validation = vectors[rows_train:rows_train + rows_validation]
+    y_validation = classes[rows_train:rows_train + rows_validation]
+
+    # Split test
+    (x_test, y_test) = test_vectors_classes(vectors, classes, test_size)
 
     # Return
     result = (x_train, x_validation, x_test, y_train, y_validation, y_test)
     return result
+
+
+def test_vectors_classes(vectors, classes, test_size):
+    """Create contiguous (not random) test data.
+
+    train_test_split in sklearn.model_selection does this randomly and is
+    not suited for time-series data. It also doesn't create a validation-set
+
+    At some point we may want to try Walk Forward Validation methods:
+
+    https://machinelearningmastery.com/backtest-machine-learning-models-time-series-forecasting/
+
+    Args:
+        vectors: Dataset of interest
+        classes: Classes of interest
+        test_size: Percentage of data that is reserved for testing
+
+    Returns:
+        x_test: Test vectors
+
+    """
+    # Initialize key variables
+    (rows_train, rows_validation) = _split(vectors.shape[0], test_size)
+
+    # Make sure we have the correct type of vectors and classes
+    '''if isinstance(vectors, np.ndarray) is False or isinstance(
+            classes, np.ndarray) is False:
+        print('Arguments must of type numpy.ndarray (2)')
+        sys.exit(0)'''
+
+    # Split vectors
+    x_test = vectors[rows_train + rows_validation:]
+    y_test = classes[rows_train + rows_validation:]
+
+    # Return
+    return (x_test, y_test)
+
+
+def _split(rows, test_size):
+    """Create dataset allocations for training, validation and test vectors.
+
+    Args:
+        rows: Number of rows of data
+        test_size: Percentage of data that is reserved for testing
+
+    Returns:
+        result: Tuple of training, validation and test row values
+
+    """
+    # Initialize key variables
+    rows_test = int(test_size * rows)
+    rows_validation = int(test_size * rows)
+    rows_train = rows - (rows_test + rows_validation)
+
+    # Return
+    return (rows_train, rows_validation)
 
 
 def binary_accuracy(predictions, limit=0.3):
@@ -140,4 +201,21 @@ def binary_accuracy(predictions, limit=0.3):
         items.append(item)
     print(items)
     sys.exit(0)
+    return result
+
+
+def to_buy_sell(values):
+    """Convert list of floats to list of +1 or -1 values depending on sign.
+
+    Args:
+        values: List of list of floats
+
+    Returns:
+        result: Numpy arrary of results
+
+    """
+    # Initialize key variables
+    buy = (np.array(values) > 0).astype(int) * 1
+    sell = (np.array(values) <= 0).astype(int) * -1
+    result = buy + sell
     return result
