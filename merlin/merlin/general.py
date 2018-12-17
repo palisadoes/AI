@@ -176,10 +176,11 @@ def _split(rows, test_size):
 
 
 def binary_accuracy(predictions, actuals):
-    """Save trial results to file.
+    """Get the accuracy of predictions versus actuals.
 
     Args:
-        trials: List of trial results dicts
+        predictions: np.array of predictions (floats)
+        actuals: np.array of actual values (ints) of either 1 or -1
 
     Returns:
         result: Float of accuracy
@@ -187,13 +188,16 @@ def binary_accuracy(predictions, actuals):
     """
     # Calculate average accuracy
     _predictions = to_buy_sell(predictions.flatten().tolist())
-    _actuals = actuals.flatten().tolist()
+    _actuals = actuals.flatten().astype(int).tolist()
     sameness = (_actuals == _predictions).astype(int).tolist()
     result = sum(sameness)/len(sameness)
 
     # Print accuracy result lists to aid visualization of the data
     print('> Actuals: {}'.format(_actuals))
     print('> Predicted: {}'.format(_predictions))
+
+    print(
+        '> Predicted (Original Formatting): {}'.format(predictions.flatten()))
 
     # Return
     return result
