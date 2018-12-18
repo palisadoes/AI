@@ -198,6 +198,8 @@ def binary_accuracy(predictions, actuals):
 
     print(
         '> Predicted (Original Formatting): {}'.format(predictions.flatten()))
+    p_list = _predictions.astype(int).tolist()
+    print('> Average Predicted Value: {:.3f}'.format(sum(p_list)/len(p_list)))
 
     # Return
     return result

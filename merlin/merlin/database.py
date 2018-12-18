@@ -4,6 +4,8 @@
 from __future__ import print_function
 from copy import deepcopy
 import sys
+import os
+import pickle
 import time
 import multiprocessing
 
@@ -363,6 +365,7 @@ class Data(object):
         features = []
         ts_start = time.time()
         cpu_cores = multiprocessing.cpu_count()
+        filename = os.path.expanduser('/tmp/selection.pickle')
 
         # Split into input and output
         _vectors = self._dataframe
@@ -378,9 +381,18 @@ class Data(object):
         print('> Calculating Suggested Features')
 
         # Perform feature selection
-        rfe = RFE(RandomForestRegressor(
-            n_estimators=500, random_state=1, n_jobs=cpu_cores - 2), count)
-        fit = rfe.fit(vectors.values, classes_1d)
+        if os.path.exists(filename) is True:
+            fit = pickle.load(open(filename, 'rb'))
+        else:
+            # Generate model
+            rfe = RFE(RandomForestRegressor(
+                n_estimators=500, random_state=1, n_jobs=cpu_cores - 2), count)
+
+            # Fit the data to the model
+            fit = rfe.fit(vectors.values, classes_1d)
+
+            # Save to file
+            pickle.dump(fit, open(filename, 'wb'))
 
         # More status
         print(

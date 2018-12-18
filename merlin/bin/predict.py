@@ -21,6 +21,7 @@ def main():
     """
     # Initialize key variables
     periods_per_day = 1
+    min_sequence_length = 50
     ts_start = int(time.time())
 
     # Set logging level - No Tensor flow messages
@@ -115,7 +116,12 @@ def main():
     corresponds to 8 weeks.
     '''
     days = args.days
-    sequence_length = int(periods_per_day * days)
+    _sequence_length = int(periods_per_day * days)
+    sequence_length = max(min_sequence_length, _sequence_length)
+    if sequence_length == min_sequence_length:
+        print(
+            'Days should be > {} for adequate predictions to be made'
+            ''.format(int(min_sequence_length/days)))
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
@@ -131,7 +137,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [3]
+    lookahead_periods = [1]
 
     # Get data from file
     datafile = DataFile(filename)

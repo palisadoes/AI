@@ -275,7 +275,7 @@ class RNNGRU(object):
                 return_sequences=True))
 
         '''
-        The GRU outputs a batchfrom keras_contrib.layers.advanced_activations
+        The GRU outputs a batch from keras_contrib.layers.advanced_activations
         of sequences of 512 values. We want to predict
         3 output-signals, so we add a fully-connected (or dense) layer which
         maps 512 values down to only 3 values.
@@ -521,7 +521,7 @@ class RNNGRU(object):
 
             # Print meaningful human accuracy values
             print(
-                '> Human accuracy {:.5f} %'
+                '> Human accuracy {:.3f} %'
                 ''.format(general.binary_accuracy(
                     predictions, filtered_classes) * 100))
 
