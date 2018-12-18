@@ -613,6 +613,14 @@ class Data(object):
         result['volume_i'] = self._volume_indicator(
             result['ma_volume'], result['ma_volume_long'])
 
+        # Create time shifted columns
+        for step in range(1, self._ignore_row_count + 1):
+            result['t-{}'.format(step)] = result['close'].shift(step)
+            result['tpd-{}'.format(step)] = result[
+                'close'].pct_change(periods=step)
+            result['tad-{}'.format(step)] = result[
+                'close'].diff(periods=step)
+
         # Mask increasing with
         result['increasing_masked'] = _mask(
             result['increasing'].to_frame(),
