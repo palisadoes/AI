@@ -297,8 +297,7 @@ class Data(object):
         _classes = self._dataclasses
 
         # Get rid of the NaNs in the vectors and classes
-        (_, classes) = _no_nans(
-            _vectors, _classes, self._shift_steps, binary=self._binary)
+        (_, classes) = _no_nans(_vectors, _classes, self._shift_steps)
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
 
@@ -327,8 +326,7 @@ class Data(object):
         _classes = self._dataclasses
 
         # Get rid of the NaNs in the vectors and classes
-        (vectors, classes) = _no_nans(
-            _vectors, _classes, self._shift_steps, binary=self._binary)
+        (vectors, classes) = _no_nans(_vectors, _classes, self._shift_steps)
 
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
@@ -374,8 +372,7 @@ class Data(object):
         _classes = self._dataclasses
 
         # Get rid of the NaNs in the vectors and classes
-        (vectors, classes) = _no_nans(
-            _vectors, _classes, self._shift_steps, binary=self._binary)
+        (vectors, classes) = _no_nans(_vectors, _classes, self._shift_steps)
 
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
@@ -987,8 +984,7 @@ class DataGRU(Data):
         _classes = self._dataclasses
 
         # Get rid of the NaNs in the vectors and classes
-        (vectors, classes) = _no_nans(
-            _vectors, _classes, self._shift_steps, binary=self._binary)
+        (vectors, classes) = _no_nans(_vectors, _classes, self._shift_steps)
 
         # Get test vectors
         (test_vectors, test_classes) = general.test_vectors_classes(
@@ -1048,8 +1044,7 @@ class DataGRU(Data):
         # Create class and vector dataframes with only non NaN values
         # (val_loss won't improve otherwise)
         (x_data['NoNaNs'], y_data['NoNaNs']) = _no_nans(
-            dataframe, classes, self._shift_steps,
-            to_series=True, binary=self._binary)
+            dataframe, classes, self._shift_steps, to_series=True)
         y_data['all'] = classes.values[:]
         x_data['all'] = dataframe.values[:]
 
@@ -1400,7 +1395,7 @@ def _create_classes(series, shift_steps):
 
 
 def _no_nans(
-        _vectors, _classes, shift_steps, to_series=False, binary=False):
+        _vectors, _classes, shift_steps, to_series=False):
     """Trim classes and vector dataframes of NaN values due to future steps.
 
     Args:
@@ -1424,28 +1419,6 @@ def _no_nans(
     else:
         classes = _classes.values[:-crop_by]
         vectors = _vectors.values[:-crop_by]
-
-        # Convert classes into integer values 0 and 1.
-        if binary is True:
-            # print(classes)
-            # pass
-            classes = classes.astype(int)
-            '''print(classes)
-            sys.exit(0)'''
-
-            '''print(classes)
-            (rows, columns) = classes.shape
-            for column in range(0, columns):
-                next_class = classes[column]
-                print(type(next_class), next_class.shape)
-                encoder = LabelEncoder()
-                encoder.fit(next_class.flatten())
-                transformed_class = encoder.transform(next_class.flatten())
-                classes[column] = np.reshape(
-                    transformed_class, (rows, 1))
-                #classes[column]
-                print(type(classes[column]), classes[column].shape)
-                print('boo')'''
 
     # Return
     result = (vectors, classes)

@@ -187,66 +187,20 @@ def binary_accuracy(predictions, actuals):
 
     """
     # Calculate average accuracy
-    # _predictions = to_buy_sell(predictions.flatten().tolist())
     _predictions = predictions.flatten()
-    _actuals = actuals.flatten() # .astype(int).tolist()
+    _actuals = actuals.flatten()
     sameness = (_actuals == _predictions).astype(int).tolist()
     result = sum(sameness)/len(sameness)
 
     # Print accuracy result lists to aid visualization of the data
-    print('> Actuals: \n{}'.format(_actuals))
-    print('> Predicted: \n{}'.format(_predictions))
+    print('> Actuals:\n{}'.format(_actuals))
+    print('> Predicted:\n{}'.format(_predictions))
 
     print(
-        '> Predicted (Original Formatting): \n{}'.format(predictions.flatten()))
+        '> Predicted (Original Formatting):\n{}'
+        ''.format(predictions.flatten()))
     p_list = _predictions.astype(int).tolist()
     print('> Average Predicted Value: {:.3f}'.format(sum(p_list)/len(p_list)))
 
     # Return
-    return result
-
-
-def _binary_accuracy(predictions, limit=0.3):
-    """Save trial results to file.
-
-    Args:
-        trials: List of trial results dicts
-
-    Returns:
-        result: Numpy arrary of results
-
-    """
-    higher = (predictions > 1 - limit).astype(int) * 1
-    lower = (predictions < limit).astype(int) * 0
-
-    above_lower_bound = (predictions > limit).astype(int) * -1
-    below_upper_bound = (predictions < 1 - limit).astype(int) * -1
-    undetermined = above_lower_bound * below_upper_bound
-
-    result = higher + lower + undetermined
-    print(higher, '\n')
-    print(lower, '\n')
-    print(undetermined)
-    items = []
-    for item in predictions:
-        items.append(item)
-    print(items)
-    sys.exit(0)
-    return result
-
-
-def to_buy_sell(values):
-    """Convert list of floats to list of +1 or -1 values depending on sign.
-
-    Args:
-        values: List of list of floats
-
-    Returns:
-        result: Numpy arrary of results
-
-    """
-    # Initialize key variables
-    buy = (np.array(values) > 0).astype(int) * 1
-    sell = (np.array(values) <= 0).astype(int) * -1
-    result = buy + sell
     return result
