@@ -8,6 +8,7 @@ import os
 import sys
 from copy import deepcopy
 from pprint import pprint
+import gc
 
 # PIP3 imports.
 import numpy as np
@@ -324,10 +325,16 @@ class RNNGRU(object):
         We then compile the Keras model so it is ready for training.
         '''
         optimizer = RMSprop(lr=1e-3)
-        _model.compile(
-            loss=self._loss_mse_warmup,
-            optimizer=optimizer,
-            metrics=['accuracy'])
+        if self._binary is True:
+            _model.compile(
+                loss='binary_crossentropy',
+                optimizer=optimizer,
+                metrics=['accuracy'])
+        else:
+            _model.compile(
+                loss=self._loss_mse_warmup,
+                optimizer=optimizer,
+                metrics=['accuracy'])
 
         '''
         This is a very small model with only two layers. The output shape of
@@ -511,7 +518,7 @@ class RNNGRU(object):
             x_values = np.expand_dims(x_scaled, axis=0)
 
             # Get the predictions
-            predictions_scaled = _model.predict(x_values, verbose=1)
+            predictions_scaled = _model.predict_classes(x_values, verbose=1)
 
             # The output of the model is between 0 and 1.
             # Do an inverse map to get it back to the scale
@@ -535,7 +542,7 @@ class RNNGRU(object):
             _model: RNN model
 
         """
-        model = self.model(params=params)
+        model = deepcopy(self.model(params=params))
 
         if bool(self._binary) is False:
             scaled_vectors = self._x_test_scaled
@@ -564,7 +571,8 @@ class RNNGRU(object):
         accuracy = mean_absolute_error(test_classes, predictions)
 
         # Free object memory
-        # model = None
+        del model
+        gc.collect()
 
         # Print meaningful human accuracy values
         if self._binary is True:

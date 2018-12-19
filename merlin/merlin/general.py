@@ -187,17 +187,18 @@ def binary_accuracy(predictions, actuals):
 
     """
     # Calculate average accuracy
-    _predictions = to_buy_sell(predictions.flatten().tolist())
-    _actuals = actuals.flatten().astype(int).tolist()
+    # _predictions = to_buy_sell(predictions.flatten().tolist())
+    _predictions = predictions.flatten()
+    _actuals = actuals.flatten() # .astype(int).tolist()
     sameness = (_actuals == _predictions).astype(int).tolist()
     result = sum(sameness)/len(sameness)
 
     # Print accuracy result lists to aid visualization of the data
-    print('> Actuals: {}'.format(_actuals))
-    print('> Predicted: {}'.format(_predictions))
+    print('> Actuals: \n{}'.format(_actuals))
+    print('> Predicted: \n{}'.format(_predictions))
 
     print(
-        '> Predicted (Original Formatting): {}'.format(predictions.flatten()))
+        '> Predicted (Original Formatting): \n{}'.format(predictions.flatten()))
     p_list = _predictions.astype(int).tolist()
     print('> Average Predicted Value: {:.3f}'.format(sum(p_list)/len(p_list)))
 
