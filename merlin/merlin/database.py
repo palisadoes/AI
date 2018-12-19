@@ -17,7 +17,7 @@ from statsmodels.graphics.tsaplots import plot_acf
 
 from matplotlib import pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.feature_selection import RFE
+from sklearn.feature_selection import RFE, RFECV
 from sklearn.preprocessing import LabelEncoder
 
 # Append custom application libraries
@@ -368,7 +368,7 @@ class Data(object):
         filename = os.path.expanduser('/tmp/selection.pickle')
 
         # Split into input and output
-        _vectors = self._dataframe
+        _vectors = self._dataframe.drop(self._label2predict, axis=1)
         _classes = self._dataclasses
 
         # Get rid of the NaNs in the vectors and classes
@@ -385,8 +385,10 @@ class Data(object):
             fit = pickle.load(open(filename, 'rb'))
         else:
             # Generate model
-            rfe = RFE(RandomForestRegressor(
-                n_estimators=500, random_state=1, n_jobs=cpu_cores - 2), count)
+            rfe = RFECV(
+                RandomForestRegressor(
+                    n_estimators=500, random_state=1, n_jobs=cpu_cores - 2),
+                n_jobs=cpu_cores - 2)
 
             # Fit the data to the model
             fit = rfe.fit(vectors.values, classes_1d)

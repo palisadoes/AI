@@ -195,10 +195,8 @@ def binary_accuracy(predictions, actuals):
     # Print accuracy result lists to aid visualization of the data
     print('> Actuals:\n{}'.format(_actuals))
     print('> Predicted:\n{}'.format(_predictions))
-
-    print(
-        '> Predicted (Original Formatting):\n{}'
-        ''.format(predictions.flatten()))
+    p_list = _actuals.astype(int).tolist()
+    print('> Average Actual Value: {:.3f}'.format(sum(p_list)/len(p_list)))
     p_list = _predictions.astype(int).tolist()
     print('> Average Predicted Value: {:.3f}'.format(sum(p_list)/len(p_list)))
 

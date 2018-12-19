@@ -122,6 +122,7 @@ def main():
         print(
             'Days should be > {} for adequate predictions to be made'
             ''.format(int(min_sequence_length/days)))
+        sys.exit(0)
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
