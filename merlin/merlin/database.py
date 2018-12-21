@@ -17,7 +17,7 @@ from statsmodels.graphics.tsaplots import plot_acf
 
 from matplotlib import pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.feature_selection import RFE, RFECV
+from sklearn.feature_selection import RFE
 from sklearn.preprocessing import LabelEncoder
 
 # Append custom application libraries
@@ -126,7 +126,8 @@ class Data(object):
 
     """
 
-    def __init__(self, dataobject, shift_steps, binary=False):
+    def __init__(
+            self, dataobject, shift_steps, test_size=test_size, binary=False):
         """Intialize the class.
 
         Args:
@@ -143,6 +144,7 @@ class Data(object):
         # Initialize key variables
         self._binary = bool(binary)
         self._shift_steps = shift_steps
+        self._test_size = test_size
 
         if bool(self._binary) is False:
             self._label2predict = 'close'
@@ -292,12 +294,9 @@ class Data(object):
             None: Series for learning
 
         """
-        # Split into input and output
-        _vectors = self._dataframe
-        _classes = self._dataclasses
+        # Get training vectors and classes
+        (_, classes) = self._training_vectors_classes()
 
-        # Get rid of the NaNs in the vectors and classes
-        (_, classes) = _no_nans(_vectors, _classes, self._shift_steps)
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
 
@@ -321,12 +320,8 @@ class Data(object):
         # Initialize key variables
         cpu_cores = multiprocessing.cpu_count()
 
-        # Split into input and output
-        _vectors = self._dataframe
-        _classes = self._dataclasses
-
-        # Get rid of the NaNs in the vectors and classes
-        (vectors, classes) = _no_nans(_vectors, _classes, self._shift_steps)
+        # Get training vectors and classes
+        (vectors, classes) = self._training_vectors_classes()
 
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
@@ -366,13 +361,10 @@ class Data(object):
         ts_start = time.time()
         cpu_cores = multiprocessing.cpu_count()
         filename = os.path.expanduser('/tmp/selection.pickle')
+        ranking_tuple_list = []
 
-        # Split into input and output
-        _vectors = self._dataframe.drop(self._label2predict, axis=1)
-        _classes = self._dataclasses
-
-        # Get rid of the NaNs in the vectors and classes
-        (vectors, classes) = _no_nans(_vectors, _classes, self._shift_steps)
+        # Get training vectors and classes
+        (vectors, classes) = self._training_vectors_classes()
 
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
@@ -385,10 +377,10 @@ class Data(object):
             fit = pickle.load(open(filename, 'rb'))
         else:
             # Generate model
-            rfe = RFECV(
+            rfe = RFE(
                 RandomForestRegressor(
                     n_estimators=500, random_state=1, n_jobs=cpu_cores - 2),
-                n_jobs=cpu_cores - 2)
+                count)
 
             # Fit the data to the model
             fit = rfe.fit(vectors.values, classes_1d)
@@ -402,13 +394,21 @@ class Data(object):
             ''.format(time.time() - ts_start))
 
         # Report selected features
-        print('> Selected Features:')
         dataframe_header = vectors.columns.values[:]
         for i in range(len(fit.support_)):
             if fit.support_[i]:
                 feature = dataframe_header[i]
                 features.append(feature)
-                print('\t', feature)
+
+        # Print results
+        for index in range(len(dataframe_header)):
+            ranking_tuple_list.append(
+                (dataframe_header[index], fit.ranking_[index])
+            )
+        ranking_tuple_list = sorted(ranking_tuple_list, key=lambda x: x[1])
+        print('> Selected Features (Feature, Ranking Value):')
+        for item in ranking_tuple_list:
+            print('\t{:30} {:.3f}'.format(item[0], item[1]))
 
         # Plot feature rank
         if bool(display) is True:
@@ -417,6 +417,18 @@ class Data(object):
             plt.bar(ticks, fit.ranking_)
             plt.xticks(ticks, dataframe_header, rotation=-90)
             plt.show()
+            plt.close()
+
+        # Plot feature importances
+        if bool(display) is True:
+            ticks = [i for i in range(len(ranking_tuple_list))]
+            sorted_headings = [i[0] for i in ranking_tuple_list]
+            sorted_features = [i[1] for i in ranking_tuple_list]
+            plt.title('Suggested Features - Sorted (Lower Values Better)')
+            plt.bar(ticks, sorted_features)
+            plt.xticks(ticks, sorted_headings, rotation=-90)
+            plt.show()
+            plt.close()
 
         # Returns
         return features
@@ -642,6 +654,33 @@ class Data(object):
 
         # Return
         return result, classes
+
+    def _training_vectors_classes(self):
+        """Create vectors and classes used for training feature selection.
+
+        Args:
+            None
+
+        Returns:
+            result: Tuple of training (vectors, classes)
+
+        """
+        # Split into input and output
+        _vectors = self._dataframe.drop(self._label2predict, axis=1)
+        _classes = self._dataclasses
+
+        # Get rid of the NaNs in the vectors and classes.
+        (nanless_vectors, nanless_classes) = _no_nans(
+            _vectors, _classes, self._shift_steps)
+
+        # Work only with training data
+        (vectors, _, __,
+         classes, ___, ____) = general.train_validation_test_split(
+             nanless_vectors, nanless_classes, self._test_size)
+
+        # Return
+        result = (vectors, classes)
+        return result
 
     def datetime(self):
         """Create a numpy array of datetimes.
@@ -889,10 +928,7 @@ class DataGRU(Data):
 
         """
         # Setup inheritance
-        Data.__init__(self, dataobject, shift_steps, binary=binary)
-
-        # Initialize key variables
-        self._test_size = test_size
+        Data.__init__(self, dataobject, shift_steps, test_size=test_size, binary=binary)
 
         # Process data
         (self._vectors,
@@ -1038,7 +1074,7 @@ class DataGRU(Data):
             'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
 
         # Try automated feature selection
-        filtered_columns = self.suggested_features(count=20)
+        filtered_columns = self.suggested_features(count=25)
 
         # Remove all undesirable columns from the dataframe
         dataframe = _filtered_dataframe(self._dataframe, filtered_columns)
