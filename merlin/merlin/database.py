@@ -18,7 +18,8 @@ from statsmodels.graphics.tsaplots import plot_acf
 from matplotlib import pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.feature_selection import RFE
-from sklearn.preprocessing import LabelEncoder
+
+import lightgbm as lgb
 
 # Append custom application libraries
 from merlin import general
@@ -127,7 +128,7 @@ class Data(object):
     """
 
     def __init__(
-            self, dataobject, shift_steps, test_size=test_size, binary=False):
+            self, dataobject, shift_steps, test_size=0.1, binary=False):
         """Intialize the class.
 
         Args:
@@ -327,8 +328,17 @@ class Data(object):
         classes_1d = classes.values[:, 0]
 
         # Fit random forest model
-        model = RandomForestRegressor(
-            n_estimators=500, random_state=1, n_jobs=cpu_cores - 2)
+        if self._binary is False:
+            model = RandomForestRegressor(
+                n_estimators=500, n_jobs=cpu_cores - 2)
+        else:
+            # Use LightGBM with GPU
+            params = {
+                'device': 'gpu',
+                'num_class': len(self._shift_steps)}
+            model = lgb.LGBMRegressor(
+                objective='binary', n_jobs=cpu_cores - 2)
+            model.set_params(**params)
         model.fit(vectors.values, classes_1d)
 
         # Show importance scores
@@ -336,7 +346,7 @@ class Data(object):
         print(model.feature_importances_)
 
         # Plot importance scores
-        names = _vectors.columns.values[:]
+        names = vectors.columns.values[:]
         ticks = [i for i in range(len(names))]
         plt.title('Feature Importance')
         plt.bar(ticks, model.feature_importances_)
@@ -377,13 +387,21 @@ class Data(object):
             fit = pickle.load(open(filename, 'rb'))
         else:
             # Generate model
-            rfe = RFE(
-                RandomForestRegressor(
-                    n_estimators=500, random_state=1, n_jobs=cpu_cores - 2),
-                count)
+            if self._binary is False:
+                model = RFE(RandomForestRegressor(
+                    n_estimators=500, n_jobs=cpu_cores - 2), count)
+            else:
+                # Use LightGBM with GPU
+                params = {
+                    'device': 'gpu',
+                    'num_class': len(self._shift_steps)}
+                lgb_model = lgb.LGBMRegressor(
+                    objective='binary', n_jobs=cpu_cores - 2)
+                lgb_model.set_params(**params)
+                model = RFE(lgb_model, count)
 
             # Fit the data to the model
-            fit = rfe.fit(vectors.values, classes_1d)
+            fit = model.fit(vectors.values, classes_1d)
 
             # Save to file
             pickle.dump(fit, open(filename, 'wb'))
@@ -928,7 +946,8 @@ class DataGRU(Data):
 
         """
         # Setup inheritance
-        Data.__init__(self, dataobject, shift_steps, test_size=test_size, binary=binary)
+        Data.__init__(
+            self, dataobject, shift_steps, test_size=test_size, binary=binary)
 
         # Process data
         (self._vectors,

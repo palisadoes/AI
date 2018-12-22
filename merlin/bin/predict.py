@@ -148,7 +148,7 @@ def main():
         datafile, lookahead_periods,
         test_size=test_size, binary=binary)
 
-    if True:
+    if False:
         if binary is True:
             # _data.autocorrelation()
             _data.feature_importance()

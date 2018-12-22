@@ -30,6 +30,7 @@ from keras.initializers import RandomUniform
 from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 from keras import backend
+from keras.utils import multi_gpu_model
 
 # Merlin imports
 from merlin import general
@@ -318,12 +319,22 @@ class RNNGRU(object):
                 activation='linear',
                 kernel_initializer=init))
 
+
+        # Apply multi-GPU logic
+
+        try:
+            _model = multi_gpu_model(_model, cpu_relocation=True)
+            print('> Training using multiple GPUs...')
+        except ValueError:
+            print('> Training using single GPU or CPU...')
+
         # Compile Model
 
         '''
         This is the optimizer and the beginning learning-rate that we will use.
         We then compile the Keras model so it is ready for training.
         '''
+
         optimizer = RMSprop(lr=1e-3)
         if self._binary is True:
             _model.compile(
