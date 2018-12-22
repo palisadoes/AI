@@ -32,8 +32,6 @@ from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 from keras import backend
 from keras.utils import multi_gpu_model
-from keras import Model
-
 
 # Merlin imports
 from merlin import general
@@ -245,7 +243,6 @@ class RNNGRU(object):
 
         """
         # Initialize key variables
-        gpus = len(general.get_available_gpus())
         if params is None:
             _hyperparameters = self.hyperparameters
         else:
@@ -255,17 +252,8 @@ class RNNGRU(object):
         epoch_steps = int(
             self.training_rows / _hyperparameters['batch_size']) + 1
 
-        '''
-        Instantiate the base model (or "template" model).
-        We recommend doing this with under a CPU device scope,
-        so that the model's weights are hosted on CPU memory.
-        Otherwise they may end up hosted on a GPU, which would
-        complicate weight sharing.
-
-        NOTE: multi_gpu_model values will be way off if you don't do this.
-        '''
-        with tf.device('/cpu:0'):
-            _model = Sequential()
+        # Create the model object
+        _model = Sequential()
 
         '''
         We can now add a Gated Recurrent Unit (GRU) to the network. This will
@@ -335,18 +323,12 @@ class RNNGRU(object):
         '''print(inspect.getmembers(_model, predicate=inspect.ismethod))
         print('\n\n----------------------\n\n')'''
 
-        # Apply multi-GPU logic.
+        # Apply multi-GPU logic
         try:
-            # We have to wrap multi_gpu_model this way to get callbacks to work
-            '''_model = ModelMGPU(
-                _model,
-                cpu_relocation=True,
-                gpus=gpus)
-            #_model = _model
             _model = multi_gpu_model(
                 _model,
                 cpu_relocation=True,
-                gpus=gpus)'''
+                gpus=len(general.get_available_gpus()))
             print('> Training using multiple GPUs...')
         except ValueError:
             print('> Training using single GPU or CPU...')
@@ -490,7 +472,6 @@ class RNNGRU(object):
             generator=generator,
             epochs=_hyperparameters['epochs'],
             steps_per_epoch=epoch_steps,
-            use_multiprocessing=True,
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -519,18 +500,6 @@ class RNNGRU(object):
         print('> Loading model weights')
         if os.path.exists(self._path_checkpoint):
             _model.load_weights(self._path_checkpoint)
-
-        '''optimizer = RMSprop(lr=1e-3)
-        if self._binary is True:
-            _model.compile(
-                loss='binary_crossentropy',
-                optimizer=optimizer,
-                metrics=['accuracy'])
-        else:
-            _model.compile(
-                loss=self._loss_mse_warmup,
-                optimizer=optimizer,
-                metrics=['accuracy'])'''
 
         # Performance on Test-Set
 
@@ -561,7 +530,7 @@ class RNNGRU(object):
         # If you have several metrics you can use this instead.
         print('> Metrics (test-set):')
         for _value, _metric in zip(result, _model.metrics_names):
-            print('\t{}: {:.10f}'.format(_metric, _value))
+            print('\t{}: {:.5f}'.format(_metric, _value))
 
         if self._binary is True:
             # Input-signals for the model.
@@ -978,23 +947,3 @@ class RNNGRU(object):
 
             # Close figure
             plt.close(fig=fig)
-
-
-class ModelMGPU(Model):
-    '''
-    https://github.com/keras-team/keras/issues/2436#issuecomment-354882296
-    '''
-    def __init__(self, ser_model, **kwargs):
-        pmodel = multi_gpu_model(ser_model, **kwargs)
-        self.__dict__.update(pmodel.__dict__)
-        self._smodel = ser_model
-
-    def __getattribute__(self, attrname):
-        '''Override load and save methods to be used from the serial-model. The
-        serial-model holds references to the weights in the multi-gpu model.
-        '''
-        # return Model.__getattribute__(self, attrname)
-        if 'load' in attrname or 'save' in attrname:
-            return getattr(self._smodel, attrname)
-
-        return super(ModelMGPU, self).__getattribute__(attrname)
