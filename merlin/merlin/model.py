@@ -320,9 +320,8 @@ class RNNGRU(object):
                 activation='linear',
                 kernel_initializer=init))
 
-
-        print(inspect.getmembers(_model, predicate=inspect.ismethod))
-        print('\n\n----------------------\n\n')
+        '''print(inspect.getmembers(_model, predicate=inspect.ismethod))
+        print('\n\n----------------------\n\n')'''
 
         # Apply multi-GPU logic
         try:
@@ -334,8 +333,8 @@ class RNNGRU(object):
         except ValueError:
             print('> Training using single GPU or CPU...')
 
-        print(inspect.getmembers(_model, predicate=inspect.ismethod))
-        sys.exit(0)
+        '''print(inspect.getmembers(_model, predicate=inspect.ismethod))
+        sys.exit(0)'''
 
         # Compile Model
 

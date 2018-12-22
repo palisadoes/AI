@@ -320,6 +320,8 @@ class Data(object):
         """
         # Initialize key variables
         cpu_cores = multiprocessing.cpu_count()
+        params = {'device': 'gpu'}
+        estimators = 500
 
         # Get training vectors and classes
         (vectors, classes) = self._training_vectors_classes()
@@ -329,15 +331,23 @@ class Data(object):
 
         # Fit random forest model
         if self._binary is False:
-            model = RandomForestRegressor(
-                n_estimators=500, n_jobs=cpu_cores - 2)
+            '''model = RandomForestRegressor(
+                n_estimators=estimators,
+                n_jobs=cpu_cores - 2)'''
+
+            # Use LightGBM with GPU
+            model = lgb.LGBMRegressor(
+                objective='regression',
+                n_estimators=estimators,
+                n_jobs=cpu_cores - 2)
+            model.set_params(**params)
         else:
             # Use LightGBM with GPU
-            params = {
-                'device': 'gpu',
-                'num_class': len(self._shift_steps)}
+            params['num_class'] = len(self._shift_steps)
             model = lgb.LGBMRegressor(
-                objective='binary', n_jobs=cpu_cores - 2)
+                objective='binary',
+                n_estimators=estimators,
+                n_jobs=cpu_cores - 2)
             model.set_params(**params)
         model.fit(vectors.values, classes_1d)
 
@@ -372,6 +382,8 @@ class Data(object):
         cpu_cores = multiprocessing.cpu_count()
         filename = os.path.expanduser('/tmp/selection.pickle')
         ranking_tuple_list = []
+        params = {'device': 'gpu'}
+        estimators = 500
 
         # Get training vectors and classes
         (vectors, classes) = self._training_vectors_classes()
@@ -388,15 +400,26 @@ class Data(object):
         else:
             # Generate model
             if self._binary is False:
-                model = RFE(RandomForestRegressor(
-                    n_estimators=500, n_jobs=cpu_cores - 2), count)
+                '''model = RFE(RandomForestRegressor(
+                    n_estimators=estimators,
+                    n_jobs=cpu_cores - 2), count)'''
+
+                # Use LightGBM with GPU
+                lgb_model = lgb.LGBMRegressor(
+                    objective='regression',
+                    n_estimators=estimators,
+                    n_jobs=cpu_cores - 2)
+                lgb_model.set_params(**params)
+                model = RFE(lgb_model, count)
             else:
                 # Use LightGBM with GPU
                 params = {
                     'device': 'gpu',
                     'num_class': len(self._shift_steps)}
                 lgb_model = lgb.LGBMRegressor(
-                    objective='binary', n_jobs=cpu_cores - 2)
+                    objective='binary',
+                    n_estimators=estimators,
+                    n_jobs=cpu_cores - 2)
                 lgb_model.set_params(**params)
                 model = RFE(lgb_model, count)
 
