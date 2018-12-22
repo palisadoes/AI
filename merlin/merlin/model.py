@@ -9,6 +9,7 @@ import sys
 from copy import deepcopy
 from pprint import pprint
 import gc
+import inspect
 
 # PIP3 imports.
 import numpy as np
@@ -320,13 +321,21 @@ class RNNGRU(object):
                 kernel_initializer=init))
 
 
-        # Apply multi-GPU logic
+        print(inspect.getmembers(_model, predicate=inspect.ismethod))
+        print('\n\n----------------------\n\n')
 
+        # Apply multi-GPU logic
         try:
-            _model = multi_gpu_model(_model, cpu_relocation=True)
+            _model = multi_gpu_model(
+                _model,
+                cpu_relocation=True,
+                gpus=len(general.get_available_gpus()))
             print('> Training using multiple GPUs...')
         except ValueError:
             print('> Training using single GPU or CPU...')
+
+        print(inspect.getmembers(_model, predicate=inspect.ismethod))
+        sys.exit(0)
 
         # Compile Model
 

@@ -8,7 +8,10 @@ import sys
 
 # PIP imports
 import pandas as pd
-import numpy as np
+
+from tensorflow.python.client import device_lib
+import tensorflow as tf
+from keras import backend
 
 
 class Dates(object):
@@ -201,4 +204,42 @@ def binary_accuracy(predictions, actuals):
     print('> Average Predicted Value: {:.3f}'.format(sum(p_list)/len(p_list)))
 
     # Return
+    return result
+
+
+def get_available_gpus():
+    """Get available number of GPUs.
+
+    Args:
+        None
+
+    Returns:
+        result: Float of accuracy
+
+    """
+    ###################################
+    # TensorFlow wizardry
+    config = tf.ConfigProto()
+
+    # Don't pre-allocate memory; allocate as-needed
+    config.gpu_options.allow_growth = True
+
+    # Only allow a total of half the GPU memory to be allocated
+    config.gpu_options.per_process_gpu_memory_fraction = 0.1
+
+    # Crash with DeadlineExceeded instead of hanging forever when your
+    # queues get full/empty
+    config.operation_timeout_in_ms = 60000
+
+    # Create a session with the above options specified.
+    backend.tensorflow_backend.set_session(tf.Session(config=config))
+    ###################################
+
+    # Create a temporary session to get the data.
+    # IMPORTANT - Memory will be immediately freed this way.
+    with tf.Session(config=config) as _:
+        local_device_protos = device_lib.list_local_devices()
+
+    # Return
+    result = [x.name for x in local_device_protos if x.device_type == 'GPU']
     return result
