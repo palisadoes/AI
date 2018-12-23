@@ -240,8 +240,8 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    offset = 30
-    rnn.plot_test(model, start_idx=rnn.test_rows - offset, length=offset)
+    # offset = 30
+    # rnn.plot_test(model, start_idx=rnn.test_rows - offset, length=offset)
 
     # Cleanup
     rnn.cleanup()

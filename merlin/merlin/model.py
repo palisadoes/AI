@@ -460,10 +460,11 @@ class RNNGRU(object):
             patience=0,
             verbose=1)
 
-        callbacks = [callback_early_stopping,
-                     callback_checkpoint,
-                     callback_tensorboard,
-                     callback_reduce_lr]
+        callbacks = [
+            callback_early_stopping,
+            callback_checkpoint,
+            callback_tensorboard,
+            callback_reduce_lr]
 
         # Train the Recurrent Neural Network
 
