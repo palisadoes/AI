@@ -318,11 +318,6 @@ class Data(object):
             None: Series for learning
 
         """
-        # Initialize key variables
-        cpu_cores = multiprocessing.cpu_count()
-        params = {'device': 'gpu'}
-        estimators = 500
-
         # Get training vectors and classes
         (vectors, classes) = self._training_vectors_classes()
 
@@ -330,36 +325,18 @@ class Data(object):
         classes_1d = classes.values[:, 0]
 
         # Fit random forest model
-        if self._binary is False:
-            '''model = RandomForestRegressor(
-                n_estimators=estimators,
-                n_jobs=cpu_cores - 2)'''
-
-            # Use LightGBM with GPU
-            model = lgb.LGBMRegressor(
-                objective='regression',
-                n_estimators=estimators,
-                n_jobs=cpu_cores - 2)
-            model.set_params(**params)
-        else:
-            # Use LightGBM with GPU
-            params['num_class'] = len(self._shift_steps)
-            model = lgb.LGBMRegressor(
-                objective='binary',
-                n_estimators=estimators,
-                n_jobs=cpu_cores - 2)
-            model.set_params(**params)
-        model.fit(vectors.values, classes_1d)
+        estimator = self.estimator()
+        estimator.fit(vectors.values, classes_1d)
 
         # Show importance scores
         print('> Feature Importances:\n')
-        print(model.feature_importances_)
+        print(estimator.feature_importances_)
 
         # Plot importance scores
         names = vectors.columns.values[:]
         ticks = [i for i in range(len(names))]
         plt.title('Feature Importance')
-        plt.bar(ticks, model.feature_importances_)
+        plt.bar(ticks, estimator.feature_importances_)
         plt.xticks(ticks, names, rotation=-90)
         plt.show()
 
@@ -379,11 +356,8 @@ class Data(object):
         # Initialize key variables
         features = []
         ts_start = time.time()
-        cpu_cores = multiprocessing.cpu_count()
         filename = os.path.expanduser('/tmp/selection.pickle')
         ranking_tuple_list = []
-        params = {'device': 'gpu'}
-        estimators = 500
 
         # Get training vectors and classes
         (vectors, classes) = self._training_vectors_classes()
@@ -398,40 +372,18 @@ class Data(object):
         if os.path.exists(filename) is True:
             fit = pickle.load(open(filename, 'rb'))
         else:
-            # Generate model
-            if self._binary is False:
-                '''model = RFE(RandomForestRegressor(
-                    n_estimators=estimators,
-                    n_jobs=cpu_cores - 2), count)'''
-
-                # Use LightGBM with GPU
-                lgb_model = lgb.LGBMRegressor(
-                    objective='regression',
-                    n_estimators=estimators,
-                    n_jobs=cpu_cores - 2)
-                lgb_model.set_params(**params)
-                model = RFE(lgb_model, count)
-            else:
-                # Use LightGBM with GPU
-                params = {
-                    'device': 'gpu',
-                    'num_class': len(self._shift_steps)}
-                lgb_model = lgb.LGBMRegressor(
-                    objective='binary',
-                    n_estimators=estimators,
-                    n_jobs=cpu_cores - 2)
-                lgb_model.set_params(**params)
-                model = RFE(lgb_model, count)
+            estimator = self.estimator()
+            selector = RFE(estimator, count)
 
             # Fit the data to the model
-            fit = model.fit(vectors.values, classes_1d)
+            fit = selector.fit(vectors.values, classes_1d)
 
             # Save to file
             pickle.dump(fit, open(filename, 'wb'))
 
         # More status
         print(
-            '> Suggested Features Calculation duration: {0:.2f}'
+            '> Suggested Features Calculation duration: {0:.2f}s'
             ''.format(time.time() - ts_start))
 
         # Report selected features
@@ -473,6 +425,62 @@ class Data(object):
 
         # Returns
         return features
+
+    def estimator(self):
+        """Construct a gradient boosting estimator model.
+
+        Source -
+            https://machinelearningmastery.com/feature-selection-time-series-forecasting-python/
+
+        Args:
+            None
+
+        Returns:
+            estimator: A supervised learning estimator with a fit method that
+                provides information about feature importance either through a
+                coef_ attribute or through a feature_importances_ attribute.
+
+        """
+        # Initialize key variables
+        cpu_cores = multiprocessing.cpu_count()
+        n_estimators = 500
+
+        # Use LightGBM with GPU
+        params = {'device': 'gpu'}
+
+        # Generate model
+        if self._binary is False:
+            '''estimator = RFE(RandomForestRegressor(
+                n_estimators=n_estimators,
+                n_jobs=cpu_cores - 2), count)'''
+            objective = 'regression'
+        else:
+            params['num_class'] = len(self._shift_steps)
+            objective = 'binary'
+
+        estimator = lgb.LGBMRegressor(
+            objective=objective,
+            n_estimators=n_estimators,
+            n_jobs=cpu_cores - 2)
+        estimator.set_params(**params)
+
+        '''
+        Based on: https://en.wikipedia.org/wiki/Random_forest#From_bagging_to_random_forests
+
+        Typically, for a classification problem with p features, √p
+        (rounded down) features are used in each split. For regression
+        problems the inventors recommend p/3 (rounded down) with a minimum node
+        size of 5 as the default.
+        '''
+
+        '''estimator = RandomForestRegressor(
+            n_estimators=n_estimators,
+            min_samples_leaf=5,
+            max_features='sqrt',
+            n_jobs=cpu_cores - 2)'''
+
+        # Return
+        return estimator
 
     def __dataframe(self):
         """Create an comprehensive list of  from data.
@@ -669,12 +677,12 @@ class Data(object):
             result['ma_volume'], result['ma_volume_long'])
 
         # Create time shifted columns
-        for step in range(1, self._ignore_row_count + 1):
+        '''for step in range(1, self._ignore_row_count + 1):
             result['t-{}'.format(step)] = result['close'].shift(step)
             result['tpd-{}'.format(step)] = result[
                 'close'].pct_change(periods=step)
             result['tad-{}'.format(step)] = result[
-                'close'].diff(periods=step)
+                'close'].diff(periods=step)'''
 
         # Mask increasing with
         result['increasing_masked'] = _mask(

@@ -24,7 +24,7 @@ from statsmodels.tsa.stattools import adfuller
 import tensorflow as tf
 
 # Keras imports
-from keras.models import Sequential
+from keras.models import Sequential, model_from_json
 from keras.layers import Dense, GRU
 from keras.optimizers import RMSprop
 from keras.initializers import RandomUniform
@@ -71,9 +71,13 @@ class RNNGRU(object):
         self._warmup_steps = warmup_steps
         self._binary = binary
         self._display = display
-        self._path_checkpoint = (
-            '/tmp/checkpoint-{}.keras'.format(int(time.time())))
         self._data = _data
+
+        # Set key file locations
+        path_prefix = '/tmp/keras-{}'.format(int(time.time()))
+        self._path_checkpoint = '{}.checkpoint'.format(path_prefix)
+        self._path_model_weights = '{}.weights.h5'.format(path_prefix)
+        self._path_model_parameters = '{}.model'.format(path_prefix)
 
         # Initialize parameters
         self.hyperparameters = {
@@ -338,16 +342,15 @@ class RNNGRU(object):
         # Apply multi-GPU logic.
         try:
             # We have to wrap multi_gpu_model this way to get callbacks to work
-            '''_model = ModelMGPU(
-                _model,
+            _model = ModelMGPU(
+                serial_model,
                 cpu_relocation=True,
                 gpus=gpus)
-            #_model = _model
-            _model = multi_gpu_model(
+            '''_model = multi_gpu_model(
                 _model,
                 cpu_relocation=True,
                 gpus=gpus)'''
-            parallel_model = serial_model
+            #_model = serial_model
             print('> Training using multiple GPUs...')
         except ValueError:
             print('> Training using single GPU or CPU...')
@@ -364,12 +367,12 @@ class RNNGRU(object):
 
         optimizer = RMSprop(lr=1e-3)
         if self._binary is True:
-            parallel_model.compile(
+            _model.compile(
                 loss='binary_crossentropy',
                 optimizer=optimizer,
                 metrics=['accuracy'])
         else:
-            parallel_model.compile(
+            _model.compile(
                 loss=self._loss_mse_warmup,
                 optimizer=optimizer,
                 metrics=['accuracy'])
@@ -382,7 +385,7 @@ class RNNGRU(object):
         the 3 target signals we want to predict.
         '''
         print('\n> Model Summary:\n')
-        print(parallel_model.summary())
+        print(_model.summary())
 
         # Create the batch-generator.
         generator = self._batch_generator(
@@ -418,12 +421,11 @@ class RNNGRU(object):
         This is the callback for writing checkpoints during training.
         '''
 
-        callback_checkpoint = ModelCheckpoint(
-            filepath=self._path_checkpoint,
-            monitor='val_loss',
-            verbose=1,
-            save_weights_only=True,
-            save_best_only=True)
+        callback_checkpoint = ModelCheckpoint(filepath=self._path_checkpoint,
+                                              monitor='val_loss',
+                                              verbose=1,
+                                              save_weights_only=True,
+                                              save_best_only=True)
 
         '''
         This is the callback for stopping the optimization when performance
@@ -439,10 +441,9 @@ class RNNGRU(object):
         This is the callback for writing the TensorBoard log during training.
         '''
 
-        callback_tensorboard = TensorBoard(
-            log_dir='/tmp/23_logs/',
-            histogram_freq=0,
-            write_graph=False)
+        callback_tensorboard = TensorBoard(log_dir='/tmp/23_logs/',
+                                           histogram_freq=0,
+                                           write_graph=False)
 
         '''
         This callback reduces the learning-rate for the optimizer if the
@@ -453,12 +454,11 @@ class RNNGRU(object):
         We don't want the learning-rate to go any lower than this.
         '''
 
-        callback_reduce_lr = ReduceLROnPlateau(
-            monitor='val_loss',
-            factor=0.1,
-            min_lr=1e-4,
-            patience=0,
-            verbose=1)
+        callback_reduce_lr = ReduceLROnPlateau(monitor='val_loss',
+                                               factor=0.1,
+                                               min_lr=1e-4,
+                                               patience=0,
+                                               verbose=1)
 
         callbacks = [callback_early_stopping,
                      callback_checkpoint,
@@ -490,7 +490,7 @@ class RNNGRU(object):
         pprint(_hyperparameters)
         print('\n> Starting data training\n')
 
-        parallel_model.fit_generator(
+        _model.fit_generator(
             generator=generator,
             epochs=_hyperparameters['epochs'],
             steps_per_epoch=epoch_steps,
@@ -499,9 +499,53 @@ class RNNGRU(object):
             callbacks=callbacks)
 
         # Return
-        return parallel_model
+        return serial_model
 
-    def evaluate(self, _model):
+    def save(self, _model):
+        """Save the Recurrent Neural Network model.
+
+        Args:
+            None
+
+        Returns:
+            _model: RNN model
+
+        """
+        # Serialize model to JSON
+        model_json = _model.to_json()
+        with open(self._path_model_parameters, 'w') as json_file:
+            json_file.write(model_json)
+
+        # Serialize weights to HDF5
+        _model.save_weights(self._path_model_weights)
+        print('> Saved model to disk')
+
+    def load_model(self):
+        """Load the Recurrent Neural Network model from disk.
+
+        Args:
+            None
+
+        Returns:
+            _model: RNN model
+
+        """
+        # Load json and create model
+        print('> Loading model from disk')
+        with open(self._path_model_parameters, 'r') as json_file:
+            loaded_model_json = json_file.read()
+        _model = model_from_json(loaded_model_json)
+
+        # Load weights into new model
+        _model.load_weights(self._path_model_weights)
+        '''sys.exit(0)
+        _model.load_weights(self._path_checkpoint)'''
+        print('> Finished loading model from disk')
+
+        # Return
+        return _model
+
+    def evaluate(self):
         """Evaluate the model.
 
         Args:
@@ -520,11 +564,12 @@ class RNNGRU(object):
         checkpoint, which should have the best performance on the test-set.
         '''
 
-        print('> Loading model weights')
-        if os.path.exists(self._path_checkpoint):
-            _model.load_weights(self._path_checkpoint)
+        '''if os.path.exists(self._path_checkpoint):
+            _model.load_weights(self._path_checkpoint)'''
 
-        '''optimizer = RMSprop(lr=1e-3)
+        _model = self.load_model()
+
+        optimizer = RMSprop(lr=1e-3)
         if self._binary is True:
             _model.compile(
                 loss='binary_crossentropy',
@@ -534,7 +579,7 @@ class RNNGRU(object):
             _model.compile(
                 loss=self._loss_mse_warmup,
                 optimizer=optimizer,
-                metrics=['accuracy'])'''
+                metrics=['accuracy'])
 
         # Performance on Test-Set
 
