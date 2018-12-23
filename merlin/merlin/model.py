@@ -537,7 +537,7 @@ class RNNGRU(object):
                 optimizer=optimizer,
                 metrics=['accuracy'])'''
 
-        # Performance on Test-Set
+        # Performance on Test-Set.
 
         '''
         We can now evaluate the model's performance on the validation-set.
