@@ -8,6 +8,7 @@ import sys
 
 # PIP imports
 import pandas as pd
+import numpy as np
 
 from tensorflow.python.client import device_lib
 import tensorflow as tf
@@ -242,4 +243,27 @@ def get_available_gpus():
 
     # Return
     result = [x.name for x in local_device_protos if x.device_type == 'GPU']
+    return result
+
+
+def weights_match(model1, model2):
+    """Determine whether the weights of two Keras models match.
+
+    Args:
+        model1: First model
+        model2: Second model
+
+    Returns:
+        result: True if there is a match
+
+    """
+    # Get weights
+    weights_m1 = backend.batch_get_value(model1.weights)
+    weights_m2 = backend.batch_get_value(model2.weights)
+
+    # Evaluate equivalence
+    if all([np.all(w == ow) for w, ow in zip(weights_m1, weights_m2)]):
+        result = True
+    else:
+        result = False
     return result

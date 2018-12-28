@@ -26,7 +26,7 @@ import tensorflow as tf
 # Keras imports
 from keras.models import Sequential, model_from_yaml
 from keras.layers import Dense, GRU
-from keras.optimizers import RMSprop
+from keras.optimizers import RMSprop, Adam
 from keras.initializers import RandomUniform
 from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
@@ -76,9 +76,9 @@ class RNNGRU(object):
 
         # Set key file locations
         path_prefix = '/tmp/keras-{}'.format(int(time.time()))
-        self._path_checkpoint = '{}.checkpoint.h5'.format(path_prefix)
+        self._path_checkpoint = '{}.checkpoint'.format(path_prefix)
         self._path_model_weights = '{}.weights.h5'.format(path_prefix)
-        self._path_model_parameters = '{}.model.yaml'.format(path_prefix)
+        self._path_model_parameters = '{}.model'.format(path_prefix)
 
         # Initialize parameters
         self.hyperparameters = {
@@ -87,7 +87,7 @@ class RNNGRU(object):
             'layers': int(abs(layers)),
             'sequence_length': sequence_length,
             'patience': patience,
-            'batch_size': int(batch_size * self._gpus),
+            'batch_size': batch_size * self._gpus,
             'epochs': epochs
         }
 
@@ -253,9 +253,12 @@ class RNNGRU(object):
         if params is None:
             _hyperparameters = self.hyperparameters
         else:
+            params['batch_size'] = params['batch_size'] * self._gpus
             _hyperparameters = params
-            _hyperparameters['batch_size'] = int(
-                _hyperparameters['batch_size'] * self._gpus)
+
+        '''print(_hyperparameters['batch_size'])
+        print(self.hyperparameters['batch_size'])
+        sys.exit(0)'''
 
         # Calculate the steps per epoch
         epoch_steps = int(
@@ -285,6 +288,8 @@ class RNNGRU(object):
 
         serial_model.add(GRU(
             _hyperparameters['units'],
+            stateful=True,
+            batch_size=_hyperparameters['batch_size'],
             return_sequences=True,
             recurrent_dropout=_hyperparameters['dropout'],
             input_shape=(None, self._training_vector_count,)))
@@ -292,6 +297,8 @@ class RNNGRU(object):
         for _ in range(1, _hyperparameters['layers']):
             serial_model.add(GRU(
                 _hyperparameters['units'],
+                stateful=True,
+                batch_size=_hyperparameters['batch_size'],
                 recurrent_dropout=_hyperparameters['dropout'],
                 return_sequences=True))
 
@@ -308,8 +315,9 @@ class RNNGRU(object):
         '''
 
         if False:
-            serial_model.add(
-                Dense(self._training_class_count, activation='sigmoid'))
+            serial_model.add(Dense(
+                self._training_class_count,
+                activation='sigmoid'))
 
         '''
         A problem with using the Sigmoid activation function, is that we can
@@ -350,20 +358,19 @@ class RNNGRU(object):
                     serial_model,
                     cpu_relocation=True,
                     gpus=self._gpus)
+            #_model = _model
             if True:
                 parallel_model = multi_gpu_model(
                     serial_model,
                     cpu_relocation=True,
                     gpus=self._gpus)
+            # parallel_model = serial_model
             if False:
                 parallel_model = serial_model
             print('> Training using multiple GPUs...')
         except ValueError:
             parallel_model = serial_model
             print('> Training using single GPU or CPU...')
-
-        '''print(inspect.getmembers(_model, predicate=inspect.ismethod))
-        sys.exit(0)'''
 
         # Compile Model
 
@@ -373,6 +380,7 @@ class RNNGRU(object):
         '''
 
         optimizer = RMSprop(lr=1e-3)
+        # optimizer = Adam(lr=1e-3)
         if self._binary is True:
             parallel_model.compile(
                 loss='binary_crossentropy',
@@ -391,10 +399,13 @@ class RNNGRU(object):
         observations, and each observation has 3 signals. This corresponds to
         the 3 target signals we want to predict.
         '''
-        print('\n> Model Summary (Parallel):\n')
-        print(parallel_model.summary())
         print('\n> Model Summary (Serial):\n')
         print(serial_model.summary())
+        print('\n> Model Summary (Parallel):\n')
+        print(parallel_model.summary())
+
+        '''print(_hyperparameters['batch_size'])
+        sys.exit(0)'''
 
         # Create the batch-generator.
         generator = self._batch_generator(
@@ -430,11 +441,12 @@ class RNNGRU(object):
         This is the callback for writing checkpoints during training.
         '''
 
-        callback_checkpoint = ModelCheckpoint(filepath=self._path_checkpoint,
-                                              monitor='val_loss',
-                                              verbose=1,
-                                              save_weights_only=True,
-                                              save_best_only=True)
+        callback_checkpoint = ModelCheckpoint(
+            filepath=self._path_checkpoint,
+            monitor='val_loss',
+            verbose=1,
+            save_weights_only=True,
+            save_best_only=True)
 
         '''
         This is the callback for stopping the optimization when performance
@@ -450,9 +462,10 @@ class RNNGRU(object):
         This is the callback for writing the TensorBoard log during training.
         '''
 
-        callback_tensorboard = TensorBoard(log_dir='/tmp/23_logs/',
-                                           histogram_freq=0,
-                                           write_graph=False)
+        callback_tensorboard = TensorBoard(
+            log_dir='/tmp/23_logs/',
+            histogram_freq=0,
+            write_graph=False)
 
         '''
         This callback reduces the learning-rate for the optimizer if the
@@ -463,16 +476,18 @@ class RNNGRU(object):
         We don't want the learning-rate to go any lower than this.
         '''
 
-        callback_reduce_lr = ReduceLROnPlateau(monitor='val_loss',
-                                               factor=0.1,
-                                               min_lr=1e-4,
-                                               patience=0,
-                                               verbose=1)
+        callback_reduce_lr = ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.1,
+            min_lr=1e-4,
+            patience=0,
+            verbose=1)
 
-        callbacks = [callback_early_stopping,
-                     callback_checkpoint,
-                     callback_tensorboard,
-                     callback_reduce_lr]
+        callbacks = [
+            callback_early_stopping,
+            callback_checkpoint,
+            callback_tensorboard,
+            callback_reduce_lr]
 
         # Train the Recurrent Neural Network
 
@@ -507,16 +522,35 @@ class RNNGRU(object):
             validation_data=validation_data,
             callbacks=callbacks)
 
-        print("Ploting History")
+        '''v_steps = (self.test_rows // _hyperparameters['batch_size']) - 1
+        parallel_model.fit(
+            self._x_train_scaled,
+            self._y_train_scaled,
+            epochs=_hyperparameters['epochs'],
+            steps_per_epoch=epoch_steps,
+            validation_data=validation_data,
+            validation_steps=v_steps,
+            callbacks=callbacks)'''
+
+        # Save model
+        '''self.save(serial_model)
+        serial_model = self.load_model()'''
+
+        # Determine whether the weights of the parallel and serial models match
+        if general.weights_match(serial_model, parallel_model) is True:
+            print('> Weights match (Parallel / Serial)')
+        else:
+            print('> Weights different (Parallel / Serial)')
+        # sys.exit(0)
+
+        '''print("Ploting History")
         plt.plot(history.history['loss'], label='Parallel Training Loss')
         plt.plot(history.history['val_loss'], label='Parallel Validation Loss')
+        # plt.plot(parallel_model.history['loss'], label='Parallel Training Loss')
+        # plt.plot(parallel_model.history['val_loss'], label='Parallel Validation Loss')
         plt.legend()
         plt.show()
-
-        self.save(serial_model)
-        backend.clear_session()
-        del serial_model
-        serial_model = self.load_model()
+        sys.exit(0)'''
 
         # Return
         return serial_model
@@ -550,22 +584,20 @@ class RNNGRU(object):
             _model: RNN model
 
         """
-        # Load yaml and create model
+        # Load json and create model
         print('> Loading model from disk')
         with open(self._path_model_parameters, 'r') as yaml_file:
             loaded_model_yaml = yaml_file.read()
         _model = model_from_yaml(loaded_model_yaml)
 
         # Load weights into new model
-        _model.load_weights(self._path_model_weights, by_name=True)
-        '''sys.exit(0)
-        _model.load_weights(self._path_checkpoint)'''
+        _model.load_weights(self._path_model_weights)
         print('> Finished loading model from disk')
 
         # Return
         return _model
 
-    def evaluate(self):
+    def evaluate(self, _model):
         """Evaluate the model.
 
         Args:
@@ -584,12 +616,11 @@ class RNNGRU(object):
         checkpoint, which should have the best performance on the test-set.
         '''
 
-        '''if os.path.exists(self._path_checkpoint):
-            _model.load_weights(self._path_checkpoint)'''
+        print('> Loading model weights')
+        if os.path.exists(self._path_checkpoint):
+            _model.load_weights(self._path_checkpoint)
 
-        _model = self.load_model()
-
-        optimizer = RMSprop(lr=1e-3)
+        '''optimizer = RMSprop(lr=1e-3)
         if self._binary is True:
             _model.compile(
                 loss='binary_crossentropy',
@@ -599,9 +630,9 @@ class RNNGRU(object):
             _model.compile(
                 loss=self._loss_mse_warmup,
                 optimizer=optimizer,
-                metrics=['accuracy'])
+                metrics=['accuracy'])'''
 
-        # Performance on Test-Set
+        # Performance on Test-Set.
 
         '''
         We can now evaluate the model's performance on the validation-set.

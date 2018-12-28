@@ -6,6 +6,7 @@ from __future__ import print_function
 import argparse
 import time
 import sys
+import os
 
 
 # Merlin imports
@@ -25,7 +26,7 @@ def main():
     ts_start = int(time.time())
 
     # Set logging level - No Tensor flow messages
-    # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
     # Get CLI arguments
     parser = argparse.ArgumentParser()
@@ -138,7 +139,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [1]
+    lookahead_periods = [5]
 
     # Get data from file
     datafile = DataFile(filename)
@@ -170,7 +171,7 @@ def main():
         display=display)
     rnn.stationary()
     model = rnn.model()
-    rnn.evaluate(model)
+    # rnn.evaluate(model)
 
     '''
     Calculate the duration
