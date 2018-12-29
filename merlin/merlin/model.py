@@ -51,7 +51,8 @@ class RNNGRU(object):
     def __init__(
             self, _data, batch_size=64, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, units=512, display=False, binary=False):
+            layers=1, patience=10, units=512, display=False, binary=False,
+            multigpu=False):
         """Instantiate the class.
 
         Args:
@@ -61,7 +62,6 @@ class RNNGRU(object):
             warmup_steps:
             display: Show charts of results if True
             binary: Process data for predicting boolean up / down movement vs
-
                 actual values if True
         Returns:
             None
@@ -72,7 +72,10 @@ class RNNGRU(object):
         self._binary = binary
         self._display = display
         self._data = _data
-        self._gpus = len(general.get_available_gpus())
+        if multigpu is True:
+            self._gpus = len(general.get_available_gpus())
+        else:
+            self._gpus = 1
 
         # Set key file locations
         path_prefix = '/tmp/keras-{}'.format(int(time.time()))
@@ -82,13 +85,13 @@ class RNNGRU(object):
 
         # Initialize parameters
         self.hyperparameters = {
-            'units': units,
-            'dropout': dropout,
+            'units': abs(units),
+            'dropout': abs(dropout),
             'layers': int(abs(layers)),
-            'sequence_length': sequence_length,
-            'patience': patience,
+            'sequence_length': abs(sequence_length),
+            'patience': abs(patience),
             'batch_size': int(batch_size * self._gpus),
-            'epochs': epochs
+            'epochs': abs(epochs)
         }
 
         # Delete any stale checkpoint file
@@ -168,13 +171,6 @@ class RNNGRU(object):
         self._x_validation_scaled = self._x_scaler.transform(x_validation)
         self._x_test_scaled = self._x_scaler.transform(_x_test)
 
-        '''print(np.amin(self._x_train_scaled), np.amax(self._x_train_scaled))
-        print(np.amin(self._x_train_scaled), np.amax(self._x_train_scaled))
-        print(np.amin(self._x_test_scaled), np.amax(self._x_test_scaled))
-
-        print('\n', _x_test, '\n')
-        print('\n', self._x_test_scaled, '\n')'''
-
         '''
         The target-data comes from the same data-set as the input-signals,
         because it is the weather-data for one of the cities that is merely
@@ -189,11 +185,6 @@ class RNNGRU(object):
         self._y_validation_scaled = self._y_scaler.transform(
             self._y_validation)
         self._y_test_scaled = self._y_scaler.transform(self._y_test)
-
-        '''print(np.amin(self._y_train_scaled), np.amax(self._y_train_scaled))
-        print(np.amin(self._y_train_scaled), np.amax(self._y_train_scaled))
-        print(np.amin(self._y_test_scaled), np.amax(self._y_test_scaled))
-        sys.exit()'''
 
         # Print stuff
         print('\n> Numpy Data Type: {}'.format(type(x_train)))
@@ -339,31 +330,21 @@ class RNNGRU(object):
                 activation='linear',
                 kernel_initializer=init))
 
-        '''print(inspect.getmembers(_model, predicate=inspect.ismethod))
-        print('\n\n----------------------\n\n')'''
-
         # Apply multi-GPU logic.
-        try:
-            # We have to wrap multi_gpu_model this way to get callbacks to work
-            if False:
-                parallel_model = ModelMGPU(
-                    serial_model,
-                    cpu_relocation=True,
-                    gpus=self._gpus)
-            if True:
+        if self._gpus == 1:
+            parallel_model = serial_model
+            print('> Training using single GPU.')
+        else:
+            try:
+                # Use multiple GPUs
                 parallel_model = multi_gpu_model(
                     serial_model,
                     cpu_relocation=True,
                     gpus=self._gpus)
-            if False:
+                print('> Training using multiple GPUs.')
+            except ValueError:
                 parallel_model = serial_model
-            print('> Training using multiple GPUs...')
-        except ValueError:
-            parallel_model = serial_model
-            print('> Training using single GPU or CPU...')
-
-        '''print(inspect.getmembers(_model, predicate=inspect.ismethod))
-        sys.exit(0)'''
+                print('> Single GPU detected. Training using single GPU.')
 
         # Compile Model
 
@@ -513,13 +494,8 @@ class RNNGRU(object):
         plt.legend()
         plt.show()
 
-        self.save(serial_model)
-        backend.clear_session()
-        del serial_model
-        serial_model = self.load_model()
-
         # Return
-        return serial_model
+        return parallel_model
 
     def save(self, _model):
         """Save the Recurrent Neural Network model.
@@ -565,7 +541,7 @@ class RNNGRU(object):
         # Return
         return _model
 
-    def evaluate(self):
+    def evaluate(self, _model):
         """Evaluate the model.
 
         Args:
@@ -584,10 +560,10 @@ class RNNGRU(object):
         checkpoint, which should have the best performance on the test-set.
         '''
 
-        '''if os.path.exists(self._path_checkpoint):
-            _model.load_weights(self._path_checkpoint)'''
+        if os.path.exists(self._path_checkpoint):
+            _model.load_weights(self._path_checkpoint)
 
-        _model = self.load_model()
+        # _model = self.load_model()
 
         optimizer = RMSprop(lr=1e-3)
         if self._binary is True:

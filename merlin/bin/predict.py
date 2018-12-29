@@ -76,6 +76,10 @@ def main():
         '--binary',
         help='Predict up/down versus actual values if True. Default False.',
         action='store_true')
+    parser.add_argument(
+        '--multigpu',
+        help='Use all available GPUs if True. Default False.',
+        action='store_true')
     args = parser.parse_args()
     binary = args.binary
     filename = args.filename
@@ -85,6 +89,7 @@ def main():
     patience = args.patience
     test_size = args.test_size
     units = args.units
+    multigpu = args.multigpu
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -168,10 +173,11 @@ def main():
         units=units,
         binary=binary,
         patience=patience,
-        display=display)
+        display=display,
+        multigpu=multigpu)
     rnn.stationary()
     model = rnn.model()
-    # rnn.evaluate(model)
+    rnn.evaluate(model)
 
     '''
     Calculate the duration
