@@ -657,12 +657,12 @@ class Data(object):
             result['ma_volume'], result['ma_volume_long'])
 
         # Create time shifted columns
-        '''for step in range(1, self._ignore_row_count + 1):
-            result['t-{}'.format(step)] = result['close'].shift(step)
+        for step in range(1, self._ignore_row_count + 1):
+            # result['t-{}'.format(step)] = result['close'].shift(step)
             result['tpd-{}'.format(step)] = result[
                 'close'].pct_change(periods=step)
             result['tad-{}'.format(step)] = result[
-                'close'].diff(periods=step)'''
+                'close'].diff(periods=step)
 
         # Mask increasing with
         result['increasing_masked'] = _mask(
@@ -677,9 +677,10 @@ class Data(object):
             classes[step] = result[self._label2predict].shift(-step)
 
         # Remove all undesirable columns from the dataframe
-        '''undesired_columns = ['open', 'close', 'high', 'low', 'volume']
+        undesired_columns = [
+            'open', 'close', 'high', 'low', 'volume']
         for column in undesired_columns:
-            result = result.drop(column, axis=1)'''
+            result = result.drop(column, axis=1)
 
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
