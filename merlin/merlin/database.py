@@ -498,27 +498,7 @@ class Data(object):
         pct_difference = difference.relative()
 
         # Create result to return.
-        # Make sure it is float16 for efficient computing
-        result = pd.DataFrame(columns=[
-            'open', 'high', 'low', 'close', 'volume', 'increasing',
-            'increasing_masked',
-            'weekday', 'day', 'quarter', 'month', 'num_diff_open',
-            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
-            'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
-            'k', 'd', 'rsi', 'adx', 'macd_diff', 'proc', 'k_d',
-            'ma_open', 'ma_high', 'ma_low', 'ma_close', 'ma_std_close',
-            'ma_volume', 'ma_volume_long',
-            'amplitude', 'amplitude_medium', 'amplitude_long',
-            'stoch_i', 'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i',
-            'volume_i', 'force_index', 'negative_volume_index',
-            'ease_of_movement', 'acc_dist_index', 'on_balance_volume',
-            'on_balance_volume_mean',
-            'volume_price_trend',
-            'std_pct_diff_close',
-            'vol_amplitude', 'vol_amplitude_long',
-            'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
-            'bollinger_hband_indicator',
-            'ma_volume_delta']).astype('float16')
+        result = pd.DataFrame()
 
         # Add current value columns
         result['open'] = self._ohlcv['open']
@@ -539,9 +519,9 @@ class Data(object):
         result['pct_diff_volume'] = pct_difference['volume']
 
         # Add date related columns
-        result['day'] = self._dates.day
+        # result['day'] = self._dates.day
         result['weekday'] = self._dates.weekday
-        result['week'] = self._dates.week
+        # result['week'] = self._dates.week
         result['month'] = self._dates.month
         result['quarter'] = self._dates.quarter
         # result['dayofyear'] = self._dates.dayofyear
@@ -696,10 +676,18 @@ class Data(object):
             # Shift each column by the value of its label
             classes[step] = result[self._label2predict].shift(-step)
 
+        # Remove all undesirable columns from the dataframe
+        '''undesired_columns = ['open', 'close', 'high', 'low', 'volume']
+        for column in undesired_columns:
+            result = result.drop(column, axis=1)'''
+
         # Delete the first row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
         result = result.iloc[self._ignore_row_count:]
         classes = classes.iloc[self._ignore_row_count:]
+
+        # Convert result to float32 to conserve memory
+        result = result.astype(np.float32)
 
         # Return
         return result, classes
@@ -1106,25 +1094,9 @@ class DataGRU(Data):
         classes = deepcopy(self._dataclasses)
         x_data = {'NoNaNs': None, 'all': None}
         y_data = {'NoNaNs': None, 'all': None}
-        filtered_columns = [
-            'open', 'high', 'low', 'close',
-            'weekday', 'day', 'quarter', 'month', 'num_diff_open',
-            'num_diff_high', 'num_diff_low', 'num_diff_close', 'pct_diff_open',
-            'pct_diff_high', 'pct_diff_low', 'pct_diff_close',
-            'std_pct_diff_close', 'ma_std_close',
-            'bollinger_lband', 'bollinger_hband', 'bollinger_lband_indicator',
-            'bollinger_hband_indicator',
-            'amplitude', 'amplitude_medium', 'amplitude_long',
-            'stoch_i', 'k_i', 'd_i', 'rsi_i', 'adx_i', 'macd_diff_i', 'k_d'
-            'volume_i', 'increasing_masked', 'increasing',
-            'force_index', 'negative_volume_index', 'ease_of_movement',
-            'acc_dist_index', 'on_balance_volume', 'on_balance_volume_mean',
-            'volume_price_trend',
-            'vol_amplitude', 'vol_amplitude_long',
-            'k', 'd', 'rsi', 'adx', 'proc', 'macd_diff', 'ma_volume_delta']
 
         # Try automated feature selection
-        filtered_columns = self.suggested_features(count=25)
+        filtered_columns = self.suggested_features(count=20)
 
         # Remove all undesirable columns from the dataframe
         dataframe = _filtered_dataframe(self._dataframe, filtered_columns)
@@ -1499,14 +1471,15 @@ def _no_nans(
     # Initialize key variables
     crop_by = max(shift_steps)
 
+    # Crop trailing rows
+    classes = _classes[:-crop_by]
+    vectors = _vectors[:-crop_by]
+
     # Create class and vector dataframes with only non NaN values
     # (val_loss won't improve otherwise)
-    if bool(to_series) is False:
-        classes = _classes[:-crop_by]
-        vectors = _vectors[:-crop_by]
-    else:
-        classes = _classes.values[:-crop_by]
-        vectors = _vectors.values[:-crop_by]
+    if bool(to_series) is True:
+        classes = classes.values
+        vectors = vectors.values
 
     # Return
     result = (vectors, classes)
