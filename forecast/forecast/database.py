@@ -475,7 +475,7 @@ class Data(object):
         result['month'] = pd.Series(output['month'])
         result['minute'] = pd.Series(output['minute'])
         result['second'] = pd.Series(output['second'])
-        result['timestamp'] = pd.Series(output['timestamp'])
+        # result['timestamp'] = pd.Series(output['timestamp'])
 
         # Create time shifted columns
         for step in range(1, prior_period_count + 1):
