@@ -5,11 +5,8 @@
 from __future__ import print_function
 import time
 import os
-import sys
-from copy import deepcopy
 from pprint import pprint
-import gc
-import inspect
+from statsmodels.tsa.stattools import adfuller
 
 # PIP3 imports.
 import numpy as np
@@ -18,41 +15,28 @@ from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from hyperopt import STATUS_OK
-from statsmodels.tsa.stattools import adfuller
 
 # TensorFlow imports
 import tensorflow as tf
-
-# Keras imports
-from keras.models import Sequential, model_from_yaml
-from keras.layers import Dense, GRU
-from keras.optimizers import RMSprop
-from keras.initializers import RandomUniform
-from keras.callbacks import (
+from tensorflow.python.keras.models import Sequential
+from tensorflow.python.keras.layers import Dense, GRU
+from tensorflow.python.keras.optimizers import RMSprop
+from tensorflow.python.keras.initializers import RandomUniform
+from tensorflow.python.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 from keras import backend
-from keras.utils import multi_gpu_model
-from keras import Model
-
 
 # Merlin imports
-from forecast import general
+from forecast.database import DataGRU
 
 
-class RNNGRU(object):
-    """Process data for ingestion.
-
-    Roughly based on:
-
-    https://github.com/Hvass-Labs/TensorFlow-Tutorials/blob/master/23_Time-Series-Prediction.ipynb
-
-    """
+class RNNGRU(DataGRU):
+    """Process data for ingestion."""
 
     def __init__(
-            self, _data, batch_size=64, epochs=20,
-            sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, units=512, display=False, binary=False,
-            multigpu=False):
+            self, filename, lookahead_periods, batch_size=64, epochs=20,
+            sequence_length=20, warmup_steps=50, dropout=0, test_size=0.33,
+            layers=1, patience=10, units=512, display=False, binary=False):
         """Instantiate the class.
 
         Args:
@@ -60,38 +44,32 @@ class RNNGRU(object):
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
             warmup_steps:
-            display: Show charts of results if True
-            binary: Process data for predicting boolean up / down movement vs
-                actual values if True
+
         Returns:
             None
 
         """
+        # Setup inheritance
+        DataGRU.__init__(
+            self, filename, lookahead_periods,
+            test_size=test_size, binary=binary)
+
         # Initialize key variables
         self._warmup_steps = warmup_steps
-        self._binary = binary
         self._display = display
-        self._data = _data
-        if multigpu is True:
-            self._gpus = len(general.get_available_gpus())
-        else:
-            self._gpus = 1
-
-        # Set key file locations
-        path_prefix = '/tmp/keras-{}'.format(int(time.time()))
-        self._path_checkpoint = '{}.checkpoint.h5'.format(path_prefix)
-        self._path_model_weights = '{}.weights.h5'.format(path_prefix)
-        self._path_model_parameters = '{}.model.yaml'.format(path_prefix)
+        self._binary = binary
+        self._path_checkpoint = (
+            '/tmp/checkpoint-{}.keras'.format(int(time.time())))
 
         # Initialize parameters
         self.hyperparameters = {
-            'units': abs(units),
-            'dropout': abs(dropout),
+            'units': units,
+            'dropout': dropout,
             'layers': int(abs(layers)),
-            'sequence_length': abs(sequence_length),
-            'patience': abs(patience),
-            'batch_size': int(batch_size * self._gpus),
-            'epochs': abs(epochs)
+            'sequence_length': sequence_length,
+            'patience': patience,
+            'batch_size': batch_size,
+            'epochs': epochs
         }
 
         # Delete any stale checkpoint file
@@ -117,15 +95,12 @@ class RNNGRU(object):
         ###################################
 
         # Get data
-        self._y_current = self._data.values()
+        self._y_current = self.values()
 
         # Create test and training arrays for VALIDATION and EVALUATION
-        (x_train,
-         x_validation,
-         _x_test,
-         self._y_train,
-         self._y_validation,
-         self._y_test) = self._data.train_validation_test_split()
+        (x_train, x_validation,
+         _x_test, self._y_train,
+         self._y_validation, self._y_test) = self.train_validation_test_split()
 
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = _x_test.shape
@@ -166,8 +141,7 @@ class RNNGRU(object):
         transform() on the same data.
         '''
         self._x_scaler = MinMaxScaler()
-        _ = self._x_scaler.fit_transform(self._data.vectors())
-        self._x_train_scaled = self._x_scaler.transform(x_train)
+        self._x_train_scaled = self._x_scaler.fit_transform(x_train)
         self._x_validation_scaled = self._x_scaler.transform(x_validation)
         self._x_test_scaled = self._x_scaler.transform(_x_test)
 
@@ -180,8 +154,7 @@ class RNNGRU(object):
         '''
 
         self._y_scaler = MinMaxScaler()
-        _ = self._y_scaler.fit_transform(self._data.classes())
-        self._y_train_scaled = self._y_scaler.transform(self._y_train)
+        self._y_train_scaled = self._y_scaler.fit_transform(self._y_train)
         self._y_validation_scaled = self._y_scaler.transform(
             self._y_validation)
         self._y_test_scaled = self._y_scaler.transform(self._y_test)
@@ -192,7 +165,6 @@ class RNNGRU(object):
         print("> Numpy Data Row[0]: {}".format(x_train[0]))
         print("> Numpy Data Row[Last]: {}".format(x_train[-1]))
         print('> Numpy Targets Type: {}'.format(type(self._y_train)))
-        print("> Numpy Vector Feature Type: {}".format(type(x_train[0][0])))
         print("> Numpy Targets Shape: {}".format(self._y_train.shape))
 
         print('> Number of Samples: {}'.format(self._y_current.shape[0]))
@@ -245,24 +217,13 @@ class RNNGRU(object):
             _hyperparameters = self.hyperparameters
         else:
             _hyperparameters = params
-            _hyperparameters['batch_size'] = int(
-                _hyperparameters['batch_size'] * self._gpus)
 
         # Calculate the steps per epoch
         epoch_steps = int(
             self.training_rows / _hyperparameters['batch_size']) + 1
 
-        '''
-        Instantiate the base model (or "template" model).
-        We recommend doing this with under a CPU device scope,
-        so that the model's weights are hosted on CPU memory.
-        Otherwise they may end up hosted on a GPU, which would
-        complicate weight sharing.
-
-        NOTE: multi_gpu_model values will be way off if you don't do this.
-        '''
-        with tf.device('/cpu:0'):
-            serial_model = Sequential()
+        # Create the model object
+        _model = Sequential()
 
         '''
         We can now add a Gated Recurrent Unit (GRU) to the network. This will
@@ -274,21 +235,20 @@ class RNNGRU(object):
         input-signals (num_x_signals).
         '''
 
-        serial_model.add(GRU(
-            _hyperparameters['units'],
+        _model.add(GRU(
+            units=_hyperparameters['units'],
             return_sequences=True,
             recurrent_dropout=_hyperparameters['dropout'],
             input_shape=(None, self._training_vector_count,)))
 
         for _ in range(1, _hyperparameters['layers']):
-            serial_model.add(GRU(
-                _hyperparameters['units'],
+            _model.add(GRU(
+                units=_hyperparameters['units'],
                 recurrent_dropout=_hyperparameters['dropout'],
                 return_sequences=True))
 
         '''
-        The GRU outputs a batch from keras_contrib.layers.advanced_activations
-        of sequences of 512 values. We want to predict
+        The GRU outputs a batch of sequences of 512 values. We want to predict
         3 output-signals, so we add a fully-connected (or dense) layer which
         maps 512 values down to only 3 values.
 
@@ -298,9 +258,8 @@ class RNNGRU(object):
         output to be between 0 and 1.
         '''
 
-        if False:
-            serial_model.add(
-                Dense(self._training_class_count, activation='sigmoid'))
+        _model.add(
+            Dense(self._training_class_count, activation='sigmoid'))
 
         '''
         A problem with using the Sigmoid activation function, is that we can
@@ -321,30 +280,14 @@ class RNNGRU(object):
         get it working.
         '''
 
-        if True:
+        if False:
             # Maybe use lower init-ranges.
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
-            serial_model.add(Dense(
+            _model.add(Dense(
                 self._training_class_count,
                 activation='linear',
                 kernel_initializer=init))
-
-        # Apply multi-GPU logic.
-        if self._gpus == 1:
-            parallel_model = serial_model
-            print('> Training using single GPU.')
-        else:
-            try:
-                # Use multiple GPUs
-                parallel_model = multi_gpu_model(
-                    serial_model,
-                    cpu_relocation=True,
-                    gpus=self._gpus)
-                print('> Training using multiple GPUs.')
-            except ValueError:
-                parallel_model = serial_model
-                print('> Single GPU detected. Training using single GPU.')
 
         # Compile Model
 
@@ -352,18 +295,11 @@ class RNNGRU(object):
         This is the optimizer and the beginning learning-rate that we will use.
         We then compile the Keras model so it is ready for training.
         '''
-
         optimizer = RMSprop(lr=1e-3)
-        if self._binary is True:
-            parallel_model.compile(
-                loss='binary_crossentropy',
-                optimizer=optimizer,
-                metrics=['accuracy'])
-        else:
-            parallel_model.compile(
-                loss=self._loss_mse_warmup,
-                optimizer=optimizer,
-                metrics=['accuracy'])
+        _model.compile(
+            loss=self._loss_mse_warmup,
+            optimizer=optimizer,
+            metrics=['accuracy'])
 
         '''
         This is a very small model with only two layers. The output shape of
@@ -372,10 +308,8 @@ class RNNGRU(object):
         observations, and each observation has 3 signals. This corresponds to
         the 3 target signals we want to predict.
         '''
-        print('\n> Model Summary (Parallel):\n')
-        print(parallel_model.summary())
-        print('\n> Model Summary (Serial):\n')
-        print(serial_model.summary())
+        print('\n> Model Summary:\n')
+        print(_model.summary())
 
         # Create the batch-generator.
         generator = self._batch_generator(
@@ -480,63 +414,12 @@ class RNNGRU(object):
         pprint(_hyperparameters)
         print('\n> Starting data training\n')
 
-        history = parallel_model.fit_generator(
+        _model.fit_generator(
             generator=generator,
             epochs=_hyperparameters['epochs'],
             steps_per_epoch=epoch_steps,
-            use_multiprocessing=True,
             validation_data=validation_data,
             callbacks=callbacks)
-
-        print("Ploting History")
-        plt.plot(history.history['loss'], label='Parallel Training Loss')
-        plt.plot(history.history['val_loss'], label='Parallel Validation Loss')
-        plt.legend()
-        plt.show()
-
-        # Return
-        return parallel_model
-
-    def save(self, _model):
-        """Save the Recurrent Neural Network model.
-
-        Args:
-            None
-
-        Returns:
-            _model: RNN model
-
-        """
-        # Serialize model to JSON
-        model_yaml = _model.to_yaml()
-        with open(self._path_model_parameters, 'w') as yaml_file:
-            yaml_file.write(model_yaml)
-
-        # Serialize weights to HDF5
-        _model.save_weights(self._path_model_weights)
-        print('> Saved model to disk')
-
-    def load_model(self):
-        """Load the Recurrent Neural Network model from disk.
-
-        Args:
-            None
-
-        Returns:
-            _model: RNN model
-
-        """
-        # Load yaml and create model
-        print('> Loading model from disk')
-        with open(self._path_model_parameters, 'r') as yaml_file:
-            loaded_model_yaml = yaml_file.read()
-        _model = model_from_yaml(loaded_model_yaml)
-
-        # Load weights into new model
-        _model.load_weights(self._path_model_weights, by_name=True)
-        '''sys.exit(0)
-        _model.load_weights(self._path_checkpoint)'''
-        print('> Finished loading model from disk')
 
         # Return
         return _model
@@ -560,22 +443,9 @@ class RNNGRU(object):
         checkpoint, which should have the best performance on the test-set.
         '''
 
+        print('> Loading model weights')
         if os.path.exists(self._path_checkpoint):
             _model.load_weights(self._path_checkpoint)
-
-        # _model = self.load_model()
-
-        optimizer = RMSprop(lr=1e-3)
-        if self._binary is True:
-            _model.compile(
-                loss='binary_crossentropy',
-                optimizer=optimizer,
-                metrics=['accuracy'])
-        else:
-            _model.compile(
-                loss=self._loss_mse_warmup,
-                optimizer=optimizer,
-                metrics=['accuracy'])
 
         # Performance on Test-Set
 
@@ -586,37 +456,16 @@ class RNNGRU(object):
         array-dimensionality to create a batch with that one sequence.
         '''
 
-        x_scaled = self._x_test_scaled
-        y_scaled = self._y_test_scaled
-
-        # Evaluate the MSE accuracy
         result = _model.evaluate(
-            x=np.expand_dims(x_scaled, axis=0),
-            y=np.expand_dims(y_scaled, axis=0))
+            x=np.expand_dims(self._x_test_scaled, axis=0),
+            y=np.expand_dims(self._y_test_scaled, axis=0))
+
+        print('> Loss (test-set): {}'.format(result))
 
         # If you have several metrics you can use this instead.
-        print('> Metrics (test-set):')
-        for _value, _metric in zip(result, _model.metrics_names):
-            print('\t{}: {:.10f}'.format(_metric, _value))
-
-        if self._binary is True:
-            # Input-signals for the model.
-            x_values = np.expand_dims(x_scaled, axis=0)
-
-            # Get the predictions
-            predictions_scaled = _model.predict_classes(x_values, verbose=1)
-
-            # The output of the model is between 0 and 1.
-            # Do an inverse map to get it back to the scale
-            # of the original data-set.
-            predictions = self._y_scaler.inverse_transform(
-                predictions_scaled[0])
-
-            # Print meaningful human accuracy values
-            print(
-                '> Human accuracy {:.3f} %'
-                ''.format(general.binary_accuracy(
-                    predictions, self._y_test) * 100))
+        if False:
+            for res, metric in zip(result, _model.metrics_names):
+                print('{0}: {1:.3e}'.format(metric, res))
 
     def objective(self, params=None):
         """Optimize the Recurrent Neural Network.
@@ -628,43 +477,31 @@ class RNNGRU(object):
             _model: RNN model
 
         """
-        # Initialize key variables
-        model = deepcopy(self.model(params=params))
-        scaled_vectors = self._x_test_scaled
-        test_classes = self._y_test
+        model = self.model(params=params)
 
         # Input-signals for the model.
-        x_values = np.expand_dims(scaled_vectors, axis=0)
+        x_values = np.expand_dims(self._x_test_scaled, axis=0)
 
         # Get the predictions
-        predictions_scaled = model.predict(x_values, verbose=1)
+        predictions = model.predict(x_values, verbose=1)
 
         # The output of the model is between 0 and 1.
         # Do an inverse map to get it back to the scale
         # of the original data-set.
-        predictions = self._y_scaler.inverse_transform(
-            predictions_scaled[0])
+        predictions_rescaled = self._y_scaler.inverse_transform(predictions[0])
+        if bool(self._binary) is True:
+            predictions_rescaled = np.round(predictions_rescaled)
 
         # Get the error value
-        accuracy = mean_absolute_error(test_classes, predictions)
+        accuracy = mean_absolute_error(self._y_test, predictions_rescaled)
 
         # Free object memory
-        del model
-        gc.collect()
-
-        # Print meaningful human accuracy values
-        if self._binary is True:
-            # Print predictions and actuals:
-            print(
-                '> Human accuracy {:.5f} %'
-                ''.format(general.binary_accuracy(
-                    predictions, test_classes) * 100))
+        model = None
 
         # Return
         return {
             'loss': (accuracy * -1),
             'status': STATUS_OK,
-            'estimated_accuracy': accuracy,
             'hyperparameters': params}
 
     def cleanup(self):
@@ -711,7 +548,6 @@ class RNNGRU(object):
         # Return
         if adf < min(values):
             state = True
-        print('  Stationarity: {}'.format(state))
         return state
 
     def _batch_generator(self, batch_size, sequence_length):
@@ -869,13 +705,13 @@ class RNNGRU(object):
             shim = 'Train'
 
             # Datetimes to use for training
-            datetimes[shim] = self._data.datetime()[
+            datetimes[shim] = self.datetime()[
                 :num_train][start_idx:end_idx]
 
         else:
             # Scale the data
             x_test_scaled = self._x_scaler.transform(
-                self._data.vectors_test_all())
+                self.vectors_test_all())
 
             # Use test-data.
             x_values = x_test_scaled[start_idx:end_idx]
@@ -883,7 +719,7 @@ class RNNGRU(object):
             shim = 'Test'
 
             # Datetimes to use for testing
-            datetimes[shim] = self._data.datetime()[
+            datetimes[shim] = self.datetime()[
                 -self.test_rows-1:][start_idx:end_idx]
 
         # Input-signals for the model.
@@ -898,7 +734,7 @@ class RNNGRU(object):
         y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
 
         # For each output-signal.
-        for signal in range(len(self._data.labels())):
+        for signal in range(len(self.labels())):
             # Assign other variables dependent on the type of data plot
             if train is True:
                 # Only get current values that are a part of the training data
@@ -906,17 +742,16 @@ class RNNGRU(object):
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self._data.datetime()[
+                datetimes['actual'] = self.datetime()[
                     :num_train][start_idx:end_idx]
 
             else:
                 # Only get current values that are a part of the test data.
-                current = self._y_current[
-                    -self.test_rows:][start_idx:]
+                current = self._y_current[-self.test_rows:][start_idx:]
 
                 # The number of datetimes for the 'actual' plot must match
                 # that of current values
-                datetimes['actual'] = self._data.datetime()[
+                datetimes['actual'] = self.datetime()[
                     -self.test_rows:][start_idx:]
 
             # Create a filename
@@ -942,7 +777,7 @@ class RNNGRU(object):
             axis.plot(
                 datetimes[shim][:len(signal_true)],
                 signal_true,
-                label='Current +{}'.format(self._data.labels()[signal]))
+                label='Current +{}'.format(self.labels()[signal]))
             axis.plot(
                 datetimes[shim][:len(signal_pred)],
                 signal_pred,
@@ -951,7 +786,7 @@ class RNNGRU(object):
 
             # Set plot labels and titles
             axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(
-                self._data.labels()[signal], shim))
+                self.labels()[signal], shim))
             axis.set_ylabel('Values')
             axis.legend(
                 bbox_to_anchor=(1.04, 0.5),
@@ -1006,23 +841,3 @@ class RNNGRU(object):
 
             # Close figure
             plt.close(fig=fig)
-
-
-class ModelMGPU(Model):
-    '''
-    https://github.com/keras-team/keras/issues/2436#issuecomment-354882296
-    '''
-    def __init__(self, ser_model, **kwargs):
-        pmodel = multi_gpu_model(ser_model, **kwargs)
-        self.__dict__.update(pmodel.__dict__)
-        self._smodel = ser_model
-
-    def __getattribute__(self, attrname):
-        '''Override load and save methods to be used from the serial-model. The
-        serial-model holds references to the weights in the multi-gpu model.
-        '''
-        # return Model.__getattribute__(self, attrname)
-        if 'load' in attrname or 'save' in attrname:
-            return getattr(self._smodel, attrname)
-
-        return super(ModelMGPU, self).__getattribute__(attrname)

@@ -5,13 +5,10 @@
 from __future__ import print_function
 import argparse
 import time
-import sys
-import os
 
 
-# Forecast imports
+# Merlin imports
 from forecast.model import RNNGRU
-from forecast.database import DataGRU, DataFile
 
 
 def main():
@@ -22,11 +19,10 @@ def main():
     """
     # Initialize key variables
     periods_per_day = 288
-    min_sequence_length = 50
     ts_start = int(time.time())
 
     # Set logging level - No Tensor flow messages
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
     # Get CLI arguments
     parser = argparse.ArgumentParser()
@@ -56,14 +52,14 @@ def main():
         type=int, default=2)
     parser.add_argument(
         '-o', '--dropout',
-        help='Dropout rate as decimal from 0 to 1. Default 0.5 (or 50%)',
+        help='Dropout rate as fraction from 0 to 1. Default 0.5 (or 50%)',
         type=float, default=0.5)
     parser.add_argument(
         '-t', '--test_size',
         help=(
             'Test size as decimal fraction of total dataset. '
-            'Default 0.2 (or 20%)'),
-        type=float, default=0.2)
+            'Default 0.1 (or 10%)'),
+        type=float, default=0.1)
     parser.add_argument(
         '-u', '--units',
         help='Number of units per layer. Default 512',
@@ -72,24 +68,13 @@ def main():
         '--display',
         help='Display on screen if True. Default False.',
         action='store_true')
-    parser.add_argument(
-        '--binary',
-        help='Predict up/down versus actual values if True. Default False.',
-        action='store_true')
-    parser.add_argument(
-        '--multigpu',
-        help='Use all available GPUs if True. Default False.',
-        action='store_true')
     args = parser.parse_args()
-    binary = args.binary
     filename = args.filename
     display = args.display
     dropout = args.dropout
-    layers = max(0, args.layers)
+    layers = max(0, args.layers - 1)
     patience = args.patience
     test_size = args.test_size
-    units = args.units
-    multigpu = args.multigpu
 
     '''
     We will use a large batch-size so as to keep the GPU near 100% work-load.
@@ -122,13 +107,7 @@ def main():
     corresponds to 8 weeks.
     '''
     days = args.days
-    _sequence_length = int(periods_per_day * days)
-    sequence_length = max(min_sequence_length, _sequence_length)
-    if sequence_length == min_sequence_length:
-        print(
-            'Days should be > {} for adequate predictions to be made'
-            ''.format(int(min_sequence_length/days)))
-        sys.exit(0)
+    sequence_length = int(periods_per_day * days)
 
     '''
     An epoch is an arbitrary cutoff, generally defined as "one pass over the
@@ -144,38 +123,19 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [5]
-
-    # Get data from file
-    datafile = DataFile(filename)
-
-    # Process data for GRU vector, class creation
-    _data = DataGRU(
-        datafile, lookahead_periods,
-        test_size=test_size, binary=binary)
-
-    if False:
-        if binary is True:
-            # _data.autocorrelation()
-            _data.feature_importance()
-            features = _data.suggested_features(count=10, display=True)
-            print(features)
-            sys.exit(0)
+    lookahead_periods = [288]
 
     # Do training
     rnn = RNNGRU(
-        _data,
+        filename, lookahead_periods,
         sequence_length=sequence_length,
         epochs=epochs,
         batch_size=batch_size,
         dropout=dropout,
+        test_size=test_size,
         layers=layers,
-        units=units,
-        binary=binary,
         patience=patience,
-        display=display,
-        multigpu=multigpu)
-    rnn.stationary()
+        display=display)
     model = rnn.model()
     rnn.evaluate(model)
 
@@ -224,8 +184,8 @@ def main():
     has a lot of noise compared to the smoothness of the original signal.
 
     '''
-    offset = 250
-    rnn.plot_train(model, start_idx=rnn.training_rows - offset, length=offset)
+
+    rnn.plot_train(model, start_idx=rnn.training_rows - 250, length=250)
 
     # Example from Test-Set
 
@@ -247,8 +207,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    # offset = 30
-    # rnn.plot_test(model, start_idx=rnn.test_rows - offset, length=offset)
+    rnn.plot_test(model, start_idx=0, length=rnn.test_rows-288)
 
     # Cleanup
     rnn.cleanup()

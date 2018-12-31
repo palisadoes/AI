@@ -687,9 +687,8 @@ class Data(object):
 
         # Delete the firsts row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
-        ignore = max(max(self._shift_steps), self._ignore_row_count)
-        result = result.iloc[ignore:]
-        classes = classes.iloc[ignore:]
+        result = result.iloc[self._ignore_row_count:]
+        classes = classes.iloc[self._ignore_row_count:]
 
         # Convert result to float32 to conserve memory
         result = result.astype(np.float32)
@@ -1113,6 +1112,280 @@ class DataGRU(Data):
         """
         # Return
         result = self._shift_steps
+        return result
+
+
+class DataDT(Data):
+    """Prepare data for use by decision tree models."""
+
+    def __init__(self, dataobject, actuals=False, steps=0):
+        """Intialize the class.
+
+        Args:
+            filename: Name of file
+            actuals: If True use actual values not 1, 0, -1 wherever possible
+
+        Returns:
+            None
+
+        """
+        # Setup inheritance
+        Data.__init__(self, dataobject)
+
+        # Setup global variables
+        self._steps = steps
+        self._actuals = actuals
+        self._buy = 1
+        self._sell = -1
+        self._hold = 0
+        self._strong = 1
+        self._weak = 0
+
+    def classes(self):
+        """Create volume variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array of binary values for learning
+                0 = sell
+                1 = buy
+
+        """
+        # Initialize key variables
+        close = self._dataframe['pct_diff_close']
+
+        # Shift data and Trim last rows
+        if bool(self._steps) is True:
+            close = close.shift(-abs(self._steps))
+            close = close.iloc[:-abs(self._steps)]
+
+        # Convert DataFrame to Numpy array
+        close = close.values
+        buy = (close > 0).astype(int) * self._buy
+        sell = (close < 0).astype(int) * self._sell
+        _result = buy + sell
+
+        # Reshape Numpy array
+        rows = _result.shape[0]
+        result = _result.reshape(rows, 1)
+
+        # Return
+        return result
+
+    def vectors(self):
+        """Create vector variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        _result = pd.DataFrame(columns=[
+            'k', 'd', 'rsi', 'volume', 'adx', 'proc', 'macd_diff'])
+        _result['k'] = self._stochastic_k()
+        _result['d'] = self._stochastic_d()
+        _result['rsi'] = self._rsi()
+        _result['volume'] = self._volume()
+        _result['adx'] = self._adx()
+        _result['macd_diff'] = self._macd_diff()
+        _result['proc'] = self._proc()
+
+        filtered_columns = [
+            'k', 'd', 'rsi', 'volume', 'adx', 'proc', 'macd_diff']
+
+        # Remove all undesirable columns from the dataframe
+        imported_columns = list(_result)
+        for column in imported_columns:
+            if column not in filtered_columns:
+                _result = _result.drop(column, axis=1)
+
+        # Trim last row if necessary
+        if bool(self._steps) is True:
+            _result = _result.iloc[:-abs(self._steps)]
+
+        # Return
+        result = np.asarray(_result)
+        return result
+
+    def _stochastic_k(self):
+        """Create stochastic K variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        result = self._stochastic(True)
+
+        # Return
+        return result
+
+    def _stochastic_d(self):
+        """Create stochastic D variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        result = self._stochastic(False)
+
+        # Return
+        return result
+
+    def _stochastic(self, selector=None):
+        """Create stochastic D variables.
+
+        Args:
+            selector:
+                True = Calculate stochastic K values
+                False = Calculate stochastic D values
+                None = Calculate RSI values
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        if selector is True:
+            s_value = self._dataframe['k'].values
+        elif selector is False:
+            s_value = self._dataframe['d'].values
+        else:
+            s_value = self._dataframe['rsi'].values
+
+        if self._actuals is False:
+            ma_close = self._dataframe['ma_close'].values
+            high_gt_ma_close = self._dataframe['high'].values > ma_close
+            low_lt_ma_close = self._dataframe['low'].values < ma_close
+
+            # Create conditions for decisions
+            sell = (s_value > 90).astype(int) * self._sell
+            buy = (s_value < 10).astype(int) * self._buy
+
+            # Condition when candle is straddling the moving average
+            straddle = np.logical_and(
+                high_gt_ma_close, low_lt_ma_close).astype(int)
+
+            # Multiply the straddle
+            result = straddle * (sell + buy)
+        else:
+            result = s_value
+
+        # Return
+        return result
+
+    def _rsi(self):
+        """Create RSI variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        result = self._stochastic(None)
+
+        # Return
+        return result
+
+    def _volume(self):
+        """Create volume variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        _short = self._dataframe['ma_volume'].values
+        _long = self._dataframe['ma_volume_long'].values
+
+        # Create conditions for decisions
+        sell = (_short > _long).astype(int) * self._sell
+        buy = (_long >= _short).astype(int) * self._buy
+
+        # Evaluate decisions
+        result = buy + sell
+
+        # Return
+        return result
+
+    def _adx(self):
+        """Create ADX variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        _adx = self._dataframe['adx'].values
+
+        # Evaluate decisions
+        if self._actuals is False:
+            result = (_adx > 25).astype(int) * self._strong
+        else:
+            result = _adx
+
+        # Return
+        return result
+
+    def _macd_diff(self):
+        """Create MACD difference variables.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        _result = self._dataframe['macd_diff'].values
+
+        # Evaluate decisions
+        if self._actuals is False:
+            buy = (_result > 0).astype(int) * self._buy
+            sell = (_result < 0).astype(int) * self._sell
+            result = buy + sell
+        else:
+            result = _result
+
+        # Return
+        return result
+
+    def _proc(self):
+        """Create PROC (Price Rate of Change) values for learning.
+
+        Args:
+            None
+
+        Returns:
+            result: Numpy array for learning
+
+        """
+        # Initialize key variables
+        result = self._dataframe['proc'].values
+
+        # Return
         return result
 
 
