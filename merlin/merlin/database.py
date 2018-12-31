@@ -661,8 +661,8 @@ class Data(object):
             # result['t-{}'.format(step)] = result['close'].shift(step)
             result['tpd-{}'.format(step)] = result[
                 'close'].pct_change(periods=step)
-            result['tad-{}'.format(step)] = result[
-                'close'].diff(periods=step)
+            # result['tad-{}'.format(step)] = result[
+            #    'close'].diff(periods=step)
 
         # Mask increasing with
         result['increasing_masked'] = _mask(
