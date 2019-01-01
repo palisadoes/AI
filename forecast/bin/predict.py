@@ -224,7 +224,7 @@ def main():
     has a lot of noise compared to the smoothness of the original signal.
 
     '''
-    offset = min(rnn.training_rows, 100)
+    offset = 3000
     rnn.plot_train(model, start_idx=rnn.training_rows - offset, length=offset)
 
     # Example from Test-Set

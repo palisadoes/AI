@@ -195,13 +195,15 @@ class Data(object):
             result: numpy array of timestamps
 
         """
-        # Initialize key variables
-        result = pd.to_datetime(pd.DataFrame({
+        # Initialize key variablesd
+        dataframe = pd.DataFrame({
             'year': self._dataframe['year'],
             'month': self._dataframe['month'],
             'day': self._dataframe['day'],
             'hour': self._dataframe['hour'],
-            'minute': self._dataframe['minute']})).values
+            'minute': self._dataframe['minute']}).astype(np.int)
+        print(dataframe.head(), dataframe.tail())
+        result = pd.to_datetime(dataframe).values
 
         # Return
         return result
