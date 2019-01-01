@@ -202,7 +202,6 @@ class Data(object):
             'day': self._dataframe['day'],
             'hour': self._dataframe['hour'],
             'minute': self._dataframe['minute']}).astype(np.int)
-        print(dataframe.head(), dataframe.tail())
         result = pd.to_datetime(dataframe).values
 
         # Return
