@@ -294,8 +294,9 @@ class Data(object):
             vectors = vectors.drop(column, axis=1)'''
 
         # Drop highly correlated columns
-        columns = general.uncorrelated_columns(vectors)
+        columns = general.uncorrelated_columns(vectors, threshold=0.95)
         vectors = vectors.drop(columns, axis=1)
+        print('> Correlated Columns to Drop: {}'.format(columns))
 
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
