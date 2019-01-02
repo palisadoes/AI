@@ -708,7 +708,7 @@ class Data(object):
 
         """
         # Split into input and output
-        _vectors = self._dataframe.drop(self._label2predict, axis=1)
+        _vectors = self._dataframe
         _classes = self._dataclasses
 
         # Get rid of the NaNs in the vectors and classes.

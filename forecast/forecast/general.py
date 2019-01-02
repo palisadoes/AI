@@ -6,7 +6,7 @@ import csv
 import os
 
 # PIP imports
-import pandas as pd
+import numpy as np
 from tensorflow.python.client import device_lib
 import tensorflow as tf
 from keras import backend
@@ -153,3 +153,49 @@ def get_available_gpus():
     # Return
     result = [x.name for x in local_device_protos if x.device_type == 'GPU']
     return result
+
+
+def trim_correlated(df_in, threshold=0.95):
+    """Drop Highly Correlated Features.
+
+    Based on: https://chrisalbon.com/machine_learning/feature_selection/drop_highly_correlated_features/
+
+    Args:
+        df_in: Input dataframe
+        threshold: Correlation threshold
+
+    Returns:
+        df_out: pd.DataFrame with uncorrelated columns
+
+    """
+    # Create correlation matrix
+    corr_matrix = df_in.corr().abs()
+
+    # Select upper triangle of correlation matrix
+    upper = corr_matrix.where(
+        np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
+
+    # Find index of feature columns with correlation greater than threshold
+    to_drop = [
+        column for column in upper.columns if any(upper[column] > threshold)]
+    df_out = df_in.drop(to_drop, axis=1)
+
+    # Return
+    return df_out
+
+
+def uncorrelated_columns(df_in, threshold=0.95):
+    """Return uncorrelated feature columns.
+
+    Args:
+        df_in: Input dataframe
+        threshold: Correlation threshold
+
+    Returns:
+        columns: Columns of pd.DataFrame with uncorrelated columns
+
+    """
+    # Initialize key variables
+    df_out = trim_correlated(df_in, threshold=threshold)
+    columns = list(df_out.columns)
+    return columns

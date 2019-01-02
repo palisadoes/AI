@@ -2,7 +2,6 @@
 
 # Standard imports
 import os
-import sys
 import pickle
 import time
 import csv
@@ -289,13 +288,9 @@ class Data(object):
         (vectors, classes) = self._training_vectors_classes()
 
         # Drop unwelcome columns
-        '''columns = ['year', 'day', 'hour']
+        columns = ['year', 'day', 'hour']
         for column in columns:
-            vectors = vectors.drop(column, axis=1)'''
-
-        # Drop highly correlated columns
-        columns = general.uncorrelated_columns(vectors)
-        vectors = vectors.drop(columns, axis=1)
+            vectors = vectors.drop(column, axis=1)
 
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
