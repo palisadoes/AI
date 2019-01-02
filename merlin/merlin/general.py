@@ -267,3 +267,50 @@ def weights_match(model1, model2):
     else:
         result = False
     return result
+
+
+def trim_correlated(df_in, threshold=0.95):
+    """Drop Highly Correlated Features.
+
+    Based on: https://chrisalbon.com/machine_learning/feature_selection/drop_highly_correlated_features/
+
+    Args:
+        df_in: Input dataframe
+        threshold: Correlation threshold
+
+    Returns:
+        df_out: pd.DataFrame with uncorrelated columns
+
+    """
+    # Find index of feature columns with correlation greater than threshold
+    to_drop = correlated_columns(df_in, threshold=threshold)
+    df_out = df_in.drop(to_drop, axis=1)
+
+    # Return
+    return df_out
+
+
+def correlated_columns(df_in, threshold=0.95):
+    """Return correlated feature columns.
+
+    Based on: https://chrisalbon.com/machine_learning/feature_selection/drop_highly_correlated_features/
+
+    Args:
+        df_in: Input dataframe
+        threshold: Correlation threshold
+
+    Returns:
+        to_drop: Columns of pd.DataFrame with correlated columns
+
+    """
+    # Create correlation matrix
+    corr_matrix = df_in.corr().abs()
+
+    # Select upper triangle of correlation matrix
+    upper = corr_matrix.where(
+        np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
+    
+    # Find index of feature columns with correlation greater than threshold
+    to_drop = [
+        column for column in upper.columns if any(upper[column] > threshold)]
+    return to_drop

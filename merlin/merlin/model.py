@@ -1024,6 +1024,113 @@ class RNNGRU(object):
             # Close figure
             plt.close(fig=fig)
 
+    def plot_predicted_vs_actual(self, model):
+        """Plot the predicted and true output-signals.
+
+        Args:
+            model: Training model
+            start_idx: Start-index for the time-series.
+            length: Sequence-length to process and plot.
+
+        Returns:
+            None
+
+        """
+        # Initialize key variables
+        num_train = self.training_rows
+        shim = 'Comparison'
+
+        # Don't plot if we are looking at binary classes
+        if bool(self._binary) is True:
+            print('> Will not plot charts for binary class values.')
+            return
+
+        # Scale the data
+        x_test_scaled = self._x_scaler.transform(
+            self._data.vectors_test_all())
+
+        # Use test-data.
+        x_values = x_test_scaled[:]
+        y_true = self._y_test[:]
+
+        # Input-signals for the model.
+        x_values = np.expand_dims(x_values, axis=0)
+
+        # Use the model to predict the output-signals.
+        y_pred = model.predict(x_values)
+
+        # The output of the model is between 0 and 1.
+        # Do an inverse map to get it back to the scale
+        # of the original data-set.
+        y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
+
+        # For each output-signal.
+        for signal in range(len(self._data.labels())):
+            # Create a filename
+            filename = (
+                '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
+                    self.hyperparameters['batch_size'],
+                    self.hyperparameters['epochs'],
+                    num_train,
+                    signal,
+                    int(time.time()),
+                    shim)
+
+            # Get the output-signal predicted by the model.
+            signal_pred = y_pred_rescaled[:, signal]
+
+            # Get the true output-signal from the data-set.
+            signal_true = y_true[:, signal]
+
+            # Create a new chart
+            (fig, axis) = plt.subplots(figsize=(15, 5))
+
+            # Plot and compare the two signals.
+            plt.scatter(
+                signal_pred[:len(signal_true)],
+                signal_true,
+                alpha=0.1,
+                label=(
+                    'Predicted vs. Actual +{}'.format(
+                        self._data.labels()[signal])))
+
+            # Set plot labels and titles
+            axis.set_title(
+                'Predicted vs. Actual ({0} Future Intervals)'.format(
+                    self._data.labels()[signal]))
+            axis.set_ylabel('Predicted')
+            axis.set_xlabel('Actual')
+            axis.legend(
+                bbox_to_anchor=(1.04, 0.5),
+                loc='center left', borderaxespad=0)
+
+            # Add gridlines and ticks
+            ax = plt.gca()
+            ax.grid(True)
+
+            # Add major gridlines
+            ax.xaxis.grid(which='major', color='black', alpha=0.2)
+            ax.yaxis.grid(which='major', color='black', alpha=0.2)
+
+            # Add minor ticks (They must be turned on first)
+            ax.minorticks_on()
+            ax.xaxis.grid(which='minor', color='black', alpha=0.1)
+            ax.yaxis.grid(which='minor', color='black', alpha=0.1)
+
+            # Remove tick marks
+            ax.tick_params(axis='both', which='both', length=0)
+
+            # Show and save the image
+            if self._display is True:
+                fig.savefig(filename, bbox_inches='tight')
+                plt.show()
+            else:
+                fig.savefig(filename, bbox_inches='tight')
+            print('> Saving file: {}'.format(filename))
+
+            # Close figure
+            plt.close(fig=fig)
+
 
 class ModelMGPU(Model):
     '''

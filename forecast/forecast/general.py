@@ -169,6 +169,27 @@ def trim_correlated(df_in, threshold=0.95):
         df_out: pd.DataFrame with uncorrelated columns
 
     """
+    # Find index of feature columns with correlation greater than threshold
+    to_drop = correlated_columns(df_in, threshold=threshold)
+    df_out = df_in.drop(to_drop, axis=1)
+
+    # Return
+    return df_out
+
+
+def correlated_columns(df_in, threshold=0.95):
+    """Return correlated feature columns.
+
+    Based on: https://chrisalbon.com/machine_learning/feature_selection/drop_highly_correlated_features/
+
+    Args:
+        df_in: Input dataframe
+        threshold: Correlation threshold
+
+    Returns:
+        to_drop: Columns of pd.DataFrame with correlated columns
+
+    """
     # Create correlation matrix
     corr_matrix = df_in.corr().abs()
 
@@ -179,24 +200,4 @@ def trim_correlated(df_in, threshold=0.95):
     # Find index of feature columns with correlation greater than threshold
     to_drop = [
         column for column in upper.columns if any(upper[column] > threshold)]
-    df_out = df_in.drop(to_drop, axis=1)
-
-    # Return
-    return df_out
-
-
-def uncorrelated_columns(df_in, threshold=0.95):
-    """Return uncorrelated feature columns.
-
-    Args:
-        df_in: Input dataframe
-        threshold: Correlation threshold
-
-    Returns:
-        columns: Columns of pd.DataFrame with uncorrelated columns
-
-    """
-    # Initialize key variables
-    df_out = trim_correlated(df_in, threshold=threshold)
-    columns = list(df_out.columns)
-    return columns
+    return to_drop

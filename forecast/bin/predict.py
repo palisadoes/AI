@@ -247,7 +247,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    offset = 300
+    offset = 100
     rnn.plot_test(model, start_idx=rnn.test_rows - offset, length=offset)
 
     # Plot predicted versus actual values

@@ -363,6 +363,11 @@ class Data(object):
         # Get training vectors and classes
         (vectors, classes) = self._training_vectors_classes()
 
+        # Drop highly correlated columns
+        columns = general.correlated_columns(vectors, threshold=0.95)
+        vectors = vectors.drop(columns, axis=1)
+        print('> Correlated Columns to Drop: {}'.format(columns))
+
         # Convert the zeroth column of classes to a 1d np.array
         classes_1d = classes.values[:, 0]
 
@@ -504,21 +509,26 @@ class Data(object):
         result = pd.DataFrame()
 
         # Add current value columns
+        # NOTE Close must be first for correct correlation column dropping
+        result['close'] = self._ohlcv['close']
         result['open'] = self._ohlcv['open']
         result['high'] = self._ohlcv['high']
         result['low'] = self._ohlcv['low']
-        result['close'] = self._ohlcv['close']
         result['volume'] = self._ohlcv['volume']
 
         # Add columns of differences
-        result['num_diff_open'] = num_difference['open']
-        result['num_diff_high'] = num_difference['high']
-        result['num_diff_low'] = num_difference['low']
+        # NOTE Close must be first for correct correlation column dropping
         result['num_diff_close'] = num_difference['close']
-        result['pct_diff_open'] = pct_difference['open']
-        result['pct_diff_high'] = pct_difference['high']
-        result['pct_diff_low'] = pct_difference['low']
         result['pct_diff_close'] = pct_difference['close']
+
+        result['num_diff_open'] = num_difference['open']
+        result['pct_diff_open'] = pct_difference['open']
+
+        result['num_diff_high'] = num_difference['high']
+        result['pct_diff_high'] = pct_difference['high']
+
+        result['num_diff_low'] = num_difference['low']
+        result['pct_diff_low'] = pct_difference['low']
         result['pct_diff_volume'] = pct_difference['volume']
 
         # Add date related columns
@@ -661,11 +671,11 @@ class Data(object):
 
         # Create time shifted columns
         for step in range(1, self._ignore_row_count + 1):
-            # result['t-{}'.format(step)] = result['close'].shift(step)
+            result['t-{}'.format(step)] = result['close'].shift(step)
             result['tpd-{}'.format(step)] = result[
                 'close'].pct_change(periods=step)
-            # result['tad-{}'.format(step)] = result[
-            #    'close'].diff(periods=step)
+            result['tad-{}'.format(step)] = result[
+                'close'].diff(periods=step)
 
         # Mask increasing with
         result['increasing_masked'] = _mask(
@@ -680,10 +690,10 @@ class Data(object):
             classes[step] = result[self._label2predict].shift(-step)
 
         # Remove all undesirable columns from the dataframe
-        undesired_columns = [
+        '''undesired_columns = [
             'open', 'close', 'high', 'low', 'volume']
         for column in undesired_columns:
-            result = result.drop(column, axis=1)
+            result = result.drop(column, axis=1)'''
 
         # Delete the firsts row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations

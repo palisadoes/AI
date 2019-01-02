@@ -294,7 +294,7 @@ class Data(object):
             vectors = vectors.drop(column, axis=1)'''
 
         # Drop highly correlated columns
-        columns = general.uncorrelated_columns(vectors, threshold=0.95)
+        columns = general.correlated_columns(vectors, threshold=0.95)
         vectors = vectors.drop(columns, axis=1)
         print('> Correlated Columns to Drop: {}'.format(columns))
 
@@ -476,7 +476,7 @@ class Data(object):
         _result = np.nan_to_num(pd.Series(output['value']).pct_change().values)
         _increasing = (_result >= 0).astype(int) * 1
         _decreasing = (_result < 0).astype(int) * 0
-        result['increasing'] = _increasing + _decreasing
+        # result['increasing'] = _increasing + _decreasing
 
         # Add current value columns
         result['value'] = pd.Series(output['value'])
