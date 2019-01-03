@@ -693,6 +693,7 @@ class Data(object):
                     result[self._label2predict].shift(-step) > 0).astype(int)
             else:
                 classes[step] = result[self._label2predict].shift(-step)
+            # classes[step] = result[self._label2predict].shift(-step)
 
         # Delete the firsts row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
