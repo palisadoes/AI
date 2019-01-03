@@ -197,11 +197,11 @@ def binary_accuracy(predictions, actuals):
     result = sum(sameness)/len(sameness)
 
     # Print accuracy result lists to aid visualization of the data
-    print('> Actuals:\n{}'.format(_actuals))
-    print('> Predicted:\n{}'.format(_predictions))
-    p_list = _actuals.astype(int).tolist()
-    print('> Average Actual Value: {:.3f}'.format(sum(p_list)/len(p_list)))
+    a_list = _actuals.astype(int).tolist()
     p_list = _predictions.astype(int).tolist()
+    print('> Actuals:\n{}'.format(a_list))
+    print('> Predicted:\n{}'.format(p_list))
+    print('> Average Actual Value: {:.3f}'.format(sum(a_list)/len(a_list)))
     print('> Average Predicted Value: {:.3f}'.format(sum(p_list)/len(p_list)))
 
     # Return
@@ -309,7 +309,7 @@ def correlated_columns(df_in, threshold=0.95):
     # Select upper triangle of correlation matrix
     upper = corr_matrix.where(
         np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
-    
+
     # Find index of feature columns with correlation greater than threshold
     to_drop = [
         column for column in upper.columns if any(upper[column] > threshold)]

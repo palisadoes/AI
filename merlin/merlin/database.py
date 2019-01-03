@@ -687,13 +687,12 @@ class Data(object):
         classes = pd.DataFrame(columns=self._shift_steps)
         for step in self._shift_steps:
             # Shift each column by the value of its label
-            classes[step] = result[self._label2predict].shift(-step)
-
-        # Remove all undesirable columns from the dataframe
-        '''undesired_columns = [
-            'open', 'close', 'high', 'low', 'volume']
-        for column in undesired_columns:
-            result = result.drop(column, axis=1)'''
+            if self._binary is True:
+                # Classes need to be 0 or 1 (One hot encoding)
+                classes[step] = (
+                    result[self._label2predict].shift(-step) > 0).astype(int)
+            else:
+                classes[step] = result[self._label2predict].shift(-step)
 
         # Delete the firsts row of the dataframe as it has NaN values from the
         # .diff() and .pct_change() operations
