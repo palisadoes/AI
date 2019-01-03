@@ -861,7 +861,6 @@ class RNNGRU(object):
 
         """
         # Initialize key variables
-        datetimes = {}
         num_train = self.training_rows
 
         # Don't plot if we are looking at binary classes
@@ -871,6 +870,12 @@ class RNNGRU(object):
 
         # End-index for the sequences.
         end_idx = start_idx + length
+
+        # Get the complete length of the dataset
+        dataset_size = (
+            self._y_train.shape[0] +
+            self._y_validation.shape[0] + self._y_test.shape[0])
+        delta = len(self._y_current) - dataset_size
 
         # Variables for date formatting
         days = mdates.DayLocator()   # Every day
@@ -886,8 +891,10 @@ class RNNGRU(object):
             shim = 'Train'
 
             # Datetimes to use for training
-            datetimes[shim] = self._data.datetime()[
-                :num_train][start_idx:end_idx]
+            datetimes = self._data.datetime()[:num_train][start_idx:end_idx]
+
+            # Only get current values that are a part of the training data
+            current = self._y_current[:num_train][start_idx:end_idx]
 
         else:
             # Scale the data
@@ -899,9 +906,14 @@ class RNNGRU(object):
             y_true = self._y_test[start_idx:end_idx]
             shim = 'Test'
 
+            # Test offset
+            test_offset = self.test_rows + delta
+
             # Datetimes to use for testing
-            datetimes[shim] = self._data.datetime()[
-                -self.test_rows-1:][start_idx:end_idx]
+            datetimes = self._data.datetime()[-test_offset:][start_idx:]
+
+            # Only get current values that are a part of the test data.
+            current = self._y_current[-test_offset:][start_idx:]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
@@ -916,26 +928,6 @@ class RNNGRU(object):
 
         # For each output-signal.
         for signal in range(len(self._data.labels())):
-            # Assign other variables dependent on the type of data plot
-            if train is True:
-                # Only get current values that are a part of the training data
-                current = self._y_current[:num_train][start_idx:end_idx]
-
-                # The number of datetimes for the 'actual' plot must match
-                # that of current values
-                datetimes['actual'] = self._data.datetime()[
-                    :num_train][start_idx:end_idx]
-
-            else:
-                # Only get current values that are a part of the test data.
-                current = self._y_current[
-                    -self.test_rows:][start_idx:]
-
-                # The number of datetimes for the 'actual' plot must match
-                # that of current values
-                datetimes['actual'] = self._data.datetime()[
-                    -self.test_rows:][start_idx:]
-
             # Create a filename
             filename = (
                 '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
@@ -957,14 +949,14 @@ class RNNGRU(object):
 
             # Plot and compare the two signals.
             axis.plot(
-                datetimes[shim][:len(signal_true)],
+                datetimes[:len(signal_true)],
                 signal_true,
                 label='Current +{}'.format(self._data.labels()[signal]))
             axis.plot(
-                datetimes[shim][:len(signal_pred)],
+                datetimes[:len(signal_pred)],
                 signal_pred,
                 label='Prediction')
-            axis.plot(datetimes['actual'], current, label='Current')
+            axis.plot(datetimes, current, label='Current')
 
             # Set plot labels and titles
             axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(

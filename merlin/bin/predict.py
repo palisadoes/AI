@@ -144,7 +144,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [1]
+    lookahead_periods = [5]
 
     # Get data from file
     datafile = DataFile(filename)
@@ -247,7 +247,7 @@ def main():
     a more noisy signal than the true time-series.
     '''
 
-    offset = 40
+    offset = 60
     rnn.plot_test(model, start_idx=rnn.test_rows - offset, length=offset)
 
     # Plot predicted versus actual values
