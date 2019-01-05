@@ -341,7 +341,8 @@ class RNNGRU(object):
                     serial_model,
                     cpu_relocation=True,
                     gpus=self._gpus)
-                print('> Training using multiple GPUs.')
+                print(
+                    '> Training using multiple ({}) GPUs.'.format(self._gpus))
             except ValueError:
                 parallel_model = serial_model
                 print('> Single GPU detected. Training using single GPU.')
