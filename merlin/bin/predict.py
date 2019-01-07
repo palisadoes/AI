@@ -144,7 +144,7 @@ def main():
     epochs = args.epochs
 
     # Get the data
-    lookahead_periods = [5]
+    lookahead_periods = [1]
 
     # Get data from file
     datafile = DataFile(filename)
