@@ -56,8 +56,8 @@ def main():
 
     # Plot in matplotlib (All)
     y_test_scaled = model.scaler.inverse_transform(model.y_test.reshape(-1, 1))
-    _, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(y_test_scaled, color='red', label='True Price of testing set')
+    _, ax_ = plt.subplots(figsize=(8, 4))
+    ax_.plot(y_test_scaled, color='red', label='True Price of testing set')
     plt.plot(predictions, color='blue', label='predicted')
     plt.legend()
     plt.show()
