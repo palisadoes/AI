@@ -36,7 +36,7 @@ def main():
     df_ = pd.read_csv(args.filename)
 
     # Preprocessing data
-    ary = df_['open'].values
+    ary = df_['close'].values
 
     # Work with model
     model = Model(ary, history=history, epochs=epochs)
@@ -68,8 +68,8 @@ class Model():
 
     def __init__(
             self, ary, batch_size=32, history=50, units=96, epochs=50,
-            dropout_percent=20, percentage_test=20,
-            model_file='/tmp/models.h5'):
+            dropout_percent=20, percentage_test=20, validation_split=0.3,
+            model_file='/tmp/models-1.h5'):
         """Create feature array using historical data.
 
         Args:
@@ -81,6 +81,7 @@ class Model():
         """
         # Initialize key variables
         self._dropout_rate = dropout_percent / 100
+        self._validation_split = validation_split
         self._ary = ary
         self._batch_size = batch_size
         self._history = history
@@ -88,7 +89,6 @@ class Model():
         self._epochs = epochs
         self._percentage_test = percentage_test
         self._model_file = model_file
-        self._model = None
 
         # Preprocess the data
         (self.x_train, self.y_train,
@@ -118,7 +118,8 @@ class Model():
         model.add(Dropout(self._dropout_rate))
         model.add(Dense(1))
         model.summary()
-        model.compile(loss='mean_squared_error', optimizer='adam')
+        model.compile(
+            loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
 
         return model
 
@@ -139,7 +140,9 @@ class Model():
                 self.x_train,
                 self.y_train,
                 epochs=self._epochs,
-                batch_size=self._batch_size)
+                batch_size=self._batch_size,
+                validation_split=self._validation_split,
+                shuffle=False)
             model.save(self._model_file)
         else:
             model = self.load()
@@ -222,7 +225,8 @@ class PreProcessing():
 
         """
         # Reshape single column array to a list of lists for tensorflow
-        if len(ary.shape) == 1:
+        self._input_features = len(ary.shape)
+        if self._input_features == 1:
             ary = ary.reshape(-1, 1)
         self._ary = ary
         self._percentage_test = percentage_test
@@ -245,7 +249,7 @@ class PreProcessing():
 
         """
         # Create a scaler
-        scaler = MinMaxScaler(feature_range=(0, 1))
+        scaler = MinMaxScaler()
 
         # Create test and training data
         dataset_train = self._ary[:self.rows_training]
@@ -262,14 +266,22 @@ class PreProcessing():
         _x_test, y_test = create_features(
             dataset_test, history=self._history)
 
-        # Reshape data for LSTM to have three dimensions namely:
-        # (rows, features, columns of data extracted from the dataset)
-        # The resulting array makes each row of featues have a row of only a
-        # single entry (input feature from database)
+        '''
+        Reshape data for LSTM to have three dimensions namely:
+
+            (rows processed during training,
+             training features,
+             columns of data extracted from the dataset)
+
+        The resulting array makes each row of featues have a row of only a
+        single entry (input feature from database)
+        '''
         x_train = np.reshape(
-            _x_train, (self.rows_training - self._history, self._history, 1))
+            _x_train,
+            (_x_train.shape[0], _x_train.shape[1], self._input_features))
         x_test = np.reshape(
-            _x_test, (self.rows_test, self._history, 1))
+            _x_test,
+            (_x_test.shape[0], _x_test.shape[1], self._input_features))
 
         # Return
         result = (x_train, y_train, x_test, y_test, scaler)
