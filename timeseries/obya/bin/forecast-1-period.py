@@ -95,6 +95,9 @@ class Model():
          self.x_test, self.y_test,
          self.scaler) = self._data()
 
+        print('-x->', self.x_train.shape)
+        print('-y->', self.y_train.shape)
+        
     def create(self):
         """Create Model.
 
