@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
+from pandas.plotting import register_matplotlib_converters
 
 # Non-standard imports using pip
 from keras.models import Sequential, load_model
@@ -43,7 +44,9 @@ def main():
 
     model = Model(df_, history=history, future=future)
     model.train()
-    model.plot_predicted_vs_actual(-1)
+    # model.plot_predicted_vs_actual(-1)
+    model.plot_forecast()
+
 
 class Model():
     """Preprocess the data for models."""
@@ -191,16 +194,22 @@ class Model():
             None
 
         """
+        # Make matplotlib aware of that is should get ready to convert
+        # Pandas DateTimes on X axis
+        register_matplotlib_converters()
+
         # Initialize key variables
-        p_df_end = self._df_.tail(self._history)
+        p_df_end = pd.DataFrame(
+            self.scaler.transform(self._df_.tail(self._history)),
+            columns=self._df_.columns,
+            index=self._df_.tail(self._history).index)
         a_df_end = self._df_.tail(self._future)
-        periods = 10
 
         # Get the prediction model
         model = self.load()
 
         # Create the feature on which to base the prediction
-        p_vectors = np.array(df_end).reshape(
+        p_vectors = np.array(p_df_end).reshape(
             1, self._history, self._input_features)
         raw_predictions = model.predict(p_vectors).tolist()[0]
         predictions = self.scaler.inverse_transform(
@@ -210,26 +219,18 @@ class Model():
         df_predictions = pd.DataFrame(
             predictions,
             index=pd.date_range(
-                start=self._df_[-1],
+                start=self._df_.index[-1],
                 periods=len(predictions),
                 freq='D'),
-            columns=df_end.columns)
-
-        # Get actual values
-        raw_actuals = self.scaler.inverse_transform(np.array(a_df_end))
-        df_actuals = pd.DataFrame(
-            raw_actuals,
-            index=(a_df_end.index),
-            columns=a_df_end.columns
-        ).append(df_predictions.head(1))
+            columns=p_df_end.columns)
 
         # Plot
         plt.figure(figsize=(8, 4))
         plt.plot(df_predictions, label='Predicted')
-        plt.plot(df_actuals, label='Actual')
+        plt.plot(a_df_end, label='Actual')
         plt.title('Forecasting Next {} days'.format(self._future))
         plt.ylabel('Price')
-        plt.ylabel('Date')
+        plt.xlabel('Date')
         plt.legend()
         plt.show()
 
