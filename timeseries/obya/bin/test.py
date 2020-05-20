@@ -27,15 +27,22 @@ def main():
     data = etl.Data(df_)
 
     result = data.split()
+    print('00', '\n', result.x_train.head())
     print(10, '\n', result.x_train.tail())
     print(11, '\n', result.x_test.head())
     print(12, '\n', result.x_test.tail())
     print(13, '\n', result.x_validate.head())
+    print(14, '\n', result.x_validate.tail())
 
     print(20, '\n', result.y_train.tail())
     print(21, '\n', result.y_test.head())
     print(22, '\n', result.y_test.tail())
     print(23, '\n', result.y_validate.head())
+    print(24, '\n', result.x_validate.values[-10:])
+    print(25, '\n', result.y_validate.values[-10:])
+    print(26, '\n', data.vectors().head())
+    print(27, '\n', data.vectors().tail())
+    print(28, '\n', data.vectors().value.values[-10:])
 
     # print(2, '\n', result[1].head().to_numpy)
     # print(3, '\n', result[2].tail())

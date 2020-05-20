@@ -293,6 +293,9 @@ class PreProcessing():
             columns=self._df_.columns,
             index=self._df_.index)
 
+        print(type(df_))
+        print(df_.tail())
+
         # Create training data features
         (x_train, y_train) = create_features(
             list(df_.close), history=self._history, future=self._future)

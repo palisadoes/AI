@@ -8,15 +8,14 @@ import os
 from copy import deepcopy
 from pprint import pprint
 import gc
+from collections import namedtuple
 
 # PIP3 imports.
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 from hyperopt import STATUS_OK
-from statsmodels.tsa.stattools import adfuller
 
 # TensorFlow imports
 import tensorflow as tf
@@ -28,13 +27,12 @@ from keras.optimizers import RMSprop
 from keras.initializers import RandomUniform
 from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
-from keras import backend
 from keras.utils import multi_gpu_model
-from keras import Model
 
 
-# Merlin imports
+# Custom package imports
 from forecast import general
+from obya.model import memory
 
 
 class RNNGRU(object):
@@ -65,11 +63,13 @@ class RNNGRU(object):
             None
 
         """
+        # Setup memory
+        memory.setup()
+
         # Initialize key variables
         self._warmup_steps = warmup_steps
         self._binary = binary
         self._display = display
-        self._data = _data
         if multigpu is True:
             self._gpus = len(general.get_available_gpus())
         else:
@@ -77,9 +77,13 @@ class RNNGRU(object):
 
         # Set key file locations
         path_prefix = '/tmp/keras-{}'.format(int(time.time()))
-        self._path_checkpoint = '{}.checkpoint.h5'.format(path_prefix)
-        self._path_model_weights = '{}.weights.h5'.format(path_prefix)
-        self._path_model_parameters = '{}.model.yaml'.format(path_prefix)
+        Files = namedtuple(
+            'Files', 'checkpoint, model_weights, model_parameters')
+        self._files = Files(
+            checkpoint='{}.checkpoint.h5'.format(path_prefix),
+            model_weights='{}.weights.h5'.format(path_prefix),
+            model_parameters='{}.model.yaml'.format(path_prefix)
+            )
 
         # Initialize parameters
         self.hyperparameters = {
@@ -93,127 +97,68 @@ class RNNGRU(object):
         }
 
         # Delete any stale checkpoint file
-        if os.path.exists(self._path_checkpoint) is True:
-            os.remove(self._path_checkpoint)
-
-        ###################################
-        # TensorFlow wizardry
-        config = tf.ConfigProto()
-
-        # Don't pre-allocate memory; allocate as-needed
-        config.gpu_options.allow_growth = True
-
-        # Only allow a total of half the GPU memory to be allocated
-        config.gpu_options.per_process_gpu_memory_fraction = 0.8
-
-        # Crash with DeadlineExceeded instead of hanging forever when your
-        # queues get full/empty
-        config.operation_timeout_in_ms = 60000
-
-        # Create a session with the above options specified.
-        backend.tensorflow_backend.set_session(tf.Session(config=config))
-        ###################################
+        if os.path.exists(self._files.checkpoint) is True:
+            os.remove(self._files.checkpoint)
 
         # Get data
-        self._y_current = self._data.values()
-
-        # Create test and training arrays for VALIDATION and EVALUATION
-        (x_train,
-         x_validation,
-         _x_test,
-         self._y_train,
-         self._y_validation,
-         self._y_test) = self._data.train_validation_test_split()
-
-        (self.training_rows, self._training_vector_count) = x_train.shape
-        (self.test_rows, _) = _x_test.shape
-        (_, self._training_class_count) = self._y_train.shape
-
-        '''
-        The neural network works best on values roughly between -1 and 1, so we
-        need to scale the data before it is being input to the neural network.
-        We can use scikit-learn for this.
-
-        We first create a scaler-object for the input-signals.
-
-        Then we detect the range of values from the training-data and scale
-        the training-data.
-
-        From StackOverflow:
-
-        To center the data (make it have zero mean and unit standard error),
-        you subtract the mean and then divide the result by the standard
-        deviation.
-
-            x'=x−μσ
-
-        You do that on the training set of data. But then you have to apply the
-        same transformation to your testing set (e.g. in cross-validation), or
-        to newly obtained examples before forecast. But you have to use the
-        same two parameters μ and σ (values) that you used for centering the
-        training set.
-
-        Hence, every sklearn's transform's fit() just calculates the parameters
-        (e.g. μ and σ in case of StandardScaler) and saves them as an internal
-        objects state. Afterwards, you can call its transform() method to apply
-        the transformation to a particular set of examples.
-
-        fit_transform() joins these two steps and is used for the initial
-        fitting of parameters on the training set x, but it also returns a
-        transformed x'. Internally, it just calls first fit() and then
-        transform() on the same data.
-        '''
-        self._x_scaler = MinMaxScaler()
-        _ = self._x_scaler.fit_transform(self._data.vectors())
-        self._x_train_scaled = self._x_scaler.transform(x_train)
-        self._x_validation_scaled = self._x_scaler.transform(x_validation)
-        self._x_test_scaled = self._x_scaler.transform(_x_test)
-
-        '''
-        The target-data comes from the same data-set as the input-signals,
-        because it is the weather-data for one of the cities that is merely
-        time-shifted. But the target-data could be from a different source with
-        different value-ranges, so we create a separate scaler-object for the
-        target-data.
-        '''
-
-        self._y_scaler = MinMaxScaler()
-        _ = self._y_scaler.fit_transform(self._data.classes())
-        self._y_train_scaled = self._y_scaler.transform(self._y_train)
-        self._y_validation_scaled = self._y_scaler.transform(
-            self._y_validation)
-        self._y_test_scaled = self._y_scaler.transform(self._y_test)
+        self._split = _data.split()
+        self._scaled_split = _data.scaled_split()
 
         # Print stuff
-        print('\n> Numpy Data Type: {}'.format(type(x_train)))
-        print("> Numpy Data Shape: {}".format(x_train.shape))
-        print("> Numpy Data Row[0]: {}".format(x_train[0]))
-        print("> Numpy Data Row[Last]: {}".format(x_train[-1]))
-        print('> Numpy Targets Type: {}'.format(type(self._y_train)))
-        print("> Numpy Vector Feature Type: {}".format(type(x_train[0][0])))
-        print("> Numpy Targets Shape: {}".format(self._y_train.shape))
+        print('\n> Numpy Data Type: {}'.format(
+            type(self._split.x_train.values)))
 
-        print('> Number of Samples: {}'.format(self._y_current.shape[0]))
-        print('> Number of Training Samples: {}'.format(x_train.shape[0]))
+        print('> Numpy Data Shape: {}'.format(
+            self._split.x_train.values.shape))
+
+        print('> Numpy Data Row[0]: {}'.format(
+            self._split.x_train.values[0]))
+
+        print('> Numpy Data Row[Last]: {}'.format(
+            self._split.x_train.values[-1]))
+
+        print('> Numpy Targets Type: {}'.format(
+            type(self._split.y_train.values)))
+
+        print('> Numpy Vector Feature Type: {}'.format(
+            type(self._split.y_train.values[0][0])))
+
+        print('> Numpy Targets Shape: {}'.format(
+            self._split.y_train.values.shape))
+
+        print('> Number of Samples: {}'.format(
+            len(self._split.x_train) + len(
+                self._split.x_test) + len(self._split.x_validate)))
+
+        print('> Number of Training Samples: {}'.format(
+            len(self._split.x_train)))
+
         print('> Number of Training Classes: {}'.format(
-            self._training_class_count))
-        print('> Number of Test Samples: {}'.format(self.test_rows))
-        print("> Training Minimum Value:", np.min(x_train))
-        print("> Training Maximum Value:", np.max(x_train))
-        print('> Number X signals: {}'.format(self._training_vector_count))
-        print('> Number Y signals: {}'.format(self._training_class_count))
+            len(self._split.y_train)))
+
+        print('> Number of Test Samples: {}'.format(len(self._split.x_test)))
+
+        print('> Training Minimum Value:', np.min(self._split.x_train.values))
+
+        print('> Training Maximum Value:', np.max(self._split.x_train.values))
+
+        print('> Number X signals: {}'.format(self._split.x_train.values[1]))
+
+        print('> Number Y signals: {}'.format(self._split.y_train.values[1]))
 
         # Print epoch related data
         print('> Epochs:', self.hyperparameters['epochs'])
         print('> Batch Size:', self.hyperparameters['batch_size'])
 
         # Display estimated memory footprint of training data.
-        print("> Data size: {:.2f} Bytes".format(x_train.nbytes))
+        print('> Data size: {:.2f} Bytes'.format(
+            self._split.x_train.values.nbytes))
 
         print('> Scaled Training Minimum Value: {}'.format(
-            np.min(self._x_train_scaled)))
+            np.min(self._scaled_split.x_train.values)))
+
         print('> Scaled Training Maximum Value: {}'.format(
-            np.max(self._x_train_scaled)))
+            np.max(self._scaled_split.x_train.values)))
 
         '''
         The data-set has now been prepared as 2-dimensional numpy arrays. The
@@ -224,9 +169,9 @@ class RNNGRU(object):
         '''
 
         print('> Scaled Training Data Shape: {}'.format(
-            self._x_train_scaled.shape))
+            self._scaled_split.x_train.values.shape))
         print('> Scaled Training Targets Shape: {}'.format(
-            self._y_train_scaled.shape))
+            self._scaled_split.y_train.values.shape))
 
     def model(self, params=None):
         """Create the Recurrent Neural Network.
@@ -248,7 +193,7 @@ class RNNGRU(object):
 
         # Calculate the steps per epoch
         epoch_steps = int(
-            self.training_rows / _hyperparameters['batch_size']) + 1
+            self._split.x_train.values[0] / _hyperparameters['batch_size']) + 1
 
         '''
         Instantiate the base model (or "template" model).
@@ -276,7 +221,7 @@ class RNNGRU(object):
             _hyperparameters['units'],
             return_sequences=True,
             recurrent_dropout=_hyperparameters['dropout'],
-            input_shape=(None, self._training_vector_count,)))
+            input_shape=(None, len(self._split.y_train.values),)))
 
         for _ in range(1, _hyperparameters['layers']):
             serial_model.add(GRU(
@@ -298,7 +243,7 @@ class RNNGRU(object):
 
         if False:
             serial_model.add(
-                Dense(self._training_class_count, activation='sigmoid'))
+                Dense(len(self._split.y_train.values), activation='sigmoid'))
 
         '''
         A problem with using the Sigmoid activation function, is that we can
@@ -324,7 +269,7 @@ class RNNGRU(object):
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
             serial_model.add(Dense(
-                self._training_class_count,
+                len(self._split.y_train.values),
                 activation='linear',
                 kernel_initializer=init))
 
@@ -397,8 +342,10 @@ class RNNGRU(object):
         sequence.
         '''
 
-        validation_data = (np.expand_dims(self._x_validation_scaled, axis=0),
-                           np.expand_dims(self._y_validation_scaled, axis=0))
+        validation_data = (
+            np.expand_dims(self._scaled_split.x_train.values, axis=0),
+            np.expand_dims(self._scaled_split.y_train.values, axis=0)
+        )
 
         # Callback Functions
 
@@ -409,7 +356,7 @@ class RNNGRU(object):
         This is the callback for writing checkpoints during training.
         '''
 
-        callback_checkpoint = ModelCheckpoint(filepath=self._path_checkpoint,
+        callback_checkpoint = ModelCheckpoint(filepath=self._files.checkpoint,
                                               monitor='val_loss',
                                               verbose=1,
                                               save_weights_only=True,
@@ -429,9 +376,8 @@ class RNNGRU(object):
         This is the callback for writing the TensorBoard log during training.
         '''
 
-        callback_tensorboard = TensorBoard(log_dir='/tmp/23_logs/',
-                                           histogram_freq=0,
-                                           write_graph=False)
+        callback_tensorboard = TensorBoard(
+            log_dir='/tmp/23_logs/', histogram_freq=0, write_graph=False)
 
         '''
         This callback reduces the learning-rate for the optimizer if the
@@ -442,11 +388,9 @@ class RNNGRU(object):
         We don't want the learning-rate to go any lower than this.
         '''
 
-        callback_reduce_lr = ReduceLROnPlateau(monitor='val_loss',
-                                               factor=0.1,
-                                               min_lr=1e-4,
-                                               patience=0,
-                                               verbose=1)
+        callback_reduce_lr = ReduceLROnPlateau(
+            monitor='val_loss', factor=0.1, min_lr=1e-4,
+            patience=0, verbose=1)
 
         callbacks = [callback_early_stopping,
                      callback_checkpoint,
@@ -507,11 +451,11 @@ class RNNGRU(object):
         """
         # Serialize model to JSON
         model_yaml = _model.to_yaml()
-        with open(self._path_model_parameters, 'w') as yaml_file:
+        with open(self._files.model_parameters, 'w') as yaml_file:
             yaml_file.write(model_yaml)
 
         # Serialize weights to HDF5
-        _model.save_weights(self._path_model_weights)
+        _model.save_weights(self._files.model_weights)
         print('> Saved model to disk')
 
     def load_model(self):
@@ -526,12 +470,12 @@ class RNNGRU(object):
         """
         # Load yaml and create model
         print('> Loading model from disk')
-        with open(self._path_model_parameters, 'r') as yaml_file:
+        with open(self._files.model_parameters, 'r') as yaml_file:
             loaded_model_yaml = yaml_file.read()
         _model = model_from_yaml(loaded_model_yaml)
 
         # Load weights into new model
-        _model.load_weights(self._path_model_weights, by_name=True)
+        _model.load_weights(self._files.model_weights, by_name=True)
         print('> Finished loading model from disk')
 
         # Return
@@ -556,8 +500,8 @@ class RNNGRU(object):
         checkpoint, which should have the best performance on the test-set.
         '''
 
-        if os.path.exists(self._path_checkpoint):
-            _model.load_weights(self._path_checkpoint)
+        if os.path.exists(self._files.checkpoint):
+            _model.load_weights(self._files.checkpoint)
 
         # _model = self.load_model()
 
@@ -582,8 +526,8 @@ class RNNGRU(object):
         array-dimensionality to create a batch with that one sequence.
         '''
 
-        x_scaled = self._x_test_scaled
-        y_scaled = self._y_test_scaled
+        x_scaled = self._scaled_split.x_test.values
+        y_scaled = self._scaled_split.y_test.values
 
         # Evaluate the MSE accuracy
         result = _model.evaluate(
@@ -605,14 +549,14 @@ class RNNGRU(object):
             # The output of the model is between 0 and 1.
             # Do an inverse map to get it back to the scale
             # of the original data-set.
-            predictions = self._y_scaler.inverse_transform(
+            predictions = self._scaled_split.y_scaler.inverse_transform(
                 predictions_scaled[0])
 
             # Print meaningful human accuracy values
             print(
                 '> Human accuracy {:.3f} %'
                 ''.format(general.binary_accuracy(
-                    predictions, self._y_test) * 100))
+                    predictions, self._split.y_test) * 100))
 
     def objective(self, params=None):
         """Optimize the Recurrent Neural Network.
@@ -626,8 +570,8 @@ class RNNGRU(object):
         """
         # Initialize key variables
         model = deepcopy(self.model(params=params))
-        scaled_vectors = self._x_test_scaled
-        test_classes = self._y_test
+        scaled_vectors = self._scaled_split.x_test.values
+        test_classes = self._split.y_test
 
         # Input-signals for the model.
         x_values = np.expand_dims(scaled_vectors, axis=0)
@@ -638,7 +582,7 @@ class RNNGRU(object):
         # The output of the model is between 0 and 1.
         # Do an inverse map to get it back to the scale
         # of the original data-set.
-        predictions = self._y_scaler.inverse_transform(
+        predictions = self._scaled_split.y_scaler.inverse_transform(
             predictions_scaled[0])
 
         # Get the error value
@@ -674,41 +618,7 @@ class RNNGRU(object):
 
         """
         # Delete
-        os.remove(self._path_checkpoint)
-
-    def stationary(self):
-        """Evaluate wether the timeseries is stationary.
-
-        non-stationary timeseries are probably random walks and not
-        suitable for forecasting.
-
-        Args:
-            None
-
-        Returns:
-            state: True if stationary
-
-        """
-        # Initialize key variables
-        state = False
-        values = []
-
-        # statistical test
-        result = adfuller(self._y_current)
-        adf = result[0]
-        print('> Stationarity Test:')
-        print('  ADF Statistic: {:.3f}'.format(adf))
-        print('  p-value: {:.3f}'.format(result[1]))
-        print('  Critical Values:')
-        for key, value in result[4].items():
-            print('\t{}: {:.3f}'.format(key, value))
-            values.append(value)
-
-        # Return
-        if adf < min(values):
-            state = True
-        print('  Stationarity: {}'.format(state))
-        return state
+        os.remove(self._files.checkpoint)
 
     def _batch_generator(self, batch_size, sequence_length):
         """Create generator function to create random batches of training-data.
@@ -724,12 +634,15 @@ class RNNGRU(object):
         # Infinite loop.
         while True:
             # Allocate a new array for the batch of input-signals.
+            # Number of features in x_train.
             x_shape = (
-                batch_size, sequence_length, self._training_vector_count)
+                batch_size, sequence_length, self._split.x_train.values[1])
             x_batch = np.zeros(shape=x_shape, dtype=np.float16)
 
             # Allocate a new array for the batch of output-signals.
-            y_shape = (batch_size, sequence_length, self._training_class_count)
+            # Number of features in y_train.
+            y_shape = (
+                batch_size, sequence_length, self._split.y_train.values[1])
             y_batch = np.zeros(shape=y_shape, dtype=np.float16)
 
             # Fill the batch with random sequences of data.
@@ -737,11 +650,13 @@ class RNNGRU(object):
                 # Get a random start-index.
                 # This points somewhere into the training-data.
                 idx = np.random.randint(
-                    self.training_rows - sequence_length)
+                    self._split.x_train.values[0] - sequence_length)
 
                 # Copy the sequences of data starting at this index.
-                x_batch[i] = self._x_train_scaled[idx:idx+sequence_length]
-                y_batch[i] = self._y_train_scaled[idx:idx+sequence_length]
+                x_batch[i] = self._scaled_split.x_train.values[
+                    idx:idx + sequence_length]
+                y_batch[i] = self._scaled_split.y_train.values[
+                    idx:idx + sequence_length]
 
             yield (x_batch, y_batch)
 
@@ -795,329 +710,3 @@ class RNNGRU(object):
         loss_mean = tf.reduce_mean(loss)
 
         return loss_mean
-
-    def plot_train(self, model, start_idx, length=100):
-        """Plot the predicted and true output-signals.
-
-        Args:
-            model: Training model
-            start_idx: Start-index for the time-series.
-            length: Sequence-length to process and plot.
-
-        Returns:
-            None
-
-        """
-        # Plot
-        self._plot_comparison(model, start_idx, length=length, train=True)
-
-    def plot_test(self, model, start_idx, length=100):
-        """Plot the predicted and true output-signals.
-
-        Args:
-            model: Training model
-            start_idx: Start-index for the time-series.
-            length: Sequence-length to process and plot.
-
-        Returns:
-            None
-
-        """
-        # Plot
-        self._plot_comparison(model, start_idx, length=length, train=False)
-
-    def _plot_comparison(self, model, start_idx, length=100, train=True):
-        """Plot the predicted and true output-signals.
-
-        Args:
-            model: Training model
-            start_idx: Start-index for the time-series.
-            length: Sequence-length to process and plot.
-            train: Boolean whether to use training- or test-set.
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        num_train = self.training_rows
-
-        # Don't plot if we are looking at binary classes
-        if bool(self._binary) is True:
-            print('> Will not plot charts for binary class values.')
-            return
-
-        # End-index for the sequences.
-        end_idx = start_idx + length
-
-        # Get the complete length of the dataset
-        dataset_size = (
-            self._y_train.shape[0] +
-            self._y_validation.shape[0] + self._y_test.shape[0])
-        delta = len(self._y_current) - dataset_size
-
-        # Variables for date formatting
-        days = mdates.DayLocator()   # Every day
-        months = mdates.MonthLocator()  # Every month
-        months_format = mdates.DateFormatter('%b %Y')
-        days_format = mdates.DateFormatter('%d')
-
-        # Assign other variables dependent on the type of data we are plotting
-        if train is True:
-            # Use training-data.
-            x_values = self._x_train_scaled[start_idx:end_idx]
-            y_true = self._y_train[start_idx:end_idx]
-            shim = 'Train'
-
-            # Datetimes to use for training
-            datetimes = self._data.datetime()[:num_train][start_idx:end_idx]
-
-            # Only get current values that are a part of the training data
-            current = self._y_current[:num_train][start_idx:end_idx]
-
-        else:
-            # Scale the data
-            x_test_scaled = self._x_scaler.transform(
-                self._data.vectors_test_all())
-
-            # Use test-data.
-            x_values = x_test_scaled[start_idx:end_idx]
-            y_true = self._y_test[start_idx:end_idx]
-            shim = 'Test'
-
-            # Test offset
-            test_offset = self.test_rows + delta
-
-            # Datetimes to use for testing
-            datetimes = self._data.datetime()[-test_offset:][start_idx:]
-
-            # Only get current values that are a part of the test data.
-            current = self._y_current[-test_offset:][start_idx:]
-
-        # Input-signals for the model.
-        x_values = np.expand_dims(x_values, axis=0)
-
-        # Use the model to predict the output-signals.
-        y_pred = model.predict(x_values)
-
-        # The output of the model is between 0 and 1.
-        # Do an inverse map to get it back to the scale
-        # of the original data-set.
-        y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
-
-        # For each output-signal.
-        for signal in range(len(self._data.labels())):
-            # Create a filename
-            filename = (
-                '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
-                    self.hyperparameters['batch_size'],
-                    self.hyperparameters['epochs'],
-                    num_train,
-                    signal,
-                    int(time.time()),
-                    shim)
-
-            # Get the output-signal predicted by the model.
-            signal_pred = y_pred_rescaled[:, signal]
-
-            # Get the true output-signal from the data-set.
-            signal_true = y_true[:, signal]
-
-            # Create a new chart
-            (fig, axis) = plt.subplots(figsize=(15, 5))
-
-            # Plot and compare the two signals.
-            axis.plot(
-                datetimes[:len(signal_true)],
-                signal_true,
-                label='Current +{}'.format(self._data.labels()[signal]))
-            axis.plot(
-                datetimes[:len(signal_pred)],
-                signal_pred,
-                label='Prediction')
-            axis.plot(datetimes, current, label='Current')
-
-            # Set plot labels and titles
-            axis.set_title('{1}ing Forecast ({0} Future Intervals)'.format(
-                self._data.labels()[signal], shim))
-            axis.set_ylabel('Values')
-            axis.legend(
-                bbox_to_anchor=(1.04, 0.5),
-                loc='center left', borderaxespad=0)
-
-            # Add gridlines and ticks
-            ax = plt.gca()
-            ax.grid(True)
-
-            # Add major gridlines
-            ax.xaxis.grid(which='major', color='black', alpha=0.2)
-            ax.yaxis.grid(which='major', color='black', alpha=0.2)
-
-            # Add minor ticks (They must be turned on first)
-            ax.minorticks_on()
-            ax.xaxis.grid(which='minor', color='black', alpha=0.1)
-            ax.yaxis.grid(which='minor', color='black', alpha=0.1)
-
-            # Format the tick labels
-            ax.xaxis.set_major_locator(months)
-            ax.xaxis.set_major_formatter(months_format)
-            ax.xaxis.set_minor_locator(days)
-
-            # Remove tick marks
-            ax.tick_params(axis='both', which='both', length=0)
-
-            # Print day numbers on xaxis for Test data only
-            if train is False:
-                ax.xaxis.set_minor_formatter(days_format)
-                plt.setp(ax.xaxis.get_minorticklabels(), rotation=90)
-
-            # Rotates and right aligns the x labels, and moves the bottom of
-            # the axes up to make room for them
-            fig.autofmt_xdate()
-
-            # Plot grey box for warmup-period if we are working with training
-            # data and the start is within the warmup-period
-            if (0 < start_idx < self._warmup_steps):
-                if train is True:
-                    plt.axvspan(
-                        datetimes[shim][start_idx],
-                        datetimes[shim][self._warmup_steps],
-                        facecolor='black', alpha=0.15)
-
-            # Show and save the image
-            if self._display is True:
-                fig.savefig(filename, bbox_inches='tight')
-                plt.show()
-            else:
-                fig.savefig(filename, bbox_inches='tight')
-            print('> Saving file: {}'.format(filename))
-
-            # Close figure
-            plt.close(fig=fig)
-
-    def plot_predicted_vs_actual(self, model):
-        """Plot the predicted and true output-signals.
-
-        Args:
-            model: Training model
-            start_idx: Start-index for the time-series.
-            length: Sequence-length to process and plot.
-
-        Returns:
-            None
-
-        """
-        # Initialize key variables
-        num_train = self.training_rows
-        shim = 'Comparison'
-
-        # Don't plot if we are looking at binary classes
-        if bool(self._binary) is True:
-            print('> Will not plot charts for binary class values.')
-            return
-
-        # Scale the data
-        x_test_scaled = self._x_scaler.transform(
-            self._data.vectors_test_all())
-
-        # Use test-data.
-        x_values = x_test_scaled[:]
-        y_true = self._y_test[:]
-
-        # Input-signals for the model.
-        x_values = np.expand_dims(x_values, axis=0)
-
-        # Use the model to predict the output-signals.
-        y_pred = model.predict(x_values)
-
-        # The output of the model is between 0 and 1.
-        # Do an inverse map to get it back to the scale
-        # of the original data-set.
-        y_pred_rescaled = self._y_scaler.inverse_transform(y_pred[0])
-
-        # For each output-signal.
-        for signal in range(len(self._data.labels())):
-            # Create a filename
-            filename = (
-                '/tmp/batch_{}_epochs_{}_training_{}_{}_{}_{}.png').format(
-                    self.hyperparameters['batch_size'],
-                    self.hyperparameters['epochs'],
-                    num_train,
-                    signal,
-                    int(time.time()),
-                    shim)
-
-            # Get the output-signal predicted by the model.
-            signal_pred = y_pred_rescaled[:, signal]
-
-            # Get the true output-signal from the data-set.
-            signal_true = y_true[:, signal]
-
-            # Create a new chart
-            (fig, axis) = plt.subplots(figsize=(15, 5))
-
-            # Plot and compare the two signals.
-            plt.scatter(
-                signal_pred[:len(signal_true)],
-                signal_true,
-                alpha=0.1,
-                label=(
-                    'Predicted vs. Actual +{}'.format(
-                        self._data.labels()[signal])))
-
-            # Set plot labels and titles
-            axis.set_title(
-                'Predicted vs. Actual ({0} Future Intervals)'.format(
-                    self._data.labels()[signal]))
-            axis.set_ylabel('Predicted')
-            axis.set_xlabel('Actual')
-            axis.legend(
-                bbox_to_anchor=(1.04, 0.5),
-                loc='center left', borderaxespad=0)
-
-            # Add gridlines and ticks
-            ax = plt.gca()
-            ax.grid(True)
-
-            # Add major gridlines
-            ax.xaxis.grid(which='major', color='black', alpha=0.2)
-            ax.yaxis.grid(which='major', color='black', alpha=0.2)
-
-            # Add minor ticks (They must be turned on first)
-            ax.minorticks_on()
-            ax.xaxis.grid(which='minor', color='black', alpha=0.1)
-            ax.yaxis.grid(which='minor', color='black', alpha=0.1)
-
-            # Remove tick marks
-            ax.tick_params(axis='both', which='both', length=0)
-
-            # Show and save the image
-            if self._display is True:
-                fig.savefig(filename, bbox_inches='tight')
-                plt.show()
-            else:
-                fig.savefig(filename, bbox_inches='tight')
-            print('> Saving file: {}'.format(filename))
-
-            # Close figure
-            plt.close(fig=fig)
-
-
-class ModelMGPU(Model):
-    '''
-    https://github.com/keras-team/keras/issues/2436#issuecomment-354882296
-    '''
-    def __init__(self, ser_model, **kwargs):
-        pmodel = multi_gpu_model(ser_model, **kwargs)
-        self.__dict__.update(pmodel.__dict__)
-        self._smodel = ser_model
-
-    def __getattribute__(self, attrname):
-        '''Override load and save methods to be used from the serial-model. The
-        serial-model holds references to the weights in the multi-gpu model.
-        '''
-        # return Model.__getattribute__(self, attrname)
-        if 'load' in attrname or 'save' in attrname:
-            return getattr(self._smodel, attrname)
-
-        return super(ModelMGPU, self).__getattribute__(attrname)
