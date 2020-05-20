@@ -27,13 +27,13 @@ from keras.initializers import RandomUniform
 from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 from keras.utils import multi_gpu_model
-
+from tensorflow.keras.backend import square, mean
 
 # Custom package imports
 from obya.model import memory
 
 
-class RNNGRU(object):
+class Model(object):
     """Process data for ingestion.
 
     Roughly based on:
@@ -44,13 +44,13 @@ class RNNGRU(object):
 
     def __init__(
             self, _data, batch_size=64, epochs=20,
-            sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, units=512, display=False,
+            sequence_length=20, warmup_steps=50, dropout=0.2,
+            layers=1, patience=5, units=256, display=False,
             multigpu=False):
         """Instantiate the class.
 
         Args:
-            data: Tuple of (x_data, y_data, target_names)
+            data: etl.Data object
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
             warmup_steps:
@@ -166,10 +166,10 @@ batch_size, epochs'''
             self._split.x_train.values.nbytes))
 
         print('> Scaled Training Minimum Value: {}'.format(
-            np.min(self._scaled_split.x_train.values)))
+            np.min(self._scaled_split.x_train)))
 
         print('> Scaled Training Maximum Value: {}'.format(
-            np.max(self._scaled_split.x_train.values)))
+            np.max(self._scaled_split.x_train)))
 
         '''
         The data-set has now been prepared as 2-dimensional numpy arrays. The
@@ -180,9 +180,9 @@ batch_size, epochs'''
         '''
 
         print('> Scaled Training Data Shape: {}'.format(
-            self._scaled_split.x_train.values.shape))
+            self._scaled_split.x_train.shape))
         print('> Scaled Training Targets Shape: {}'.format(
-            self._scaled_split.y_train.values.shape))
+            self._scaled_split.y_train.shape))
 
     def model(self, params=None):
         """Create the Recurrent Neural Network.
@@ -195,6 +195,10 @@ batch_size, epochs'''
 
         """
         # Initialize key variables
+        (training_rows,
+         vector_count_features) = self._split.x_train.values.shape
+        vector_count_classes = self._split.y_train.values.shape[1]
+
         if params is None:
             _hyperparameters = self._hyperparameters
         else:
@@ -203,8 +207,7 @@ batch_size, epochs'''
                 _hyperparameters.batch_size * self._gpus)
 
         # Calculate the steps per epoch
-        epoch_steps = int(
-            self._split.x_train.values[0] / _hyperparameters.batch_size) + 1
+        epoch_steps = int(training_rows / _hyperparameters.batch_size) + 1
 
         '''
         Instantiate the base model (or "template" model).
@@ -232,7 +235,7 @@ batch_size, epochs'''
             _hyperparameters.units,
             return_sequences=True,
             recurrent_dropout=_hyperparameters.dropout,
-            input_shape=(None, len(self._split.y_train.values),)))
+            input_shape=(None, vector_count_features),))
 
         for _ in range(1, _hyperparameters.layers):
             serial_model.add(GRU(
@@ -254,7 +257,7 @@ batch_size, epochs'''
 
         if False:
             serial_model.add(
-                Dense(len(self._split.y_train.values), activation='sigmoid'))
+                Dense(vector_count_classes, activation='sigmoid'))
 
         '''
         A problem with using the Sigmoid activation function, is that we can
@@ -280,7 +283,7 @@ batch_size, epochs'''
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
             serial_model.add(Dense(
-                len(self._split.y_train.values),
+                vector_count_classes,
                 activation='linear',
                 kernel_initializer=init))
 
@@ -348,8 +351,8 @@ batch_size, epochs'''
         '''
 
         validation_data = (
-            np.expand_dims(self._scaled_split.x_train.values, axis=0),
-            np.expand_dims(self._scaled_split.y_train.values, axis=0)
+            np.expand_dims(self._scaled_split.x_train, axis=0),
+            np.expand_dims(self._scaled_split.y_train, axis=0)
         )
 
         # Callback Functions
@@ -361,11 +364,10 @@ batch_size, epochs'''
         This is the callback for writing checkpoints during training.
         '''
 
-        callback_checkpoint = ModelCheckpoint(filepath=self._files.checkpoint,
-                                              monitor='val_loss',
-                                              verbose=1,
-                                              save_weights_only=True,
-                                              save_best_only=True)
+        callback_checkpoint = ModelCheckpoint(
+            filepath=self._files.checkpoint, monitor='val_loss',
+            verbose=1, save_weights_only=True, save_best_only=True
+        )
 
         '''
         This is the callback for stopping the optimization when performance
@@ -373,16 +375,16 @@ batch_size, epochs'''
         '''
 
         callback_early_stopping = EarlyStopping(
-            monitor='val_loss',
-            patience=_hyperparameters.patience,
-            verbose=1)
+            monitor='val_loss', patience=_hyperparameters.patience, verbose=1
+        )
 
         '''
         This is the callback for writing the TensorBoard log during training.
         '''
 
         callback_tensorboard = TensorBoard(
-            log_dir='/tmp/23_logs/', histogram_freq=0, write_graph=False)
+            log_dir='/tmp/23_logs/', histogram_freq=0, write_graph=False
+        )
 
         '''
         This callback reduces the learning-rate for the optimizer if the
@@ -394,8 +396,8 @@ batch_size, epochs'''
         '''
 
         callback_reduce_lr = ReduceLROnPlateau(
-            monitor='val_loss', factor=0.1, min_lr=1e-4,
-            patience=0, verbose=1)
+            monitor='val_loss', factor=0.1, min_lr=1e-4, patience=0, verbose=1
+        )
 
         callbacks = [callback_early_stopping,
                      callback_checkpoint,
@@ -601,31 +603,35 @@ batch_size, epochs'''
             (x_batch, y_batch)
 
         """
+        # Intialize key variables
+        (training_rows,
+         vector_count_features) = self._split.x_train.values.shape
+        vector_count_classes = self._split.y_train.values.shape[1]
+
         # Infinite loop.
         while True:
             # Allocate a new array for the batch of input-signals.
             # Number of features in x_train.
             x_shape = (
-                batch_size, sequence_length, self._split.x_train.values[1])
+                batch_size, sequence_length, vector_count_features)
             x_batch = np.zeros(shape=x_shape, dtype=np.float16)
 
             # Allocate a new array for the batch of output-signals.
             # Number of features in y_train.
             y_shape = (
-                batch_size, sequence_length, self._split.y_train.values[1])
+                batch_size, sequence_length, vector_count_classes)
             y_batch = np.zeros(shape=y_shape, dtype=np.float16)
 
             # Fill the batch with random sequences of data.
             for i in range(batch_size):
                 # Get a random start-index.
                 # This points somewhere into the training-data.
-                idx = np.random.randint(
-                    self._split.x_train.values[0] - sequence_length)
+                idx = np.random.randint(training_rows - sequence_length)
 
                 # Copy the sequences of data starting at this index.
-                x_batch[i] = self._scaled_split.x_train.values[
+                x_batch[i] = self._scaled_split.x_train[
                     idx:idx + sequence_length]
-                y_batch[i] = self._scaled_split.y_train.values[
+                y_batch[i] = self._scaled_split.y_train[
                     idx:idx + sequence_length]
 
             yield (x_batch, y_batch)
@@ -652,7 +658,7 @@ batch_size, epochs'''
             y_pred: Model's output.
 
         Returns:
-            loss_mean: Mean Squared Error
+            mse: Mean Squared Error
 
         """
         warmup_steps = self._warmup_steps
@@ -668,15 +674,8 @@ batch_size, epochs'''
         # These sliced tensors both have this shape:
         # [batch_size, sequence_length - warmup_steps, num_y_signals]
 
-        # Calculate the MSE loss for each value in these tensors.
-        # This outputs a 3-rank tensor of the same shape.
-        loss = tf.losses.mean_squared_error(labels=y_true_slice,
-                                            predictions=y_pred_slice)
+        # Calculate the Mean Squared Error and use it as loss.
+        mse = mean(square(y_true_slice - y_pred_slice))
 
-        # Keras may reduce this across the first axis (the batch)
-        # but the semantics are unclear, so to be sure we use
-        # the loss across the entire tensor, we reduce it to a
-        # single scalar with the mean function.
-        loss_mean = tf.reduce_mean(loss)
-
-        return loss_mean
+        # Return
+        return mse

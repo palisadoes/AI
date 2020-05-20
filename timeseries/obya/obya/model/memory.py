@@ -23,6 +23,7 @@ def setup():
     # Limit Tensorflow v2 Limit GPU Memory usage
     # https://www.tensorflow.org/guide/gpu
     gpus = tf.config.experimental.list_physical_devices('GPU')
+    print(gpus)
     if bool(gpus) is True:
         try:
             # Currently, memory growth needs to be the same across GPUs

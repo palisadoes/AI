@@ -4,13 +4,13 @@
 # Standard imports
 from __future__ import print_function
 import argparse
-import sys
 
 # PIP3 packages
 import pandas as pd
 
 # Obya imports
 from obya.etl import etl
+from obya.model import gru
 
 
 def main():
@@ -44,16 +44,9 @@ def main():
     print(27, '\n', data.vectors().tail())
     print(28, '\n', data.vectors().value.values[-10:])
 
-    # print(2, '\n', result[1].head().to_numpy)
-    # print(3, '\n', result[2].tail())
-    # print(4, '\n', result[3].head())
-    # print(5, '\n', result[3].head().to_numpy())
-    # print(6, '\n', result[3].head().to_numpy().reshape(1, len(result[3].head())))
-
-    # vectors = data.vectors()
-    # print(pd.DataFrame(vectors['value'].head(), columns=['value']))
-    # print(vectors.columns)
-    # print(vectors.iloc[:, : len(vectors.columns) - 1].head())
+    _model = gru.Model(data)
+    _model.info()
+    _model.model()
 
 
 def arguments():
