@@ -12,7 +12,6 @@ from collections import namedtuple
 
 # PIP3 imports.
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 from hyperopt import STATUS_OK
@@ -31,7 +30,6 @@ from keras.utils import multi_gpu_model
 
 
 # Custom package imports
-from forecast import general
 from obya.model import memory
 
 
@@ -47,7 +45,7 @@ class RNNGRU(object):
     def __init__(
             self, _data, batch_size=64, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, units=512, display=False, binary=False,
+            layers=1, patience=10, units=512, display=False,
             multigpu=False):
         """Instantiate the class.
 
@@ -57,21 +55,19 @@ class RNNGRU(object):
             sequence_length: Length of vectors for for each target
             warmup_steps:
             display: Show charts of results if True
-            binary: Process data for predicting boolean up / down movement vs
-                actual values if True
+
         Returns:
             None
 
         """
         # Setup memory
-        memory.setup()
+        gpus = memory.setup()
 
         # Initialize key variables
         self._warmup_steps = warmup_steps
-        self._binary = binary
         self._display = display
         if multigpu is True:
-            self._gpus = len(general.get_available_gpus())
+            self._gpus = gpus
         else:
             self._gpus = 1
 
@@ -86,15 +82,20 @@ class RNNGRU(object):
             )
 
         # Initialize parameters
-        self.hyperparameters = {
-            'units': abs(units),
-            'dropout': abs(dropout),
-            'layers': int(abs(layers)),
-            'sequence_length': abs(sequence_length),
-            'patience': abs(patience),
-            'batch_size': int(batch_size * self._gpus),
-            'epochs': abs(epochs)
-        }
+        HyperParameters = namedtuple(
+            'HyperParameters',
+            '''units, dropout, layers, sequence_length, patience, \
+batch_size, epochs'''
+        )
+        self._hyperparameters = HyperParameters(
+            units=abs(units),
+            dropout=abs(dropout),
+            layers=int(abs(layers)),
+            sequence_length=abs(sequence_length),
+            patience=abs(patience),
+            batch_size=int(batch_size * self._gpus),
+            epochs=abs(epochs)
+        )
 
         # Delete any stale checkpoint file
         if os.path.exists(self._files.checkpoint) is True:
@@ -104,6 +105,16 @@ class RNNGRU(object):
         self._split = _data.split()
         self._scaled_split = _data.scaled_split()
 
+    def info(self):
+        """Print out information on the dataset.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        """
         # Print stuff
         print('\n> Numpy Data Type: {}'.format(
             type(self._split.x_train.values)))
@@ -147,8 +158,8 @@ class RNNGRU(object):
         print('> Number Y signals: {}'.format(self._split.y_train.values[1]))
 
         # Print epoch related data
-        print('> Epochs:', self.hyperparameters['epochs'])
-        print('> Batch Size:', self.hyperparameters['batch_size'])
+        print('> Epochs:', self._hyperparameters.epochs)
+        print('> Batch Size:', self._hyperparameters.batch_size)
 
         # Display estimated memory footprint of training data.
         print('> Data size: {:.2f} Bytes'.format(
@@ -185,15 +196,15 @@ class RNNGRU(object):
         """
         # Initialize key variables
         if params is None:
-            _hyperparameters = self.hyperparameters
+            _hyperparameters = self._hyperparameters
         else:
             _hyperparameters = params
-            _hyperparameters['batch_size'] = int(
-                _hyperparameters['batch_size'] * self._gpus)
+            _hyperparameters.batch_size = int(
+                _hyperparameters.batch_size * self._gpus)
 
         # Calculate the steps per epoch
         epoch_steps = int(
-            self._split.x_train.values[0] / _hyperparameters['batch_size']) + 1
+            self._split.x_train.values[0] / _hyperparameters.batch_size) + 1
 
         '''
         Instantiate the base model (or "template" model).
@@ -218,15 +229,15 @@ class RNNGRU(object):
         '''
 
         serial_model.add(GRU(
-            _hyperparameters['units'],
+            _hyperparameters.units,
             return_sequences=True,
-            recurrent_dropout=_hyperparameters['dropout'],
+            recurrent_dropout=_hyperparameters.dropout,
             input_shape=(None, len(self._split.y_train.values),)))
 
-        for _ in range(1, _hyperparameters['layers']):
+        for _ in range(1, _hyperparameters.layers):
             serial_model.add(GRU(
-                _hyperparameters['units'],
-                recurrent_dropout=_hyperparameters['dropout'],
+                _hyperparameters.units,
+                recurrent_dropout=_hyperparameters.dropout,
                 return_sequences=True))
 
         '''
@@ -297,16 +308,10 @@ class RNNGRU(object):
         '''
 
         optimizer = RMSprop(lr=1e-3)
-        if self._binary is True:
-            parallel_model.compile(
-                loss='binary_crossentropy',
-                optimizer=optimizer,
-                metrics=['accuracy'])
-        else:
-            parallel_model.compile(
-                loss=self._loss_mse_warmup,
-                optimizer=optimizer,
-                metrics=['accuracy'])
+        parallel_model.compile(
+            loss=self._loss_mse_warmup,
+            optimizer=optimizer,
+            metrics=['accuracy'])
 
         '''
         This is a very small model with only two layers. The output shape of
@@ -322,8 +327,8 @@ class RNNGRU(object):
 
         # Create the batch-generator.
         generator = self._batch_generator(
-            _hyperparameters['batch_size'],
-            _hyperparameters['sequence_length'])
+            _hyperparameters.batch_size,
+            _hyperparameters.sequence_length)
 
         # Validation Set
 
@@ -369,7 +374,7 @@ class RNNGRU(object):
 
         callback_early_stopping = EarlyStopping(
             monitor='val_loss',
-            patience=_hyperparameters['patience'],
+            patience=_hyperparameters.patience,
             verbose=1)
 
         '''
@@ -424,7 +429,7 @@ class RNNGRU(object):
 
         history = parallel_model.fit_generator(
             generator=generator,
-            epochs=_hyperparameters['epochs'],
+            epochs=_hyperparameters.epochs,
             steps_per_epoch=epoch_steps,
             use_multiprocessing=True,
             validation_data=validation_data,
@@ -503,19 +508,11 @@ class RNNGRU(object):
         if os.path.exists(self._files.checkpoint):
             _model.load_weights(self._files.checkpoint)
 
-        # _model = self.load_model()
-
         optimizer = RMSprop(lr=1e-3)
-        if self._binary is True:
-            _model.compile(
-                loss='binary_crossentropy',
-                optimizer=optimizer,
-                metrics=['accuracy'])
-        else:
-            _model.compile(
-                loss=self._loss_mse_warmup,
-                optimizer=optimizer,
-                metrics=['accuracy'])
+        _model.compile(
+            loss=self._loss_mse_warmup,
+            optimizer=optimizer,
+            metrics=['accuracy'])
 
         # Performance on Test-Set
 
@@ -538,25 +535,6 @@ class RNNGRU(object):
         print('> Metrics (test-set):')
         for _value, _metric in zip(result, _model.metrics_names):
             print('\t{}: {:.10f}'.format(_metric, _value))
-
-        if self._binary is True:
-            # Input-signals for the model.
-            x_values = np.expand_dims(x_scaled, axis=0)
-
-            # Get the predictions
-            predictions_scaled = _model.predict_classes(x_values, verbose=1)
-
-            # The output of the model is between 0 and 1.
-            # Do an inverse map to get it back to the scale
-            # of the original data-set.
-            predictions = self._scaled_split.y_scaler.inverse_transform(
-                predictions_scaled[0])
-
-            # Print meaningful human accuracy values
-            print(
-                '> Human accuracy {:.3f} %'
-                ''.format(general.binary_accuracy(
-                    predictions, self._split.y_test) * 100))
 
     def objective(self, params=None):
         """Optimize the Recurrent Neural Network.
@@ -591,14 +569,6 @@ class RNNGRU(object):
         # Free object memory
         del model
         gc.collect()
-
-        # Print meaningful human accuracy values
-        if self._binary is True:
-            # Print predictions and actuals:
-            print(
-                '> Human accuracy {:.5f} %'
-                ''.format(general.binary_accuracy(
-                    predictions, test_classes) * 100))
 
         # Return
         return {

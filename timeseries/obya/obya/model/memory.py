@@ -11,7 +11,7 @@ def setup():
         None
 
     Returns:
-        None
+        logical_gpus: The number of logical GPUs in the system
 
     """
     # Initialize key variables
@@ -37,3 +37,6 @@ def setup():
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
             print(e)
+
+    # Return
+    return logical_gpus
