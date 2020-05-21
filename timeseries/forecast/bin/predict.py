@@ -56,13 +56,12 @@ def main():
         type=int, default=2)
     parser.add_argument(
         '-o', '--dropout',
-        help='Dropout rate as decimal from 0 to 1. Default 0.5 (or 50%)',
+        help='Dropout rate as decimal from 0 to 1. Default 0.5 (50 percent)',
         type=float, default=0.5)
     parser.add_argument(
         '-t', '--test_size',
-        help=(
-            'Test size as decimal fraction of total dataset. '
-            'Default 0.2 (or 20%)'),
+        help='''\
+Test size as decimal fraction of total dataset. Default 0.2 (20 percent)''',
         type=float, default=0.2)
     parser.add_argument(
         '-u', '--units',
@@ -154,13 +153,13 @@ def main():
         datafile, lookahead_periods,
         test_size=test_size, binary=binary)
 
-    if False:
-        if binary is True:
-            # _data.autocorrelation()
-            _data.feature_importance()
-            features = _data.suggested_features(count=10, display=True)
-            print(features)
-            sys.exit(0)
+    # if False:
+    #     if binary is True:
+    #         # _data.autocorrelation()
+    #         _data.feature_importance()
+    #         features = _data.suggested_features(count=10, display=True)
+    #         print(features)
+    #         sys.exit(0)
 
     # Do training
     rnn = RNNGRU(

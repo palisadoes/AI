@@ -28,13 +28,13 @@ from keras.optimizers import RMSprop
 from keras.initializers import RandomUniform
 from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
-from keras import backend
 from keras.utils import multi_gpu_model
 from keras import Model
 
 
 # Merlin imports
 from forecast import general
+from forecast import memory
 
 
 class RNNGRU(object):
@@ -49,7 +49,7 @@ class RNNGRU(object):
     def __init__(
             self, _data, batch_size=64, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0,
-            layers=1, patience=10, units=512, display=False, binary=False,
+            layers=1, patience=10, units=256, display=False, binary=False,
             multigpu=False):
         """Instantiate the class.
 
@@ -70,8 +70,13 @@ class RNNGRU(object):
         self._binary = binary
         self._display = display
         self._data = _data
+
+        # Setup memory
+        gpus = memory.setup()
+
+        # Setup GPUs
         if multigpu is True:
-            self._gpus = len(general.get_available_gpus())
+            self._gpus = gpus
         else:
             self._gpus = 1
 
@@ -96,23 +101,23 @@ class RNNGRU(object):
         if os.path.exists(self._path_checkpoint) is True:
             os.remove(self._path_checkpoint)
 
-        ###################################
-        # TensorFlow wizardry
-        config = tf.ConfigProto()
-
-        # Don't pre-allocate memory; allocate as-needed
-        config.gpu_options.allow_growth = True
-
-        # Only allow a total of half the GPU memory to be allocated
-        config.gpu_options.per_process_gpu_memory_fraction = 0.8
-
-        # Crash with DeadlineExceeded instead of hanging forever when your
-        # queues get full/empty
-        config.operation_timeout_in_ms = 60000
-
-        # Create a session with the above options specified.
-        backend.tensorflow_backend.set_session(tf.Session(config=config))
-        ###################################
+        # ###################################
+        # # TensorFlow wizardry
+        # config = tf.ConfigProto()
+        #
+        # # Don't pre-allocate memory; allocate as-needed
+        # config.gpu_options.allow_growth = True
+        #
+        # # Only allow a total of half the GPU memory to be allocated
+        # config.gpu_options.per_process_gpu_memory_fraction = 0.8
+        #
+        # # Crash with DeadlineExceeded instead of hanging forever when your
+        # # queues get full/empty
+        # config.operation_timeout_in_ms = 60000
+        #
+        # # Create a session with the above options specified.
+        # backend.tensorflow_backend.set_session(tf.Session(config=config))
+        # ###################################
 
         # Get data
         self._y_current = self._data.values()
@@ -163,6 +168,7 @@ class RNNGRU(object):
         transformed x'. Internally, it just calls first fit() and then
         transform() on the same data.
         '''
+
         self._x_scaler = MinMaxScaler()
         _ = self._x_scaler.fit_transform(self._data.vectors())
         self._x_train_scaled = self._x_scaler.transform(x_train)

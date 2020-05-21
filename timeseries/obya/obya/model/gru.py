@@ -45,7 +45,7 @@ class Model(object):
     def __init__(
             self, _data, batch_size=64, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0.2,
-            layers=1, patience=5, units=256, display=False,
+            layers=3, patience=5, units=256, display=False,
             multigpu=False):
         """Instantiate the class.
 
@@ -142,7 +142,7 @@ batch_size, epochs'''
                 self._split.x_test) + len(self._split.x_validate)))
 
         print('> Number of Training Samples: {}'.format(
-            len(self._split.x_train)))
+            self._split.x_train.values.shape[0]))
 
         print('> Number of Training Classes: {}'.format(
             len(self._split.y_train)))
@@ -195,6 +195,7 @@ batch_size, epochs'''
 
         """
         # Initialize key variables
+        use_sigmoid = False
         (training_rows,
          vector_count_features) = self._split.x_train.values.shape
         vector_count_classes = self._split.y_train.values.shape[1]
@@ -231,11 +232,17 @@ batch_size, epochs'''
         input-signals (num_x_signals).
         '''
 
+        # serial_model.add(GRU(
+        #     _hyperparameters.units,
+        #     return_sequences=True,
+        #     recurrent_dropout=_hyperparameters.dropout,
+        #     input_shape=(None, vector_count_features)))
+
         serial_model.add(GRU(
             _hyperparameters.units,
             return_sequences=True,
             recurrent_dropout=_hyperparameters.dropout,
-            input_shape=(None, vector_count_features),))
+            input_shape=(None, vector_count_features)))
 
         for _ in range(1, _hyperparameters.layers):
             serial_model.add(GRU(
@@ -255,7 +262,7 @@ batch_size, epochs'''
         output to be between 0 and 1.
         '''
 
-        if False:
+        if bool(use_sigmoid) is True:
             serial_model.add(
                 Dense(vector_count_classes, activation='sigmoid'))
 
@@ -278,7 +285,7 @@ batch_size, epochs'''
         get it working.
         '''
 
-        if True:
+        if bool(use_sigmoid) is False:
             # Maybe use lower init-ranges.
             init = RandomUniform(minval=-0.05, maxval=0.05)
 

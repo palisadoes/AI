@@ -78,7 +78,7 @@ class DataFile(DataIngest):
 
         # Set the start time to be 2 years by default
         if (ts_start is None) or (ts_start < 0):
-            ts_start = now - (3600 * 24 * 365 * 2)
+            ts_start = now - (3600 * 24 * 365 * 3)
         else:
             ts_start = _normalize(ts_start, rrd_step)
 
@@ -87,9 +87,9 @@ class DataFile(DataIngest):
             spamreader = csv.reader(csvfile, delimiter=',')
             for row in spamreader:
                 timestamp = _normalize(int(row[0]), rrd_step)
-                if ts_start <= timestamp:
-                    value = float(row[1])
-                    data_dict[timestamp] = value
+                # if ts_start <= timestamp:
+                value = float(row[1])
+                data_dict[timestamp] = value
 
         # Fill in the blanks in timestamps
         ts_max = max(data_dict.keys())
