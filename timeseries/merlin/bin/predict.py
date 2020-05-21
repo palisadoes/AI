@@ -56,13 +56,13 @@ def main():
         type=int, default=2)
     parser.add_argument(
         '-o', '--dropout',
-        help='Dropout rate as decimal from 0 to 1. Default 0.5 (or 50%)',
+        help='Dropout rate as decimal from 0 to 1. Default 0.5 (or 50 percent)',
         type=float, default=0.5)
     parser.add_argument(
         '-t', '--test_size',
         help=(
             'Test size as decimal fraction of total dataset. '
-            'Default 0.2 (or 20%)'),
+            'Default 0.2 (or 20 percent)'),
         type=float, default=0.2)
     parser.add_argument(
         '-u', '--units',

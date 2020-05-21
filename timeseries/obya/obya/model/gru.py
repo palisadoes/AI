@@ -5,6 +5,7 @@
 from __future__ import print_function
 import time
 import os
+import sys
 from copy import deepcopy
 from pprint import pprint
 import gc
@@ -220,7 +221,7 @@ batch_size, epochs'''
         NOTE: multi_gpu_model values will be way off if you don't do this.
         '''
         with tf.device('/cpu:0'):
-            serial_model = Sequential()
+            ai_model = Sequential()
 
         '''
         We can now add a Gated Recurrent Unit (GRU) to the network. This will
@@ -232,20 +233,14 @@ batch_size, epochs'''
         input-signals (num_x_signals).
         '''
 
-        # serial_model.add(GRU(
-        #     _hyperparameters.units,
-        #     return_sequences=True,
-        #     recurrent_dropout=_hyperparameters.dropout,
-        #     input_shape=(None, vector_count_features)))
-
-        serial_model.add(GRU(
+        ai_model.add(GRU(
             _hyperparameters.units,
             return_sequences=True,
             recurrent_dropout=_hyperparameters.dropout,
             input_shape=(None, vector_count_features)))
 
         for _ in range(1, _hyperparameters.layers):
-            serial_model.add(GRU(
+            ai_model.add(GRU(
                 _hyperparameters.units,
                 recurrent_dropout=_hyperparameters.dropout,
                 return_sequences=True))
@@ -263,7 +258,7 @@ batch_size, epochs'''
         '''
 
         if bool(use_sigmoid) is True:
-            serial_model.add(
+            ai_model.add(
                 Dense(vector_count_classes, activation='sigmoid'))
 
         '''
@@ -289,26 +284,10 @@ batch_size, epochs'''
             # Maybe use lower init-ranges.
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
-            serial_model.add(Dense(
+            ai_model.add(Dense(
                 vector_count_classes,
                 activation='linear',
                 kernel_initializer=init))
-
-        # Apply multi-GPU logic.
-        if self._gpus == 1:
-            parallel_model = serial_model
-            print('> Training using single GPU.')
-        else:
-            try:
-                # Use multiple GPUs
-                parallel_model = multi_gpu_model(
-                    serial_model,
-                    cpu_relocation=True,
-                    gpus=self._gpus)
-                print('> Training using multiple GPUs.')
-            except ValueError:
-                parallel_model = serial_model
-                print('> Single GPU detected. Training using single GPU.')
 
         # Compile Model
 
@@ -318,7 +297,7 @@ batch_size, epochs'''
         '''
 
         optimizer = RMSprop(lr=1e-3)
-        parallel_model.compile(
+        ai_model.compile(
             loss=self._loss_mse_warmup,
             optimizer=optimizer,
             metrics=['accuracy'])
@@ -330,15 +309,24 @@ batch_size, epochs'''
         observations, and each observation has 3 signals. This corresponds to
         the 3 target signals we want to predict.
         '''
-        print('\n> Model Summary (Parallel):\n')
-        print(parallel_model.summary())
-        print('\n> Model Summary (Serial):\n')
-        print(serial_model.summary())
+        print('\n> Summary (Parallel):\n')
+        print(ai_model.summary())
 
         # Create the batch-generator.
         generator = self._batch_generator(
             _hyperparameters.batch_size,
             _hyperparameters.sequence_length)
+
+        # x_batch, y_batch = next(generator)
+        # print(x_batch.shape)
+        # print(y_batch.shape)
+        # seq = x_batch[0, :, 0]
+        # plt.plot(seq)
+        # plt.show()
+        # seq = y_batch[0, :, 0]
+        # plt.plot(seq)
+        # plt.show()
+        # sys.exit(0)
 
         # Validation Set
 
@@ -436,8 +424,8 @@ batch_size, epochs'''
         pprint(_hyperparameters)
         print('\n> Starting data training\n')
 
-        history = parallel_model.fit_generator(
-            generator=generator,
+        history = ai_model.fit(
+            x=generator,
             epochs=_hyperparameters.epochs,
             steps_per_epoch=epoch_steps,
             use_multiprocessing=True,
@@ -451,7 +439,7 @@ batch_size, epochs'''
         plt.show()
 
         # Return
-        return parallel_model
+        return ai_model
 
     def save(self, _model):
         """Save the Recurrent Neural Network model.
@@ -601,6 +589,14 @@ batch_size, epochs'''
 
     def _batch_generator(self, batch_size, sequence_length):
         """Create generator function to create random batches of training-data.
+
+        Instead of training the Recurrent Neural Network on the complete
+        sequences, we use this function to create a batch of
+        shorter sub-sequences picked at random from the training-data.
+
+        This gives us a random batch of 'batch_size' sequences, each sequence
+        having 'sequence_length' observations, and each observation having
+        X feature-vector input-signals and Y class-vector output-signals.
 
         Args:
             batch_size: Size of batch

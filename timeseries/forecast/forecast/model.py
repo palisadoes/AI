@@ -282,7 +282,7 @@ class RNNGRU(object):
             _hyperparameters['units'],
             return_sequences=True,
             recurrent_dropout=_hyperparameters['dropout'],
-            input_shape=(None, self._training_vector_count,)))
+            input_shape=(None, self._training_vector_count)))
 
         for _ in range(1, _hyperparameters['layers']):
             serial_model.add(GRU(
