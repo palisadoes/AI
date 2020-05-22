@@ -1,9 +1,11 @@
 """Module to process data files."""
 
 from collections import namedtuple
+from datetime import datetime
 
 # PIP3 package imports
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
@@ -61,8 +63,11 @@ class Data():
         dataframe = pd.DataFrame()
         for index in range(self._shift, 0, -1):
             dataframe['t-{}'.format(index)] = self._df['value'].shift(index)
+
+        dataframe['random'] = np.random.rand(self._df['value'].shape[0])
+
         dataframe['value'] = self._df.values
-        return dataframe[self._shift:]
+        return dataframe[self._shift + 1:]
 
     def split(self, test_size=0.2):
         """Split vectors into training, test and validation sets.

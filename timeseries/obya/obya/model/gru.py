@@ -43,8 +43,8 @@ class Model():
     """
 
     def __init__(
-            self, _data, batch_size=5, epochs=20,
-            sequence_length=20, warmup_steps=50, dropout=0.2,
+            self, _data, batch_size=128, epochs=20,
+            sequence_length=20, warmup_steps=50, dropout=0.1,
             layers=3, patience=5, units=256, multigpu=False):
         """Instantiate the class.
 
