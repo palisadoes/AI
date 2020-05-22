@@ -423,6 +423,14 @@ batch_size, epochs'''
             validation_data=validation_data,
             callbacks=callbacks)
 
+        # history = ai_model.fit(
+        #     self._split.x_train,
+        #     self._split.y_train,
+        #     epochs=_hyperparameters.epochs,
+        #     batch_size=_hyperparameters.batch_size,
+        #     validation_split=.5,
+        #     shuffle=False)
+
         print("Ploting History")
         plt.plot(history.history['loss'], label='Parallel Training Loss')
         plt.plot(history.history['val_loss'], label='Parallel Validation Loss')
