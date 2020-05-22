@@ -33,7 +33,7 @@ from tensorflow.keras.backend import square, mean
 from obya.model import memory
 
 
-class Model(object):
+class Model():
     """Process data for ingestion.
 
     Roughly based on:
@@ -45,8 +45,7 @@ class Model(object):
     def __init__(
             self, _data, batch_size=5, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0.2,
-            layers=3, patience=5, units=256, display=False,
-            multigpu=False):
+            layers=3, patience=5, units=256, multigpu=False):
         """Instantiate the class.
 
         Args:
@@ -65,7 +64,6 @@ class Model(object):
 
         # Initialize key variables
         self._warmup_steps = warmup_steps
-        self._display = display
         if multigpu is True:
             self._gpus = len(self._processors.gpus)
         else:
@@ -138,8 +136,7 @@ batch_size, epochs'''
             self._split.y_train.values.shape))
 
         print('> Number of Samples: {}'.format(
-            len(self._split.x_train) + len(
-                self._split.x_test) + len(self._split.x_validate)))
+            len(self._split.x_train) + len(self._split.x_test)))
 
         print('> Number of Training Samples: {}'.format(
             self._split.x_train.values.shape[0]))
@@ -197,8 +194,8 @@ batch_size, epochs'''
         # Initialize key variables
         use_sigmoid = False
         (training_rows,
-         vector_count_features) = self._split.x_train.values.shape
-        vector_count_classes = self._split.y_train.values.shape[1]
+         x_feature_count) = self._split.x_train.values.shape
+        y_feature_count = self._split.y_train.values.shape[1]
 
         if params is None:
             _hyperparameters = self._hyperparameters
@@ -240,7 +237,7 @@ batch_size, epochs'''
             _hyperparameters.units,
             return_sequences=True,
             recurrent_dropout=_hyperparameters.dropout,
-            input_shape=(None, vector_count_features)))
+            input_shape=(None, x_feature_count)))
 
         for _ in range(1, _hyperparameters.layers):
             ai_model.add(GRU(
@@ -262,7 +259,7 @@ batch_size, epochs'''
 
         if bool(use_sigmoid) is True:
             ai_model.add(
-                Dense(vector_count_classes, activation='sigmoid'))
+                Dense(y_feature_count, activation='sigmoid'))
 
         '''
         A problem with using the Sigmoid activation function, is that we can
@@ -288,7 +285,7 @@ batch_size, epochs'''
             init = RandomUniform(minval=-0.05, maxval=0.05)
 
             ai_model.add(Dense(
-                vector_count_classes,
+                y_feature_count,
                 activation='linear',
                 kernel_initializer=init))
 
@@ -304,6 +301,8 @@ batch_size, epochs'''
             loss=self._loss_mse_warmup,
             optimizer=optimizer,
             metrics=['accuracy'])
+
+        # Display layers
 
         '''
         This is a very small model with only two layers. The output shape of
@@ -349,8 +348,8 @@ batch_size, epochs'''
         '''
 
         validation_data = (
-            np.expand_dims(self._scaled_split.x_train, axis=0),
-            np.expand_dims(self._scaled_split.y_train, axis=0)
+            np.expand_dims(self._scaled_split.x_test, axis=0),
+            np.expand_dims(self._scaled_split.y_test, axis=0)
         )
 
         # Callback Functions
@@ -611,21 +610,21 @@ batch_size, epochs'''
         """
         # Intialize key variables
         (training_rows,
-         vector_count_features) = self._split.x_train.values.shape
-        vector_count_classes = self._split.y_train.values.shape[1]
+         x_feature_count) = self._split.x_train.values.shape
+        y_feature_count = self._split.y_train.values.shape[1]
 
         # Infinite loop.
         while True:
             # Allocate a new array for the batch of input-signals.
             # Number of features in x_train.
             x_shape = (
-                batch_size, sequence_length, vector_count_features)
+                batch_size, sequence_length, x_feature_count)
             x_batch = np.zeros(shape=x_shape, dtype=np.float16)
 
             # Allocate a new array for the batch of output-signals.
             # Number of features in y_train.
             y_shape = (
-                batch_size, sequence_length, vector_count_classes)
+                batch_size, sequence_length, y_feature_count)
             y_batch = np.zeros(shape=y_shape, dtype=np.float16)
 
             # Fill the batch with random sequences of data.

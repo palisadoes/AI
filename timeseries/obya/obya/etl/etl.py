@@ -41,12 +41,7 @@ class Data():
 
         """
         # Return
-        splits = self.split()
-        vectors = pd.concat(
-            [splits.x_train, splits.x_test, splits.x_validate])
-        classes = pd.concat(
-            [splits.y_train, splits.y_test, splits.y_validate])
-        result = pd.concat([vectors, classes], axis=1)
+        result = self._vectors()
         return result
 
     def _vectors(self):
@@ -79,30 +74,24 @@ class Data():
 
         Returns:
             result: NamedTuple with the following attributes:
-                'x_train, x_test, x_validate, y_train, y_test, y_validate'
+                'x_train, x_test, y_train, y_test'
 
         """
         # Initialize key variables
-        Splits = namedtuple(
-            'Splits',
-            'x_train, x_test, x_validate, y_train, y_test, y_validate')
+        Splits = namedtuple('Splits', 'x_train, x_test, y_train, y_test')
 
         # X-Vectors are all columns except ['value']
         # ['value'] is always the right most column
-        (x_train, x_later, y_train, y_later) = train_test_split(
+        (x_train, x_test, y_train, y_test) = train_test_split(
             self._xy.feature_vectors,
             self._xy.value_vectors,
             test_size=test_size,
             shuffle=False)
-        (x_test, x_validate, y_test, y_validate) = train_test_split(
-            x_later,
-            y_later,
-            test_size=0.5,
-            shuffle=False)
 
         result = Splits(
-            x_train=x_train, x_test=x_test, x_validate=x_validate,
-            y_train=y_train, y_test=y_test, y_validate=y_validate)
+            x_train=x_train, x_test=x_test,
+            y_train=y_train, y_test=y_test
+        )
         return result
 
     def scaled_split(self):
@@ -113,14 +102,13 @@ class Data():
 
         Returns:
             result: NamedTuple with the following attributes:
-                'x_train, x_test, x_validate, y_train, y_test, y_validate'
+                'x_train, x_test, y_train, y_test'
 
         """
         # Initialize key variables
         ScaledSplits = namedtuple(
             'ScaledSplits',
-            '''x_train, x_test, x_validate, x_scaler, \
-y_train, y_test, y_validate, y_scaler''')
+            '''x_train, x_test, x_scaler, y_train, y_test, y_scaler''')
         splits = self.split()
 
         '''
@@ -158,10 +146,8 @@ y_train, y_test, y_validate, y_scaler''')
         transform() on the same data.
         '''
         x_scaler = MinMaxScaler()
-        _ = x_scaler.fit_transform(self._xy.feature_vectors.values)
-        x_train = x_scaler.transform(splits.x_train.values)
+        x_train = x_scaler.fit_transform(splits.x_train.values)
         x_test = x_scaler.transform(splits.x_test.values)
-        x_validate = x_scaler.transform(splits.x_validate.values)
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -172,20 +158,16 @@ y_train, y_test, y_validate, y_scaler''')
         '''
 
         y_scaler = MinMaxScaler()
-        _ = y_scaler.fit_transform(self._xy.value_vectors.values)
-        y_train = y_scaler.transform(splits.y_train.values)
+        y_train = y_scaler.fit_transform(splits.y_train.values)
         y_test = y_scaler.transform(splits.y_test.values)
-        y_validate = y_scaler.transform(splits.y_validate.values)
 
         # Return
         result = ScaledSplits(
             x_train=x_train,
             x_test=x_test,
-            x_validate=x_validate,
             x_scaler=x_scaler,
             y_train=y_train,
             y_test=y_test,
-            y_validate=y_validate,
             y_scaler=y_scaler)
         return result
 
