@@ -207,6 +207,33 @@ batch_size, epochs'''
         # Calculate the steps per epoch
         epoch_steps = int(training_rows / _hyperparameters.batch_size) + 1
 
+        # Create the batch-generator.
+        generator = self._batch_generator(
+            _hyperparameters.batch_size,
+            _hyperparameters.sequence_length)
+
+        # Validation Set
+
+        '''
+        The neural network trains quickly so we can easily run many training
+        epochs. But then there is a risk of overfitting the model to the
+        training-set so it does not generalize well to unseen data. We will
+        therefore monitor the model's performance on the test-set after each
+        epoch and only save the model's weights if the performance is improved
+        on the test-set.
+
+        The batch-generator randomly selects a batch of short sequences from
+        the training-data and uses that during training. But for the
+        validation-data we will instead run through the entire sequence from
+        the test-set and measure the prediction accuracy on that entire
+        sequence.
+        '''
+
+        validation_data = (
+            np.expand_dims(self._scaled_split.x_test, axis=0),
+            np.expand_dims(self._scaled_split.y_test, axis=0)
+        )
+
         '''
         Instantiate the base model (or "template" model).
         We recommend doing this with under a CPU device scope,
@@ -313,44 +340,6 @@ batch_size, epochs'''
         '''
         print('\n> Summary (Parallel):\n')
         print(ai_model.summary())
-
-        # Create the batch-generator.
-        generator = self._batch_generator(
-            _hyperparameters.batch_size,
-            _hyperparameters.sequence_length)
-
-        # x_batch, y_batch = next(generator)
-        # print(x_batch.shape)
-        # print(y_batch.shape)
-        # seq = x_batch[0, :, 0]
-        # plt.plot(seq)
-        # plt.show()
-        # seq = y_batch[0, :, 0]
-        # plt.plot(seq)
-        # plt.show()
-        # sys.exit(0)
-
-        # Validation Set
-
-        '''
-        The neural network trains quickly so we can easily run many training
-        epochs. But then there is a risk of overfitting the model to the
-        training-set so it does not generalize well to unseen data. We will
-        therefore monitor the model's performance on the test-set after each
-        epoch and only save the model's weights if the performance is improved
-        on the test-set.
-
-        The batch-generator randomly selects a batch of short sequences from
-        the training-data and uses that during training. But for the
-        validation-data we will instead run through the entire sequence from
-        the test-set and measure the prediction accuracy on that entire
-        sequence.
-        '''
-
-        validation_data = (
-            np.expand_dims(self._scaled_split.x_test, axis=0),
-            np.expand_dims(self._scaled_split.y_test, axis=0)
-        )
 
         # Callback Functions
 
