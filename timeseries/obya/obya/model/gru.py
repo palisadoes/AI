@@ -27,7 +27,6 @@ from keras.optimizers import RMSprop
 from keras.initializers import RandomUniform
 from keras.callbacks import (
     EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
-from keras.utils import multi_gpu_model
 from tensorflow.keras.backend import square, mean
 
 # Custom package imports
@@ -44,7 +43,7 @@ class Model(object):
     """
 
     def __init__(
-            self, _data, batch_size=64, epochs=20,
+            self, _data, batch_size=5, epochs=20,
             sequence_length=20, warmup_steps=50, dropout=0.2,
             layers=3, patience=5, units=256, display=False,
             multigpu=False):
@@ -62,13 +61,13 @@ class Model(object):
 
         """
         # Setup memory
-        gpus = memory.setup()
+        self._processors = memory.setup()
 
         # Initialize key variables
         self._warmup_steps = warmup_steps
         self._display = display
         if multigpu is True:
-            self._gpus = gpus
+            self._gpus = len(self._processors.gpus)
         else:
             self._gpus = 1
 
@@ -220,8 +219,12 @@ batch_size, epochs'''
 
         NOTE: multi_gpu_model values will be way off if you don't do this.
         '''
-        with tf.device('/cpu:0'):
-            ai_model = Sequential()
+        if bool(self._processors.gpus) is True:
+            with tf.device(self._processors.gpus[0]):
+                ai_model = Sequential()
+        else:
+            with tf.device(self._processors.cpus[0]):
+                ai_model = Sequential()
 
         '''
         We can now add a Gated Recurrent Unit (GRU) to the network. This will

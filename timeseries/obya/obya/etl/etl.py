@@ -158,10 +158,10 @@ y_train, y_test, y_validate, y_scaler''')
         transform() on the same data.
         '''
         x_scaler = MinMaxScaler()
-        _ = x_scaler.fit_transform(self._xy.feature_vectors)
-        x_train = x_scaler.transform(splits.x_train)
-        x_test = x_scaler.transform(splits.x_test)
-        x_validate = x_scaler.transform(splits.x_validate)
+        _ = x_scaler.fit_transform(self._xy.feature_vectors.values)
+        x_train = x_scaler.transform(splits.x_train.values)
+        x_test = x_scaler.transform(splits.x_test.values)
+        x_validate = x_scaler.transform(splits.x_validate.values)
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -172,10 +172,10 @@ y_train, y_test, y_validate, y_scaler''')
         '''
 
         y_scaler = MinMaxScaler()
-        _ = y_scaler.fit_transform(self._xy.value_vectors)
-        y_train = y_scaler.transform(splits.y_train)
-        y_test = y_scaler.transform(splits.y_test)
-        y_validate = y_scaler.transform(splits.y_validate)
+        _ = y_scaler.fit_transform(self._xy.value_vectors.values)
+        y_train = y_scaler.transform(splits.y_train.values)
+        y_test = y_scaler.transform(splits.y_test.values)
+        y_validate = y_scaler.transform(splits.y_validate.values)
 
         # Return
         result = ScaledSplits(

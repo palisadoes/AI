@@ -4,6 +4,7 @@
 # Standard imports
 from __future__ import print_function
 import argparse
+from pprint import pprint
 
 # PIP3 packages
 import pandas as pd
@@ -25,6 +26,8 @@ def main():
     args = arguments()
     df_ = pd.read_csv(args.filename, names=['timestamp', 'value'], index_col=0)
     # df_ = df_.div(100)
+    df_ = df_.div(100).tail(100)
+
     data = etl.Data(df_)
 
     # result = data.split()
