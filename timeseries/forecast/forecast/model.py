@@ -5,12 +5,14 @@
 from __future__ import print_function
 import time
 import os
+import sys
 from copy import deepcopy
 from pprint import pprint
 import gc
 
 # PIP3 imports.
 import numpy as np
+import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
@@ -124,11 +126,13 @@ class RNNGRU(object):
 
         # Create test and training arrays for VALIDATION and EVALUATION
         (x_train,
-         x_validation,
          _x_test,
          self._y_train,
-         self._y_validation,
-         self._y_test) = self._data.train_validation_test_split()
+         self._y_test) = self._data.train_test_split()
+
+        print(pd.DataFrame(x_train).isnull().any())
+        print(pd.DataFrame(_x_test).isnull().any())
+        sys.exit(0)
 
         (self.training_rows, self._training_vector_count) = x_train.shape
         (self.test_rows, _) = _x_test.shape
@@ -170,9 +174,7 @@ class RNNGRU(object):
         '''
 
         self._x_scaler = MinMaxScaler()
-        _ = self._x_scaler.fit_transform(self._data.vectors())
-        self._x_train_scaled = self._x_scaler.transform(x_train)
-        self._x_validation_scaled = self._x_scaler.transform(x_validation)
+        self._x_train_scaled = self._x_scaler.fit_transform(x_train)
         self._x_test_scaled = self._x_scaler.transform(_x_test)
 
         '''
@@ -184,10 +186,7 @@ class RNNGRU(object):
         '''
 
         self._y_scaler = MinMaxScaler()
-        _ = self._y_scaler.fit_transform(self._data.classes())
-        self._y_train_scaled = self._y_scaler.transform(self._y_train)
-        self._y_validation_scaled = self._y_scaler.transform(
-            self._y_validation)
+        self._y_train_scaled = self._y_scaler.fit_transform(self._y_train)
         self._y_test_scaled = self._y_scaler.transform(self._y_test)
 
         # Print stuff
@@ -403,8 +402,8 @@ class RNNGRU(object):
         sequence.
         '''
 
-        validation_data = (np.expand_dims(self._x_validation_scaled, axis=0),
-                           np.expand_dims(self._y_validation_scaled, axis=0))
+        validation_data = (np.expand_dims(self._x_test_scaled, axis=0),
+                           np.expand_dims(self._y_test_scaled, axis=0))
 
         # Callback Functions
 
@@ -858,8 +857,7 @@ class RNNGRU(object):
 
         # Get the complete length of the dataset
         dataset_size = (
-            self._y_train.shape[0] +
-            self._y_validation.shape[0] + self._y_test.shape[0])
+            self._y_train.shape[0] + self._y_test.shape[0])
         delta = len(self._y_current) - dataset_size
 
         # Variables for date formatting

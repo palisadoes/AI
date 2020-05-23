@@ -4,7 +4,6 @@
 import time
 import csv
 import os
-import sys
 
 # PIP imports
 import numpy as np
@@ -49,7 +48,7 @@ def save_trials(trials, input_filename):
             writer.writerow(hyperparameters)
 
 
-def train_validation_test_split(vectors, classes, test_size):
+def train_test_split(vectors, classes, test_size):
     """Create contiguous (not random) training and test data.
 
     train_test_split in sklearn.model_selection does this randomly and is
@@ -71,21 +70,18 @@ def train_validation_test_split(vectors, classes, test_size):
     # Initialize key variables
     num_data = vectors.shape[0]
     num_test = int(test_size * num_data)
-    num_validation = int(test_size * num_data)
-    num_train = num_data - (num_test + num_validation)
+    num_train = num_data - num_test
 
     # Split vectors
     x_train = vectors[:num_train]
-    x_validation = vectors[num_train:num_train + num_validation]
-    x_test = vectors[num_train + num_validation:]
+    x_test = vectors[num_train:]
 
     # Split classes
     y_train = classes[:num_train]
-    y_validation = classes[num_train:num_train + num_validation]
-    y_test = classes[num_train + num_validation:]
+    y_test = classes[num_train:]
 
     # Return
-    result = (x_train, x_validation, x_test, y_train, y_validation, y_test)
+    result = (x_train, x_test, y_train, y_test)
     return result
 
 

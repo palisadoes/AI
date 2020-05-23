@@ -1,19 +1,16 @@
 """Module to process data files."""
 
 from collections import namedtuple
-from datetime import datetime
 
 # PIP3 package imports
 import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
 
 class Data():
     """Class for processing data."""
 
-    def __init__(self, df_, shift=10):
+    def __init__(self, df_, shift=1):
         """Intialize the class.
 
         Args:
@@ -61,13 +58,10 @@ class Data():
         """
         # Create vectors
         dataframe = pd.DataFrame()
-        for index in range(self._shift, 0, -1):
-            dataframe['t-{}'.format(index)] = self._df['value'].shift(index)
-
-        dataframe['random'] = np.random.rand(self._df['value'].shape[0])
-
-        dataframe['value'] = self._df.values
-        return dataframe[self._shift + 1:]
+        dataframe['t-1'] = self._df['value']
+        dataframe['value'] = self._df['value'].shift(-self._shift)
+        dataframe = dataframe[0: -self._shift]
+        return dataframe
 
     def split(self, test_size=0.2):
         """Split vectors into training, test and validation sets.
@@ -85,13 +79,15 @@ class Data():
         # Initialize key variables
         Splits = namedtuple('Splits', 'x_train, x_test, y_train, y_test')
 
-        # X-Vectors are all columns except ['value']
-        # ['value'] is always the right most column
-        (x_train, x_test, y_train, y_test) = train_test_split(
-            self._xy.feature_vectors,
-            self._xy.value_vectors,
-            test_size=test_size,
-            shuffle=False)
+        num_data = len(self._xy.feature_vectors)
+        num_test = int(test_size * num_data)
+        num_train = num_data - num_test
+
+        # Split into test and trainint data
+        x_train = self._xy.feature_vectors[0:num_train]
+        x_test = self._xy.feature_vectors[num_train:]
+        y_train = self._xy.value_vectors[0:num_train]
+        y_test = self._xy.value_vectors[num_train:]
 
         result = Splits(
             x_train=x_train, x_test=x_test,
@@ -151,8 +147,8 @@ class Data():
         transform() on the same data.
         '''
         x_scaler = MinMaxScaler()
-        x_train = x_scaler.fit_transform(splits.x_train.values)
-        x_test = x_scaler.transform(splits.x_test.values)
+        x_train = x_scaler.fit_transform(splits.x_train)
+        x_test = x_scaler.transform(splits.x_test)
 
         '''
         The target-data comes from the same data-set as the input-signals,
@@ -163,8 +159,8 @@ class Data():
         '''
 
         y_scaler = MinMaxScaler()
-        y_train = y_scaler.fit_transform(splits.y_train.values)
-        y_test = y_scaler.transform(splits.y_test.values)
+        y_train = y_scaler.fit_transform(splits.y_train)
+        y_test = y_scaler.transform(splits.y_test)
 
         # Return
         result = ScaledSplits(
@@ -194,8 +190,18 @@ def _xy(vectors):
 
     # X-Vectors are all columns except ['value']
     # ['value'] is always the right most column
+
+    feature_vectors = vectors.iloc[:, : len(vectors.columns) - 1].to_numpy()
+    if len(feature_vectors.shape) == 1:
+        feature_vectors = feature_vectors.reshape(-1, 1)
+
+    value_vectors = vectors['value'].to_numpy()
+    if len(value_vectors.shape) == 1:
+        value_vectors = value_vectors.reshape(-1, 1)
+
     result = VectorsValues(
-        feature_vectors=vectors.iloc[:, : len(vectors.columns) - 1],
-        value_vectors=pd.DataFrame(vectors['value'], columns=['value'])
+        feature_vectors=feature_vectors,
+        value_vectors=value_vectors
     )
+
     return result

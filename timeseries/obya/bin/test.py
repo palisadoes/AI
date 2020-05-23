@@ -25,9 +25,6 @@ def main():
     # Import data
     args = arguments()
     df_ = pd.read_csv(args.filename, names=['timestamp', 'value'], index_col=0)
-    # df_ = df_.div(100)
-    df_ = df_.div(100)
-
     data = etl.Data(df_)
 
     # result = data.split()

@@ -381,8 +381,8 @@ class Data(object):
             _vectors, _classes, self._shift_steps)
 
         # Work only with training data
-        (vectors, _, __,
-         classes, ___, ____) = general.train_validation_test_split(
+        (vectors, _,
+         classes, ___) = general.train_test_split(
              nanless_vectors, nanless_classes, self._test_size)
 
         # Return
@@ -590,7 +590,7 @@ class DataGRU(Data):
         result = self._vectors['all'][training_count:]
         return result
 
-    def train_validation_test_split(self):
+    def train_test_split(self):
         """Create contiguous (not random) training and test data.
 
         train_test_split in sklearn.model_selection does this randomly and is
@@ -607,8 +607,7 @@ class DataGRU(Data):
         # Return
         vectors = self._vectors['NoNaNs']
         classes = self._classes['NoNaNs']
-        result = general.train_validation_test_split(
-            vectors, classes, self._test_size)
+        result = general.train_test_split(vectors, classes, self._test_size)
         return result
 
     def _create_vector_classes(self):
