@@ -26,6 +26,20 @@ class Data():
         self._df = df_
         self._xy = _xy(self._vectors())
 
+    def labels(self):
+        """Get class labels.
+
+        Args:
+            None
+
+        Returns:
+            result: list of labels
+
+        """
+        # Return
+        result = ['value']
+        return result
+
     def vectors(self):
         """Recreate vectors.
 

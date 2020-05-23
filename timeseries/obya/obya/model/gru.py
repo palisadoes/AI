@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-"""Script to forecast data using RNN AI using GRU feedback."""
+"""Module forecast data using RNN AI using GRU feedback."""
 
 # Standard imports
 from __future__ import print_function
-import time
 import os
 from copy import deepcopy
 from pprint import pprint
@@ -11,6 +9,7 @@ import gc
 from collections import namedtuple
 
 # PIP3 imports.
+import yaml
 import numpy as np
 from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
@@ -20,7 +19,7 @@ from hyperopt import STATUS_OK
 import tensorflow as tf
 
 # Keras imports
-from keras.models import Sequential, model_from_yaml
+from keras.models import Sequential
 from keras.layers import Dense, GRU
 from keras.optimizers import RMSprop
 from keras.initializers import RandomUniform
@@ -30,6 +29,8 @@ from tensorflow.keras.backend import square, mean
 
 # Custom package imports
 from obya.model import memory
+from obya.model import files
+from obya import HyperParameters, WARMUP_STEPS
 
 
 class Model():
@@ -42,8 +43,8 @@ class Model():
     """
 
     def __init__(
-            self, _data, batch_size=256, epochs=20,
-            sequence_length=1500, dropout=0.1,
+            self, _data, identifier, batch_size=256, epochs=20,
+            sequence_length=500, dropout=0.1,
             layers=1, patience=5, units=128, multigpu=False):
         """Instantiate the class.
 
@@ -51,7 +52,6 @@ class Model():
             data: etl.Data object
             batch_size: Size of batch
             sequence_length: Length of vectors for for each target
-            warmup_steps:
             display: Show charts of results if True
 
         Returns:
@@ -66,33 +66,20 @@ class Model():
             self._gpus = len(self._processors.gpus)
         else:
             self._gpus = 1
-        self._batch_size = batch_size * self._gpus
-        self._sequence_length = sequence_length
 
         # Set key file locations
-        path_prefix = '/tmp/keras-{}'.format(int(time.time()))
-        Files = namedtuple(
-            'Files', 'checkpoint, model_weights, model_parameters')
-        self._files = Files(
-            checkpoint='{}.checkpoint.h5'.format(path_prefix),
-            model_weights='{}.weights.h5'.format(path_prefix),
-            model_parameters='{}.model.yaml'.format(path_prefix)
-            )
+        self._files = files.files(identifier)
 
         # Initialize parameters
-        HyperParameters = namedtuple(
-            'HyperParameters',
-            '''units, dropout, layers, sequence_length, patience, \
-batch_size, epochs'''
-        )
         self._hyperparameters = HyperParameters(
             units=abs(units),
             dropout=abs(dropout),
             layers=int(abs(layers)),
             sequence_length=abs(sequence_length),
             patience=abs(patience),
-            batch_size=int(self._batch_size),
-            epochs=abs(epochs)
+            batch_size=int(batch_size * self._gpus),
+            epochs=abs(epochs),
+            steps_per_epoch=10
         )
 
         # Delete any stale checkpoint file
@@ -184,7 +171,7 @@ batch_size, epochs'''
         print('> Scaled Training Targets Shape: {}'.format(
             scaled.y_train.shape))
 
-    def model(self, params=None):
+    def train(self, params=None):
         """Create the Recurrent Neural Network.
 
         Args:
@@ -211,9 +198,7 @@ batch_size, epochs'''
             _hyperparameters.batch_size = int(
                 _hyperparameters.batch_size * self._gpus)
 
-        # Calculate the steps per epoch
-        epoch_steps = int(training_rows / _hyperparameters.batch_size) + 1
-
+        # Prepare the generator
         Generator = namedtuple(
             'Generator',
             '''batch_size, sequence_length, x_feature_count, y_feature_count, \
@@ -384,7 +369,7 @@ training_rows, y_train_scaled, x_train_scaled''')
         '''
 
         callback_tensorboard = TensorBoard(
-            log_dir='/tmp/23_logs/', histogram_freq=0, write_graph=False
+            log_dir=self._files.log_dir, histogram_freq=0, write_graph=False
         )
 
         '''
@@ -433,7 +418,7 @@ training_rows, y_train_scaled, x_train_scaled''')
         history = ai_model.fit(
             x=generator,
             epochs=_hyperparameters.epochs,
-            steps_per_epoch=100,
+            steps_per_epoch=_hyperparameters.steps_per_epoch,
             validation_data=validation_data,
             callbacks=callbacks)
 
@@ -443,10 +428,10 @@ training_rows, y_train_scaled, x_train_scaled''')
         plt.legend()
         plt.show()
 
-        # Return
-        return ai_model
+        # Save model
+        self.save(ai_model, history)
 
-    def save(self, _model):
+    def save(self, _model, history):
         """Save the Recurrent Neural Network model.
 
         Args:
@@ -456,7 +441,11 @@ training_rows, y_train_scaled, x_train_scaled''')
             _model: RNN model
 
         """
-        # Serialize model to JSON
+        # Save history to file
+        with open(self._files.history, 'w') as yaml_file:
+            yaml.dump(history.history, yaml_file, default_flow_style=False)
+
+        # Serialize model to YAML and save
         model_yaml = _model.to_yaml()
         with open(self._files.model_parameters, 'w') as yaml_file:
             yaml_file.write(model_yaml)
@@ -465,34 +454,11 @@ training_rows, y_train_scaled, x_train_scaled''')
         _model.save_weights(self._files.model_weights)
         print('> Saved model to disk')
 
-    def load_model(self):
-        """Load the Recurrent Neural Network model from disk.
-
-        Args:
-            None
-
-        Returns:
-            _model: RNN model
-
-        """
-        # Load yaml and create model
-        print('> Loading model from disk')
-        with open(self._files.model_parameters, 'r') as yaml_file:
-            loaded_model_yaml = yaml_file.read()
-        _model = model_from_yaml(loaded_model_yaml)
-
-        # Load weights into new model
-        _model.load_weights(self._files.model_weights, by_name=True)
-        print('> Finished loading model from disk')
-
-        # Return
-        return _model
-
-    def evaluate(self, _model):
+    def evaluate(self):
         """Evaluate the model.
 
         Args:
-            _model: Model to evaluate
+            None
 
         Returns:
             None
@@ -500,6 +466,9 @@ training_rows, y_train_scaled, x_train_scaled''')
         """
         # Initialize key variables
         scaled = self._data.scaled_split()
+
+        # Get model from disk
+        _model = files.load_model(self._identifier)
 
         '''
         Because we use early-stopping when training the model, it is possible
@@ -553,7 +522,9 @@ training_rows, y_train_scaled, x_train_scaled''')
         scaled = self._data.scaled_split()
         scaled_vectors = scaled.x_test
         test_classes = scaled.y_test
-        model = deepcopy(self.model(params=params))
+
+        # Create model
+        model = deepcopy(self.train(params=params))
 
         # Input-signals for the model.
         x_values = np.expand_dims(scaled_vectors, axis=0)
@@ -591,7 +562,8 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         """
         # Delete
-        os.remove(self._files.checkpoint)
+        if os.path.exists(self._files.checkpoint):
+            os.remove(self._files.checkpoint)
 
 
 def _loss_mse_warmup(y_true, y_pred):
@@ -619,15 +591,13 @@ def _loss_mse_warmup(y_true, y_pred):
         mse: Mean Squared Error
 
     """
-    warmup_steps = 50
-
     # The shape of both input tensors are:
     # [batch_size, sequence_length, y_feature_count].
 
     # Ignore the "warmup" parts of the sequences
     # by taking slices of the tensors.
-    y_true_slice = y_true[:, warmup_steps:, :]
-    y_pred_slice = y_pred[:, warmup_steps:, :]
+    y_true_slice = y_true[:, WARMUP_STEPS:, :]
+    y_pred_slice = y_pred[:, WARMUP_STEPS:, :]
 
     # These sliced tensors both have this shape:
     # [batch_size, sequence_length - warmup_steps, y_feature_count]
@@ -639,8 +609,15 @@ def _loss_mse_warmup(y_true, y_pred):
 
 
 def _batch_generator(parameters):
-    """
-    Generator function for creating random batches of training-data.
+    """Create generator function to create random batches of training-data.
+
+    Args:
+        parameters: Named tuple of parameters to be used
+
+    Returns:
+
+        (x_batch, y_batch)
+
     """
     # Infinite loop.
     while True:
