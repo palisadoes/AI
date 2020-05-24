@@ -6,6 +6,9 @@ from collections import namedtuple
 import yaml
 from keras.models import model_from_yaml
 
+# Custom package imports
+from obya.model import memory
+
 
 def files(identifier):
     """Create well known locations for model files.
@@ -42,6 +45,9 @@ def load_model(identifier):
         _model: RNN model
 
     """
+    # Turn off verbose logging
+    memory.setup()
+
     # Initialize key Variables
     _files = files(identifier)
 
