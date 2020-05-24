@@ -44,7 +44,7 @@ class Model():
 
     def __init__(
             self, _data, identifier, batch_size=256, epochs=20,
-            sequence_length=500, dropout=0.1,
+            sequence_length=500, dropout=0.1, divider=1,
             layers=1, patience=5, units=128, multigpu=False):
         """Instantiate the class.
 
@@ -75,7 +75,7 @@ class Model():
         # Set steps per epoch
         normal = self._data.split()
         (training_rows, _) = normal.x_train.shape
-        steps_per_epoch = int((training_rows // _batch_size) / 10)
+        steps_per_epoch = int((training_rows // _batch_size) / divider)
 
         # Set key file locations
         self._files = files.files(identifier)
@@ -428,18 +428,6 @@ training_rows, y_train_scaled, x_train_scaled''')
             steps_per_epoch=_hyperparameters.steps_per_epoch,
             validation_data=validation_data,
             callbacks=callbacks)
-
-        print("Ploting History")
-        plt.plot(history.history['loss'], label='Parallel Training Loss')
-        plt.plot(history.history['val_loss'], label='Parallel Validation Loss')
-        plt.legend()
-        plt.show()
-
-        for key, value in history.history.items():
-            print('--------------------------------')
-            print('''\
-\nkey: {}\ntype value: {}\ntype element: {}\nvalue: {}\n'''.format(
-                key, type(value), type(value[0]), value))
 
         # Save model
         self.save(ai_model, history)
