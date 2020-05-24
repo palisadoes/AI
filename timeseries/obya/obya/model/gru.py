@@ -75,7 +75,7 @@ class Model():
         # Set steps per epoch
         normal = self._data.split()
         (training_rows, _) = normal.x_train.shape
-        steps_per_epoch = int((training_rows // _batch_size) / 2)
+        steps_per_epoch = int((training_rows // _batch_size) / 10)
 
         # Set key file locations
         self._files = files.files(identifier)
