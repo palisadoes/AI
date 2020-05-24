@@ -67,6 +67,15 @@ class Model():
             self._gpus = len(self._processors.gpus)
         else:
             self._gpus = 1
+        _batch_size = int(batch_size * self._gpus)
+
+        # Get data
+        self._data = _data
+
+        # Set steps per epoch
+        normal = self._data.split()
+        (training_rows, _) = normal.x_train.shape
+        steps_per_epoch = int((training_rows // _batch_size) / 2)
 
         # Set key file locations
         self._files = files.files(identifier)
@@ -78,17 +87,14 @@ class Model():
             layers=int(abs(layers)),
             sequence_length=abs(sequence_length),
             patience=abs(patience),
-            batch_size=int(batch_size * self._gpus),
+            batch_size=_batch_size,
             epochs=abs(epochs),
-            steps_per_epoch=10
+            steps_per_epoch=steps_per_epoch
         )
 
         # Delete any stale checkpoint file
         if os.path.exists(self._files.checkpoint) is True:
             os.remove(self._files.checkpoint)
-
-        # Get data
-        self._data = _data
 
     def info(self):
         """Print out information on the dataset.

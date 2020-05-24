@@ -1,7 +1,6 @@
 """Module forecast data using RNN AI using GRU feedback."""
 
 import time
-from pprint import pprint
 
 # PIP3 imports.
 import numpy as np
@@ -150,10 +149,10 @@ class Plot():
             test_offset = test_rows + delta
 
             # Datetimes to use for testing
-            datetimes = datetimes[-test_offset:][start_idx:]
+            datetimes = datetimes[-test_offset:][start_idx:end_idx]
 
             # Only get current values that are a part of the test data.
-            current = y_combined[-test_offset:][start_idx:]
+            current = y_combined[-test_offset:][start_idx:end_idx]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
@@ -184,7 +183,7 @@ class Plot():
             axis.plot(
                 datetimes[:len(signal_true)],
                 signal_true,
-                label='Current +{}'.format(self._data.labels()[signal]))
+                label='Current + {}'.format(self._data.labels()[signal]))
             axis.plot(
                 datetimes[:len(signal_pred)],
                 signal_pred,

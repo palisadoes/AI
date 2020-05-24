@@ -22,6 +22,7 @@ def main():
     """
     # Initialize key variables
     identifier = 'test'
+    length = 1000
 
     # Import data
     args = arguments()
@@ -38,8 +39,8 @@ def main():
 
     _plot = plot.Plot(data, identifier)
     _plot.history()
-    _plot.train(0)
-    _plot.test(0)
+    _plot.train(0, length=length)
+    _plot.test(0, length=length)
 
 
 def arguments():
