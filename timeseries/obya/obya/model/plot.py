@@ -1,6 +1,7 @@
 """Module forecast data using RNN AI using GRU feedback."""
 
 import time
+from pprint import pprint
 
 # PIP3 imports.
 import numpy as np
@@ -61,7 +62,21 @@ class Plot():
         plt.legend()
         plt.show()
 
-    def train(self, model, start_idx, length=100):
+    def train(self, start_idx, length=100):
+        """Plot the predicted and true output-signals.
+
+        Args:
+            start_idx: Start-index for the time-series.
+            length: Sequence-length to process and plot.
+
+        Returns:
+            None
+
+        """
+        # Plot
+        self._plot_comparison(start_idx, length=length, train=True)
+
+    def test(self, start_idx, length=100):
         """Plot the predicted and true output-signals.
 
         Args:
@@ -74,28 +89,12 @@ class Plot():
 
         """
         # Plot
-        self._plot_comparison(model, start_idx, length=length, train=True)
+        self._plot_comparison(start_idx, length=length, train=False)
 
-    def test(self, model, start_idx, length=100):
+    def _plot_comparison(self, start_idx, length=100, train=True):
         """Plot the predicted and true output-signals.
 
         Args:
-            model: Training model
-            start_idx: Start-index for the time-series.
-            length: Sequence-length to process and plot.
-
-        Returns:
-            None
-
-        """
-        # Plot
-        self._plot_comparison(model, start_idx, length=length, train=False)
-
-    def _plot_comparison(self, model, start_idx, length=100, train=True):
-        """Plot the predicted and true output-signals.
-
-        Args:
-            model: Training model
             start_idx: Start-index for the time-series.
             length: Sequence-length to process and plot.
             train: Boolean whether to use training- or test-set.
@@ -104,20 +103,23 @@ class Plot():
             None
 
         """
+        # Get model
+        model = files.load_model(self._identifier)
+
         # Intialize key variables realted to data
         normal = self._data.split()
         scaled = self._data.scaled_split()
-        (training_rows, x_feature_count) = normal.x_train.shape
-        (test_rows, ) = normal.x_test.shape
-        (_, y_feature_count) = normal.y_train.shape
+        y_combined = self._data.values()
+        datetimes = self._data.datetimes()
+        (training_rows, _) = normal.x_train.shape
+        (test_rows, _) = normal.x_test.shape
 
         # End-index for the sequences.
         end_idx = start_idx + length
 
         # Get the complete length of the dataset
-        dataset_size = (
-            normal.y_train.shape[0] + normal.y_test.shape[0])
-        delta = len(self._y_current) - dataset_size
+        dataset_size = (training_rows + test_rows)
+        delta = len(y_combined) - dataset_size
 
         # Variables for date formatting
         days = mdates.DayLocator()   # Every day
@@ -133,10 +135,10 @@ class Plot():
             shim = 'Train'
 
             # Datetimes to use for training
-            datetimes = self._data.datetime()[:training_rows][start_idx:end_idx]
+            datetimes = datetimes[:training_rows][start_idx:end_idx]
 
             # Only get current values that are a part of the training data
-            current = self._y_current[:training_rows][start_idx:end_idx]
+            current = y_combined[:training_rows][start_idx:end_idx]
 
         else:
             # Use test-data.
@@ -148,10 +150,10 @@ class Plot():
             test_offset = test_rows + delta
 
             # Datetimes to use for testing
-            datetimes = self._data.datetime()[-test_offset:][start_idx:]
+            datetimes = datetimes[-test_offset:][start_idx:]
 
             # Only get current values that are a part of the test data.
-            current = self._y_current[-test_offset:][start_idx:]
+            current = y_combined[-test_offset:][start_idx:]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
@@ -229,7 +231,7 @@ class Plot():
 
             # Plot grey box for warmup-period if we are working with training
             # data and the start is within the warmup-period
-            if (0 < start_idx < WARMUP_STEPS):
+            if 0 < start_idx < WARMUP_STEPS:
                 if train is True:
                     plt.axvspan(
                         datetimes[shim][start_idx],
@@ -259,8 +261,6 @@ class Plot():
         # Intialize key variables realted to data
         normal = self._data.split()
         scaled = self._data.scaled_split()
-        (training_rows, x_feature_count) = normal.x_train.shape
-        (_, y_feature_count) = normal.y_train.shape
 
         # Initialize other key variables
         shim = 'Comparison'

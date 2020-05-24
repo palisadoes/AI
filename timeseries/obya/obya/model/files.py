@@ -3,6 +3,7 @@
 from collections import namedtuple
 
 # PIP3 imports
+import yaml
 from keras.models import model_from_yaml
 
 
@@ -72,9 +73,9 @@ def load_history(identifier):
     _files = files(identifier)
 
     # Load yaml and create model
-    print('> Loading history from disk')
+    print('> Loading history file {} from disk'.format(_files.history))
     with open(_files.history, 'r') as yaml_file:
-        history = yaml_file.read()
+        history = yaml.safe_load(yaml_file)
 
     # Load weights into new model
     print('> Finished loading history from disk')

@@ -62,6 +62,7 @@ class Model():
         self._processors = memory.setup()
 
         # Initialize key variables
+        self._identifier = identifier
         if multigpu is True:
             self._gpus = len(self._processors.gpus)
         else:
@@ -428,6 +429,12 @@ training_rows, y_train_scaled, x_train_scaled''')
         plt.legend()
         plt.show()
 
+        for key, value in history.history.items():
+            print('--------------------------------')
+            print('''\
+\nkey: {}\ntype value: {}\ntype element: {}\nvalue: {}\n'''.format(
+                key, type(value), type(value[0]), value))
+
         # Save model
         self.save(ai_model, history)
 
@@ -443,7 +450,10 @@ training_rows, y_train_scaled, x_train_scaled''')
         """
         # Save history to file
         with open(self._files.history, 'w') as yaml_file:
-            yaml.dump(history.history, yaml_file, default_flow_style=False)
+            _data = {}
+            for key, value_list in history.history.items():
+                _data[key] = np.array(value_list).tolist()
+            yaml.dump(_data, yaml_file)
 
         # Serialize model to YAML and save
         model_yaml = _model.to_yaml()

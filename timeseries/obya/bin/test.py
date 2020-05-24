@@ -11,6 +11,7 @@ import pandas as pd
 # Obya imports
 from obya.etl import etl
 from obya.model import gru
+from obya.model import plot
 
 
 def main():
@@ -27,10 +28,18 @@ def main():
     df_ = pd.read_csv(args.filename, names=['timestamp', 'value'], index_col=0)
     data = etl.Data(df_)
 
-    # Create Model
-    model = gru.Model(data, identifier, epochs=10, batch_size=128, units=64)
-    model.info()
-    model.train()
+    # Train if necessary
+    if args.train is True:
+        # Create Model
+        model = gru.Model(
+            data, identifier, epochs=10, batch_size=128, units=64)
+        model.info()
+        model.train()
+
+    _plot = plot.Plot(data, identifier)
+    _plot.history()
+    _plot.train(0)
+    _plot.test(0)
 
 
 def arguments():
@@ -50,6 +59,10 @@ def arguments():
         help=('Name of file to process.'),
         required=True)
 
+    parser.add_argument(
+        '-t', '--train',
+        help=('Train the data model if True.'),
+        action='store_true')
     args = parser.parse_args()
     return args
 

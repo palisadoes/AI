@@ -40,6 +40,39 @@ class Data():
         result = ['value']
         return result
 
+    def datetimes(self):
+        """Create a numpy array of datetimes.
+
+        Args:
+
+            None
+
+        Returns:
+
+            result: Timestamps numpy array
+
+        """
+        # Initialize key variables
+        result = pd.to_datetime(
+            self._df.index, unit='s').to_numpy()[0: -self._shift]
+
+        # Return
+        return result
+
+    def values(self):
+        """Original values in the dataset that must be forecasted.
+
+        Args:
+            None
+
+        Returns:
+            result: Series of values
+
+        """
+        # Return
+        result = self._df['value'][0: -self._shift]
+        return result
+
     def vectors(self):
         """Recreate vectors.
 
