@@ -162,7 +162,12 @@ def main():
         model.add(tf.keras.layers.Dense(1))
         model.compile(loss='mean_squared_error', optimizer='adam')
 
-    model.fit(trainX, trainY, epochs=100, batch_size=4, verbose=2)
+    model.fit(
+        trainX,
+        trainY,
+        epochs=100,
+        batch_size=int(dataset.size * len(devices) / 20), 
+        verbose=2)
 
     trainPredict = model.predict(trainX)
     testPredict = model.predict(testX)
