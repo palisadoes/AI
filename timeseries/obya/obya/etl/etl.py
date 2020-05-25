@@ -70,7 +70,7 @@ class Data():
 
         """
         # Return
-        result = self._df['value'][0: -self._shift]
+        result = self._df['value'][: -self._shift]
         return result
 
     def vectors(self):
@@ -107,7 +107,7 @@ class Data():
         dataframe = pd.DataFrame()
         dataframe['t-1'] = self._df['value']
         dataframe['value'] = self._df['value'].shift(-self._shift)
-        dataframe = dataframe[0: -self._shift]
+        dataframe = dataframe[: -self._shift]
         return dataframe
 
     def split(self, test_size=0.2):
@@ -131,9 +131,9 @@ class Data():
         num_train = num_data - num_test
 
         # Split into test and trainint data
-        x_train = self._xy.feature_vectors[0:num_train]
+        x_train = self._xy.feature_vectors[:num_train]
         x_test = self._xy.feature_vectors[num_train:]
-        y_train = self._xy.value_vectors[0:num_train]
+        y_train = self._xy.value_vectors[:num_train]
         y_test = self._xy.value_vectors[num_train:]
 
         result = Splits(

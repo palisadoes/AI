@@ -87,8 +87,15 @@ class Plot():
             None
 
         """
+        # Intialize key variables realted to data
+        normal = self._data.split()
+        (test_rows, _) = normal.x_test.shape
+
         # Plot
-        self._plot_comparison(start_idx, length=length, train=False)
+        self._plot_comparison(
+            start_idx,
+            length=min(test_rows, length),
+            train=False)
 
     def _plot_comparison(self, start_idx, length=100, train=True):
         """Plot the predicted and true output-signals.
@@ -111,19 +118,14 @@ class Plot():
         y_combined = self._data.values()
         datetimes = self._data.datetimes()
         (training_rows, _) = normal.x_train.shape
-        (test_rows, _) = normal.x_test.shape
 
         # End-index for the sequences.
         end_idx = start_idx + length
 
-        # Get the complete length of the dataset
-        dataset_size = (training_rows + test_rows)
-        delta = len(y_combined) - dataset_size
-
         # Variables for date formatting
         days = mdates.DayLocator()   # Every day
         months = mdates.MonthLocator()  # Every month
-        months_format = mdates.DateFormatter('%b %Y')
+        months_format = mdates.DateFormatter('%b %Y %H:%M')
         days_format = mdates.DateFormatter('%d')
 
         # Assign other variables dependent on the type of data we are plotting
@@ -145,14 +147,11 @@ class Plot():
             y_true = normal.y_test[start_idx:end_idx]
             shim = 'Test'
 
-            # Test offset
-            test_offset = test_rows + delta
-
             # Datetimes to use for testing
-            datetimes = datetimes[-test_offset:][start_idx:end_idx]
+            datetimes = datetimes[training_rows:][start_idx:end_idx]
 
             # Only get current values that are a part of the test data.
-            current = y_combined[-test_offset:][start_idx:end_idx]
+            current = y_combined[training_rows:][start_idx:end_idx]
 
         # Input-signals for the model.
         x_values = np.expand_dims(x_values, axis=0)
@@ -230,12 +229,11 @@ class Plot():
 
             # Plot grey box for warmup-period if we are working with training
             # data and the start is within the warmup-period
-            if 0 < start_idx < WARMUP_STEPS:
-                if train is True:
-                    plt.axvspan(
-                        datetimes[shim][start_idx],
-                        datetimes[shim][WARMUP_STEPS],
-                        facecolor='black', alpha=0.15)
+            if 0 <= start_idx < WARMUP_STEPS:
+                plt.axvspan(
+                    datetimes[start_idx],
+                    datetimes[min(length, WARMUP_STEPS)],
+                    facecolor='black', alpha=0.15)
 
             # Show and save the image
             fig.savefig(filename, bbox_inches='tight')

@@ -43,7 +43,7 @@ class Model():
 
     def __init__(
             self, _data, identifier, batch_size=256, epochs=20,
-            sequence_length=500, dropout=0.1, divider=1,
+            sequence_length=500, dropout=0.1, divider=1, test_size=0.2,
             layers=1, patience=5, units=128, multigpu=False):
         """Instantiate the class.
 
@@ -67,6 +67,7 @@ class Model():
         else:
             self._gpus = 1
         _batch_size = int(batch_size * self._gpus)
+        self._test_size = test_size
 
         # Get data
         self._data = _data
@@ -166,8 +167,8 @@ class Model():
 
         '''
         The data-set has now been prepared as 2-dimensional numpy arrays. The
-        training-data has almost 300k observations, consisting of 20
-        input-signals and 3 output-signals.
+        training-data has many observations, consisting of
+        'x_feature_count' input-signals and 'y_feature_count' output-signals.
 
         These are the array-shapes of the input and output data:
         '''
@@ -259,7 +260,7 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         '''
         We can now add a Gated Recurrent Unit (GRU) to the network. This will
-        have 512 outputs for each time-step in the sequence.
+        have 'units' outputs for each time-step in the sequence.
 
         Note that because this is the first layer in the model, Keras needs to
         know the shape of its input, which is a batch of sequences of arbitrary
@@ -281,9 +282,10 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         '''
         The GRU outputs a batch from keras_contrib.layers.advanced_activations
-        of sequences of 512 values. We want to predict
-        3 output-signals, so we add a fully-connected (or dense) layer which
-        maps 512 values down to only 3 values.
+        of sequences of 'units' values. We want to predict
+        'y_feature_count' output-signals, so we add a fully-connected (or
+        dense) layer which maps 'units' values down to only 'y_feature_count'
+        values.
 
         The output-signals in the data-set have been limited to be between 0
         and 1 using a scaler-object. So we also limit the output of the neural
@@ -339,10 +341,11 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         '''
         This is a very small model with only two layers. The output shape of
-        (None, None, 3) means that the model will output a batch with an
-        arbitrary number of sequences, each of which has an arbitrary number of
-        observations, and each observation has 3 signals. This corresponds to
-        the 3 target signals we want to predict.
+        (None, None, 'y_feature_count') means that the model will output a
+        batch with an arbitrary number of sequences, each of which has an
+        arbitrary number of observations, and each observation has
+        'y_feature_count' signals. This corresponds to the 'y_feature_count'
+        target signals we want to predict.
         '''
         print('\n> Summary (Parallel):\n')
         print(ai_model.summary())
@@ -605,7 +608,7 @@ def _loss_mse_warmup(y_true, y_pred):
     # These sliced tensors both have this shape:
     # [batch_size, sequence_length - warmup_steps, y_feature_count]
 
-    # Calculat the Mean Squared Error and use it as loss.
+    # Calculate the Mean Squared Error and use it as loss.
     mse = mean(square(y_true_slice - y_pred_slice))
 
     return mse
@@ -619,7 +622,13 @@ def _batch_generator(parameters):
 
     Returns:
 
-        (x_batch, y_batch)
+        result: Tuple of (x_batch, y_batch) where:
+
+            x_batch: Numpy array of 'batch_size' groups of 'sequence_length'
+                vectors where each vector has 'x_feature_count' features
+
+            y_batch: Numpy array of 'batch_size' groups of 'sequence_length'
+                vectors where each vector has 'y_feature_count' features
 
     """
     # Infinite loop.
@@ -653,4 +662,5 @@ def _batch_generator(parameters):
             y_batch[i] = parameters.y_train_scaled[
                 idx:idx+parameters.sequence_length]
 
-        yield (x_batch, y_batch)
+        result = (x_batch, y_batch)
+        yield result
