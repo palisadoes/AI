@@ -48,7 +48,7 @@ def main():
             multigpu=False
         )
         model.info()
-        model.train()
+        model.mtrain()
 
     _plot = plot.Plot(data, identifier)
     _plot.history()
