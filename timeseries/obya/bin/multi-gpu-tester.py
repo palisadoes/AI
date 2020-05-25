@@ -10,22 +10,66 @@ https://machinelearningmastery.com/time-series-prediction-lstm-recurrent-neural-
 # Standard imports
 import argparse
 import math
+from collections import namedtuple
+import os
+import sys
 
 # PIP3 imports
 import numpy
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from pandas import DataFrame
-from keras.models import Sequential
-from keras.layers import Dense
-from keras.layers import LSTM
-from keras.utils import multi_gpu_model
-
-import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 
 tf.debugging.set_log_device_placement(True)
+
+
+def setup():
+    """Setup TensorFlow 2 operating parameters.
+
+    Args:
+        None
+
+    Returns:
+        result: Processor namedtuple of GPUs and CPUs in the system
+
+    """
+    # Initialize key variables
+    memory_limit = 1024
+    Processors = namedtuple('Processors', 'gpus, cpus')
+    gpu_names = []
+    cpu_names = []
+
+    # Reduce error logging
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+    # Limit Tensorflow v2 Limit GPU Memory usage
+    # https://www.tensorflow.org/guide/gpu
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    cpus = tf.config.experimental.list_physical_devices('CPU')
+    if bool(gpus) is True:
+        try:
+            # Currently, memory growth needs to be the same across GPUs
+            for _, gpu in enumerate(gpus):
+                tf.config.experimental.set_virtual_device_configuration(
+                    gpu,
+                    [tf.config.experimental.VirtualDeviceConfiguration(
+                        memory_limit=memory_limit)])
+                gpu_names.append(gpu.name.replace('physical_device', ''))
+
+            # Currently, memory growth needs to be the same across GPUs
+            for _, cpu in enumerate(cpus):
+                cpu_names.append(cpu.name.replace('physical_device', ''))
+
+        except RuntimeError as e:
+            # Memory growth must be set before GPUs have been initialized
+            print(e)
+
+    # Return
+    result = Processors(gpus=gpu_names, cpus=cpu_names)
+    return result
+
 
 # convert an array of values into a dataset matrix
 def create_dataset(dataset, look_back=1):
@@ -36,7 +80,12 @@ def create_dataset(dataset, look_back=1):
         dataY.append(dataset[i + look_back, 0])
     return numpy.array(dataX), numpy.array(dataY)
 
+
 def main():
+
+    # Setup memory
+    processors = setup()
+
     # fix random seed for reproducibility
     numpy.random.seed(7)
 
@@ -97,27 +146,21 @@ def main():
     trainX = numpy.reshape(trainX, (trainX.shape[0], 1, trainX.shape[1]))
     testX = numpy.reshape(testX, (testX.shape[0], 1, testX.shape[1]))
 
-    # create and fit the LSTM network
-    model = tf.keras.Sequential()
-    model.add(tf.keras.layers.LSTM(4, input_shape=(1, look_back)))
-    model.add(tf.keras.layers.Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
+    # Create and fit the LSTM network
+    if abs(gpus) > len(processors.gpus):
+        devices = processors.gpus
+    else:
+        devices = processors.gpus[:min(0, len(processors.gpus) - 1)]
 
-    if gpus == 1:
+    strategy = tf.distribute.MirroredStrategy(devices=devices)
+    print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+
+    # Define the model
+    with strategy.scope():
         model = tf.keras.Sequential()
         model.add(tf.keras.layers.LSTM(4, input_shape=(1, look_back)))
         model.add(tf.keras.layers.Dense(1))
         model.compile(loss='mean_squared_error', optimizer='adam')
-    else:
-        strategy = tf.distribute.MirroredStrategy(devices=["/gpu:0", "/gpu:1"])
-        print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-
-        # Define the model
-        with strategy.scope():
-            model = tf.keras.Sequential()
-            model.add(tf.keras.layers.LSTM(4, input_shape=(1, look_back)))
-            model.add(tf.keras.layers.Dense(1))
-            model.compile(loss='mean_squared_error', optimizer='adam')
 
     model.fit(trainX, trainY, epochs=100, batch_size=4, verbose=2)
 
