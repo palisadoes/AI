@@ -25,7 +25,7 @@ from sklearn.metrics import mean_squared_error
 tf.debugging.set_log_device_placement(True)
 
 
-def device_name(item):
+def _device_name(item):
     """Create a device name for Tensorflow.
 
     Args:
@@ -52,7 +52,6 @@ def setup():
 
     """
     # Initialize key variables
-    memory_limit = 1024
     Processors = namedtuple('Processors', 'gpus, cpus')
     gpu_names = []
     cpu_names = []
@@ -67,16 +66,12 @@ def setup():
     if bool(gpus) is True:
         try:
             # Currently, memory growth needs to be the same across GPUs
-            for _, gpu in enumerate(gpus):
-                tf.config.experimental.set_virtual_device_configuration(
-                    gpu,
-                    [tf.config.experimental.VirtualDeviceConfiguration(
-                        memory_limit=memory_limit)])
-                gpu_names.append(device_name(gpu.name))
+            for gpu in gpus:
+                gpu_names.append(_device_name(gpu.name))
 
             # Currently, memory growth needs to be the same across GPUs
             for _, cpu in enumerate(cpus):
-                cpu_names.append(device_name(cpu.name))
+                cpu_names.append(_device_name(cpu.name))
 
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
@@ -112,7 +107,7 @@ def main():
         help='Number of GPUs to use.',
         type=int, default=1)
     args = parser.parse_args()
-    gpus = max(1, abs(args.gpus))
+    _gpus = max(1, abs(args.gpus))
 
     # load the dataset
     dataframe = DataFrame(
@@ -163,10 +158,11 @@ def main():
     testX = numpy.reshape(testX, (testX.shape[0], 1, testX.shape[1]))
 
     # Create and fit the LSTM network
-    if gpus > len(processors.gpus):
+    if _gpus > len(processors.gpus):
         devices = processors.gpus
     else:
-        devices = processors.gpus[:min(gpus, len(processors.gpus))]
+        devices = processors.gpus[:min(_gpus, len(processors.gpus))]
+    gpus = len(devices)
 
     strategy = tf.distribute.MirroredStrategy(devices=devices)
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -181,9 +177,9 @@ def main():
     model.fit(
         trainX,
         trainY,
-        epochs=100,
+        epochs=500,
         batch_size=int(dataset.size * len(devices) / 20),
-        verbose=2)
+        verbose=1)
 
     trainPredict = model.predict(trainX)
     testPredict = model.predict(testX)

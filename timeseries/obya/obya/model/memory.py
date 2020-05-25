@@ -6,6 +6,22 @@ from collections import namedtuple
 import tensorflow as tf
 
 
+def _device_name(item):
+    """Create a device name for Tensorflow.
+
+    Args:
+        item: tensorflow.python.eager.context.PhysicalDevice
+
+    Returns:
+        result: Name of device for tensorflow
+
+    """
+    # Process
+    components = item.split(':')
+    result = '/{}'.format(':'.join(components[1:]))
+    return result
+
+
 def setup():
     """Setup TensorFlow 2 operating parameters.
 
@@ -37,11 +53,11 @@ def setup():
                     gpu,
                     [tf.config.experimental.VirtualDeviceConfiguration(
                         memory_limit=memory_limit)])
-                gpu_names.append(gpu.name.replace('physical_device:', ''))
+                gpu_names.append(_device_name(gpu.name))
 
             # Currently, memory growth needs to be the same across GPUs
             for _, cpu in enumerate(cpus):
-                cpu_names.append(cpu.name.replace('physical_device', ''))
+                cpu_names.append(_device_name(cpu.name))
 
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
