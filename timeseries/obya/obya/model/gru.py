@@ -12,7 +12,6 @@ from collections import namedtuple
 import yaml
 import numpy as np
 from sklearn.metrics import mean_absolute_error
-import matplotlib.pyplot as plt
 from hyperopt import STATUS_OK
 
 # TensorFlow imports
