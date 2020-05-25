@@ -12,6 +12,7 @@ import argparse
 import math
 from collections import namedtuple
 import os
+import sys
 
 # PIP3 imports
 import numpy
@@ -36,7 +37,7 @@ def _device_name(item):
     """
     # Process
     components = item.split(':')
-    result = '/{}'.format(':'.join(components[1:]))
+    result = '/{}'.format(':'.join(components[1:])).lower()
     return result
 
 
@@ -144,6 +145,7 @@ def main():
 
     # split into train and test sets
     train_size = int(len(dataset) * 0.67)
+    test_size = len(dataset) - train_size
     train, test = dataset[0:train_size, :], dataset[train_size:len(dataset), :]
 
     # reshape into X=t and Y=t+1
