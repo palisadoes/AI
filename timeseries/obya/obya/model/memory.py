@@ -37,7 +37,7 @@ def setup():
                     gpu,
                     [tf.config.experimental.VirtualDeviceConfiguration(
                         memory_limit=memory_limit)])
-                gpu_names.append(gpu.name.replace('physical_device', ''))
+                gpu_names.append(gpu.name.replace('physical_device:', ''))
 
             # Currently, memory growth needs to be the same across GPUs
             for _, cpu in enumerate(cpus):

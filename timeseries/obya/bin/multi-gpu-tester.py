@@ -25,6 +25,22 @@ from sklearn.metrics import mean_squared_error
 tf.debugging.set_log_device_placement(True)
 
 
+def device_name(item):
+    """Create a device name for Tensorflow.
+
+    Args:
+        item: tensorflow.python.eager.context.PhysicalDevice
+
+    Returns:
+        result: Name of device for tensorflow
+
+    """
+    # Process
+    components = item.split(':')
+    result = '/{}'.format(':'.join(components[1:]))
+    return result
+
+
 def setup():
     """Setup TensorFlow 2 operating parameters.
 
@@ -56,11 +72,11 @@ def setup():
                     gpu,
                     [tf.config.experimental.VirtualDeviceConfiguration(
                         memory_limit=memory_limit)])
-                gpu_names.append(gpu.name.replace('physical_device', ''))
+                gpu_names.append(device_name(gpu.name))
 
             # Currently, memory growth needs to be the same across GPUs
             for _, cpu in enumerate(cpus):
-                cpu_names.append(cpu.name.replace('physical_device', ''))
+                cpu_names.append(device_name(cpu.name))
 
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
@@ -151,9 +167,6 @@ def main():
         devices = processors.gpus
     else:
         devices = processors.gpus[:min(gpus, len(processors.gpus))]
-
-    print(devices, processors.gpus)
-    sys.exit(0)
 
     strategy = tf.distribute.MirroredStrategy(devices=devices)
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
