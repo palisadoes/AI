@@ -96,7 +96,7 @@ def main():
         help='Number of GPUs to use.',
         type=int, default=1)
     args = parser.parse_args()
-    gpus = args.gpus
+    gpus = max(1, abs(args.gpus))
 
     # load the dataset
     dataframe = DataFrame(
@@ -147,10 +147,13 @@ def main():
     testX = numpy.reshape(testX, (testX.shape[0], 1, testX.shape[1]))
 
     # Create and fit the LSTM network
-    if abs(gpus) > len(processors.gpus):
+    if gpus > len(processors.gpus):
         devices = processors.gpus
     else:
-        devices = processors.gpus[:min(0, len(processors.gpus) - 1)]
+        devices = processors.gpus[:min(gpus, len(processors.gpus))]
+
+    print(devices, processors.gpus)
+    sys.exit(0)
 
     strategy = tf.distribute.MirroredStrategy(devices=devices)
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -166,7 +169,7 @@ def main():
         trainX,
         trainY,
         epochs=100,
-        batch_size=int(dataset.size * len(devices) / 20), 
+        batch_size=int(dataset.size * len(devices) / 20),
         verbose=2)
 
     trainPredict = model.predict(trainX)
