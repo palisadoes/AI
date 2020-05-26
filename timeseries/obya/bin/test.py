@@ -12,7 +12,6 @@ import pandas as pd
 from obya.etl import etl
 from obya.model import gru
 from obya.model import plot
-from obya.model import files
 
 
 def main():
@@ -54,7 +53,8 @@ def main():
     _plot.history()
     _plot.train(0, length=length)
     _plot.test(0, length=length)
-    _plot.train_test(files.load_model(identifier))
+    _model = gru.load(identifier)
+    _plot.train_test(_model.model)
 
 
 def arguments():
