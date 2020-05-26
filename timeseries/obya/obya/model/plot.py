@@ -41,6 +41,7 @@ class Plot():
 
         # Get data
         self._data = _data
+        self._model = gru.load(identifier)
 
     def history(self):
         """Plot the predicted and true output-signals.
@@ -55,8 +56,7 @@ class Plot():
 
         """
         # Get history
-        model = gru.load(self._identifier)
-        _history = model.history
+        _history = self._model.history
 
         # Plot
         plt.plot(_history['loss'], label='Parallel Training Loss')
@@ -116,8 +116,7 @@ class Plot():
         register_matplotlib_converters()
 
         # Get model
-        _model = gru.load(self._identifier)
-        model = _model.model
+        model = self._model.model
 
         # Intialize key variables realted to data
         normal = self._data.split()
@@ -250,19 +249,18 @@ class Plot():
             # Close figure
             plt.close(fig=fig)
 
-    def train_test(self, model):
+    def train_test(self):
         """Plot the predicted and true output-signals.
 
         Args:
-            model: Training model
-            start_idx: Start-index for the time-series.
-            length: Sequence-length to process and plot.
+            None
 
         Returns:
             None
 
         """
         # Intialize key variables realted to data
+        model = self._model.model
         normal = self._data.split()
         scaled = self._data.scaled_split()
 

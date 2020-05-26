@@ -238,8 +238,8 @@ training_rows, y_train_scaled, x_train_scaled''')
         '''
 
         validation_data = (
-            np.expand_dims(scaled.x_train, axis=0),
-            np.expand_dims(scaled.y_train, axis=0)
+            np.expand_dims(scaled.x_test, axis=0),
+            np.expand_dims(scaled.y_test, axis=0)
         )
 
         '''
@@ -490,8 +490,8 @@ training_rows, y_train_scaled, x_train_scaled''')
         '''
 
         validation_data = (
-            np.expand_dims(scaled.x_train, axis=0),
-            np.expand_dims(scaled.y_train, axis=0)
+            np.expand_dims(scaled.x_test, axis=0),
+            np.expand_dims(scaled.y_test, axis=0)
         )
 
         # Get model
@@ -546,7 +546,7 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         """
         # Initialize key variables
-        use_sigmoid = True
+        use_sigmoid = False
 
         '''
         Instantiate the base model (or "template" model).
@@ -648,7 +648,7 @@ training_rows, y_train_scaled, x_train_scaled''')
             use. We then compile the Keras model so it is ready for training.
             '''
 
-            optimizer = tf.keras.optimizers.RMSprop(lr=1e-3)
+            optimizer = tf.keras.optimizers.RMSprop(lr=1e-5)
             ai_model.compile(
                 loss=model_loss,
                 optimizer=optimizer,

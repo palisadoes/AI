@@ -47,14 +47,13 @@ def main():
             multigpu=False
         )
         model.info()
-        model.train()
+        model.mtrain()
 
-    _plot = plot.Plot(data, identifier)
-    _plot.history()
-    _plot.train(0, length=length)
-    _plot.test(0, length=length)
-    _model = gru.load(identifier)
-    _plot.train_test(_model.model)
+    # _plot = plot.Plot(data, identifier)
+    # _plot.history()
+    # _plot.train(0, length=length)
+    # _plot.test(0, length=length)
+    # _plot.train_test()
 
 
 def arguments():
