@@ -1,7 +1,7 @@
 """File manipulation module."""
 
 from collections import namedtuple
-
+import os
 
 def files(identifier):
     """Create well known locations for model files.
@@ -14,7 +14,7 @@ def files(identifier):
 
     """
     # Set key file locations
-    path_prefix = '/tmp/obya-{}'.format(identifier)
+    path_prefix = '~/obya/obya-{}'.format(identifier)
     Files = namedtuple(
         'Files',
         'checkpoint, model_weights, model_parameters, log_dir, history')

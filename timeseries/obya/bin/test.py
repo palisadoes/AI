@@ -4,6 +4,8 @@
 # Standard imports
 from __future__ import print_function
 import argparse
+import sys
+import os
 
 # PIP3 packages
 import pandas as pd
@@ -21,11 +23,13 @@ def main():
 
     """
     # Initialize key variables
-    identifier = 'test'
     length = 1000
 
     # Import data
     args = arguments()
+
+    # Create an identifier and import data
+    identifier = 'test_{}'.format(os.path.basename(args.filename))
     df_ = pd.read_csv(args.filename, names=['timestamp', 'value'], index_col=0)
     data = etl.Data(df_)
 
@@ -49,11 +53,11 @@ def main():
         model.info()
         model.mtrain()
 
-    # _plot = plot.Plot(data, identifier)
-    # _plot.history()
-    # _plot.train(0, length=length)
-    # _plot.test(0, length=length)
-    # _plot.train_test()
+    _plot = plot.Plot(data, identifier)
+    _plot.history()
+    _plot.train(0, length=length)
+    _plot.test(0, length=length)
+    _plot.train_test()
 
 
 def arguments():

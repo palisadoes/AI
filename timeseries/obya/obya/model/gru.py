@@ -648,14 +648,11 @@ training_rows, y_train_scaled, x_train_scaled''')
             use. We then compile the Keras model so it is ready for training.
             '''
 
-            optimizer = tf.keras.optimizers.RMSprop(lr=1e-5)
+            optimizer = tf.keras.optimizers.RMSprop(lr=1e-3)
             ai_model.compile(
                 loss=model_loss,
                 optimizer=optimizer,
                 metrics=['accuracy'])
-
-            # Save model to HDF5 before compilation
-            # ai_model.save(self._files.model_parameters, save_format='tf')
 
             # Display layers
 
