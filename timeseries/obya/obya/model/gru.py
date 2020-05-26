@@ -318,7 +318,6 @@ training_rows, y_train_scaled, x_train_scaled''')
         if bool(use_sigmoid) is False:
             # Maybe use lower init-ranges.
             init = RandomUniform(minval=-0.05, maxval=0.05)
-
             ai_model.add(Dense(
                 y_feature_count,
                 activation='linear',
@@ -333,7 +332,7 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         optimizer = RMSprop(lr=1e-3)
         ai_model.compile(
-            loss=_loss_mse_warmup,
+            loss=model_loss,
             optimizer=optimizer,
             metrics=['accuracy'])
 
@@ -495,79 +494,11 @@ training_rows, y_train_scaled, x_train_scaled''')
             np.expand_dims(scaled.y_train, axis=0)
         )
 
-        '''
-        Instantiate the base model (or "template" model).
-        We recommend doing this with under a CPU device scope,
-        so that the model's weights are hosted on CPU memory.
-        Otherwise they may end up hosted on a GPU, which would
-        complicate weight sharing.
-
-        NOTE: multi_gpu_model values will be way off if you don't do this.
-        '''
-        if bool(self._processors.gpus) is True:
-            devices = self._processors.gpus[:len(self._processors.gpus)]
-            strategy = tf.distribute.MirroredStrategy(devices=devices)
-
-            print('Number of devices: {}'.format(
-                strategy.num_replicas_in_sync))
-
-            # Define the model
-            with strategy.scope():
-                ai_model = Sequential()
-                ai_model = self._compile(ai_model, _hyperparameters)
-        else:
-            with tf.device(self._processors.cpus[0]):
-                ai_model = Sequential()
-                ai_model = self._compile(ai_model, _hyperparameters)
+        # Get model
+        ai_model = self._compile(_hyperparameters)
 
         # Callback Functions
-
-        '''
-        During training we want to save checkpoints and log the progress to
-        TensorBoard so we create the appropriate callbacks for Keras.
-
-        This is the callback for writing checkpoints during training.
-        '''
-
-        callback_checkpoint = ModelCheckpoint(
-            filepath=self._files.checkpoint, monitor='val_loss',
-            verbose=1, save_weights_only=True, save_best_only=True
-        )
-
-        '''
-        This is the callback for stopping the optimization when performance
-        worsens on the validation-set.
-        '''
-
-        callback_early_stopping = EarlyStopping(
-            monitor='val_loss', patience=_hyperparameters.patience, verbose=1
-        )
-
-        '''
-        This is the callback for writing the TensorBoard log during training.
-        '''
-
-        callback_tensorboard = TensorBoard(
-            log_dir=self._files.log_dir, histogram_freq=0, write_graph=False
-        )
-
-        '''
-        This callback reduces the learning-rate for the optimizer if the
-        validation-loss has not improved since the last epoch
-        (as indicated by patience=0). The learning-rate will be reduced by
-        multiplying it with the given factor. We set a start learning-rate of
-        1e-3 above, so multiplying it by 0.1 gives a learning-rate of 1e-4.
-        We don't want the learning-rate to go any lower than this.
-        '''
-
-        callback_reduce_lr = ReduceLROnPlateau(
-            monitor='val_loss', factor=0.1, min_lr=1e-4, patience=0, verbose=1
-        )
-
-        callbacks = [callback_early_stopping,
-                     callback_checkpoint,
-                     callback_tensorboard,
-                     callback_reduce_lr]
+        callbacks = _callbacks(self._files, _hyperparameters.patience)
 
         # Train the Recurrent Neural Network
 
@@ -604,117 +535,141 @@ training_rows, y_train_scaled, x_train_scaled''')
         # Save model
         self.save(ai_model, history)
 
-    def _compile(self, ai_model, _hyperparameters):
-        """Create the Recurrent Neural Network.
+    def _compile(self, _hyperparameters):
+        """Compile the default model.
 
         Args:
             None
 
         Returns:
-            _model: RNN model
+            ai_model: RNN model
 
         """
         # Initialize key variables
         use_sigmoid = True
+
+        '''
+        Instantiate the base model (or "template" model).
+        We recommend doing this with under a CPU device scope,
+        so that the model's weights are hosted on CPU memory.
+        Otherwise they may end up hosted on a GPU, which would
+        complicate weight sharing.
+        '''
 
         # Intialize key variables realted to data
         normal = self._data.split()
         (_, x_feature_count) = normal.x_train.shape
         (_, y_feature_count) = normal.y_train.shape
 
-        '''
-        We can now add a Gated Recurrent Unit (GRU) to the network. This will
-        have 'units' outputs for each time-step in the sequence.
+        strategy = tf.distribute.MirroredStrategy()
+        print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
-        Note that because this is the first layer in the model, Keras needs to
-        know the shape of its input, which is a batch of sequences of arbitrary
-        length (indicated by None), where each observation has a number of
-        input-signals (x_feature_count).
-        '''
+        # Define the model
+        with strategy.scope():
+            ai_model = tf.keras.Sequential()
 
-        ai_model.add(GRU(
-            _hyperparameters.units,
-            return_sequences=True,
-            recurrent_dropout=_hyperparameters.dropout,
-            input_shape=(None, x_feature_count)))
+            '''
+            We can now add a Gated Recurrent Unit (GRU) to the network. This
+            will have 'units' outputs for each time-step in the sequence.
 
-        for _ in range(1, abs(_hyperparameters.layers)):
-            ai_model.add(GRU(
-                _hyperparameters.units,
-                recurrent_dropout=_hyperparameters.dropout,
-                return_sequences=True))
+            Note that because this is the first layer in the model, Keras
+            needs to know the shape of its input, which is a batch of sequences
+            of arbitrary length (indicated by None), where each observation
+            has a number of input-signals (x_feature_count).
+            '''
 
-        '''
-        The GRU outputs a batch from keras_contrib.layers.advanced_activations
-        of sequences of 'units' values. We want to predict
-        'y_feature_count' output-signals, so we add a fully-connected (or
-        dense) layer which maps 'units' values down to only 'y_feature_count'
-        values.
+            ai_model.add(
+                tf.keras.layers.GRU(
+                    _hyperparameters.units,
+                    return_sequences=True,
+                    recurrent_dropout=_hyperparameters.dropout,
+                    input_shape=(None, x_feature_count))
+            )
 
-        The output-signals in the data-set have been limited to be between 0
-        and 1 using a scaler-object. So we also limit the output of the neural
-        network using the Sigmoid activation function, which squashes the
-        output to be between 0 and 1.
-        '''
+            for _ in range(1, abs(_hyperparameters.layers)):
+                ai_model.add(
+                    tf.keras.layers.GRU(
+                        _hyperparameters.units,
+                        return_sequences=True,
+                        recurrent_dropout=_hyperparameters.dropout)
+                )
 
-        if bool(use_sigmoid) is True:
-            ai_model.add(Dense(y_feature_count, activation='sigmoid'))
+            '''
+            The GRU outputs a batch from
+            keras_contrib.layers.advanced_activations of sequences of 'units'
+            values. We want to predict 'y_feature_count' output-signals, so we
+            add a fully-connected (or dense) layer which maps 'units' values
+            down to only 'y_feature_count' values.
 
-        '''
-        A problem with using the Sigmoid activation function, is that we can
-        now only output values in the same range as the training-data.
+            The output-signals in the data-set have been limited to be between
+            0 and 1 using a scaler-object. So we also limit the output of the
+            neural network using the Sigmoid activation function, which
+            squashes the output to be between 0 and 1.
+            '''
 
-        For example, if the training-data only has values between -20 and +30,
-        then the scaler-object will map -20 to 0 and +30 to 1. So if we limit
-        the output of the neural network to be between 0 and 1 using the
-        Sigmoid function, this can only be mapped back to values between
-        -20 and +30.
+            if bool(use_sigmoid) is True:
+                ai_model.add(
+                    tf.keras.layers.Dense(
+                        y_feature_count, activation='sigmoid'
+                    )
+                )
 
-        We can use a linear activation function on the output instead. This
-        allows for the output to take on arbitrary values. It might work with
-        the standard initialization for a simple network architecture, but for
-        more complicated network architectures e.g. with more layers, it might
-        be necessary to initialize the weights with smaller values to avoid
-        NaN values during training. You may need to experiment with this to
-        get it working.
-        '''
+            '''
+            A problem with using the Sigmoid activation function, is that we
+            can now only output values in the same range as the training-data.
 
-        if bool(use_sigmoid) is False:
-            # Maybe use lower init-ranges.
-            init = RandomUniform(minval=-0.05, maxval=0.05)
+            For example, if the training-data only has values between -20 and
+            +30, then the scaler-object will map -20 to 0 and +30 to 1. So if
+            we limit the output of the neural network to be between 0 and 1
+            using the Sigmoid function, this can only be mapped back to values
+            between -20 and +30.
 
-            ai_model.add(Dense(
-                y_feature_count,
-                activation='linear',
-                kernel_initializer=init))
+            We can use a linear activation function on the output instead. This
+            allows for the output to take on arbitrary values. It might work
+            with the standard initialization for a simple network architecture,
+            but for more complicated network architectures e.g. with more
+            layers, it might be necessary to initialize the weights with
+            smaller values to avoid NaN values during training. You may need to
+            experiment with this to get it working.
+            '''
 
-        # Compile Model
+            if bool(use_sigmoid) is False:
+                init = tf.keras.initializers.RandomUniform(
+                    minval=-0.03, maxval=0.03)
+                ai_model.add(tf.keras.layers.Dense(
+                    y_feature_count,
+                    activation='linear',
+                    kernel_initializer=init))
 
-        '''
-        This is the optimizer and the beginning learning-rate that we will use.
-        We then compile the Keras model so it is ready for training.
-        '''
+            # Compile Model
 
-        optimizer = RMSprop(lr=1e-3)
-        ai_model.compile(
-            loss=_loss_mse_warmup,
-            optimizer=optimizer,
-            metrics=['accuracy'])
+            '''
+            This is the optimizer and the beginning learning-rate that we will
+            use. We then compile the Keras model so it is ready for training.
+            '''
 
-        # Display layers
+            optimizer = tf.keras.optimizers.RMSprop(lr=1e-3)
+            ai_model.compile(
+                loss=model_loss,
+                optimizer=optimizer,
+                metrics=['accuracy'])
 
-        '''
-        This is a very small model with only two layers. The output shape of
-        (None, None, 'y_feature_count') means that the model will output a
-        batch with an arbitrary number of sequences, each of which has an
-        arbitrary number of observations, and each observation has
-        'y_feature_count' signals. This corresponds to the 'y_feature_count'
-        target signals we want to predict.
-        '''
-        print('\n> Summary (Parallel):\n')
-        print(ai_model.summary())
+            # Save model to HDF5 before compilation
+            # ai_model.save(self._files.model_parameters, save_format='tf')
 
-        # return
+            # Display layers
+
+            '''
+            This is a very small model with only two layers. The output shape
+            of (None, None, 'y_feature_count') means that the model will output
+            a batch with an arbitrary number of sequences, each of which has an
+            arbitrary number of observations, and each observation has
+            'y_feature_count' signals. This corresponds to the
+            'y_feature_count' target signals we want to predict.
+            '''
+            print('\n> Summary (Parallel):\n')
+            print(ai_model.summary())
+
         return ai_model
 
     def save(self, _model, history):
@@ -734,10 +689,8 @@ training_rows, y_train_scaled, x_train_scaled''')
                 _data[key] = np.array(value_list).tolist()
             yaml.dump(_data, yaml_file)
 
-        # Serialize model to YAML and save
-        model_yaml = _model.to_yaml()
-        with open(self._files.model_parameters, 'w') as yaml_file:
-            yaml_file.write(model_yaml)
+        # Serialize model to HDF5
+        _model.save(self._files.model_parameters, save_format='tf')
 
         # Serialize weights to HDF5
         _model.save_weights(self._files.model_weights)
@@ -771,7 +724,7 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         optimizer = RMSprop(lr=1e-3)
         _model.compile(
-            loss=_loss_mse_warmup,
+            loss=model_loss,
             optimizer=optimizer,
             metrics=['accuracy'])
 
@@ -855,7 +808,7 @@ training_rows, y_train_scaled, x_train_scaled''')
             os.remove(self._files.checkpoint)
 
 
-def _loss_mse_warmup(y_true, y_pred):
+def model_loss(y_true, y_pred):
     """Calculate the Mean Squared Errror.
 
     Calculate the Mean Squared Error between y_true and y_pred,
@@ -893,7 +846,6 @@ def _loss_mse_warmup(y_true, y_pred):
 
     # Calculate the Mean Squared Error and use it as loss.
     mse = mean(square(y_true_slice - y_pred_slice))
-
     return mse
 
 
@@ -947,3 +899,110 @@ def _batch_generator(parameters):
 
         result = (x_batch, y_batch)
         yield result
+
+
+def _callbacks(_files, patience):
+    """Create callbacks for learning.
+
+    Args:
+        _files: model.files.Files tuple of data
+
+    Returns:
+
+        callbacks: List of callbacks
+
+    """
+
+    '''
+    During training we want to save checkpoints and log the progress to
+    TensorBoard so we create the appropriate callbacks for Keras.
+
+    This is the callback for writing checkpoints during training.
+    '''
+
+    callback_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        filepath=_files.checkpoint, monitor='val_loss',
+        verbose=1, save_weights_only=True, save_best_only=True
+    )
+
+    '''
+    This is the callback for stopping the optimization when performance
+    worsens on the validation-set.
+    '''
+
+    callback_early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor='val_loss', patience=patience, verbose=1
+    )
+
+    '''
+    This is the callback for writing the TensorBoard log during training.
+    '''
+
+    callback_tensorboard = tf.keras.callbacks.TensorBoard(
+        log_dir=_files.log_dir, histogram_freq=0, write_graph=False
+    )
+
+    '''
+    This callback reduces the learning-rate for the optimizer if the
+    validation-loss has not improved since the last epoch
+    (as indicated by patience=0). The learning-rate will be reduced by
+    multiplying it with the given factor. We set a start learning-rate of
+    1e-3 above, so multiplying it by 0.1 gives a learning-rate of 1e-4.
+    We don't want the learning-rate to go any lower than this.
+    '''
+
+    callback_reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
+        monitor='val_loss', factor=0.1, min_lr=1e-4, patience=0, verbose=1
+    )
+
+    callbacks = [callback_early_stopping,
+                 callback_checkpoint,
+                 callback_tensorboard,
+                 callback_reduce_lr]
+
+    return callbacks
+
+
+def load(identifier):
+    """Load the Recurrent Neural Network model from disk.
+
+    Args:
+        identifier: Identifier of model to load
+
+    Returns:
+        result: RNN model
+
+    """
+    # Turn off verbose logging
+    memory.setup()
+
+    # Setup a Load object
+    Load = namedtuple(
+        'Load', 'model, history')
+
+    # Initialize key Variables
+    _files = files.files(identifier)
+
+    # Load yaml and create model
+    '''
+    You have to use this custom_object parameter to read loss values from the
+    customized loss function cannot be save to a keras model. It does not seem
+    to work if the load function is in a module different from the one in which
+    the customized loss function is located. Reference:
+
+    https://github.com/keras-team/keras/issues/9377#issuecomment-396187881
+    '''
+
+    ai_model = tf.keras.models.load_model(
+        _files.model_parameters,
+        custom_objects={'model_loss': model_loss})
+
+    # Load weights into new model
+    ai_model.load_weights(_files.model_weights, by_name=True)
+
+    # Load yaml and create model
+    with open(_files.history, 'r') as yaml_file:
+        history = yaml.safe_load(yaml_file)
+
+    result = Load(model=ai_model, history=history)
+    return result

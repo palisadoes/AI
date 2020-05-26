@@ -6,9 +6,11 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from pandas.plotting import register_matplotlib_converters
 
 # Custom package imports
 from obya.model import files
+from obya.model import gru
 from obya import WARMUP_STEPS
 
 
@@ -52,8 +54,9 @@ class Plot():
             None
 
         """
-        # Initialize key variables
-        _history = files.load_history(self._identifier)
+        # Get history
+        model = gru.load(self._identifier)
+        _history = model.history
 
         # Plot
         plt.plot(_history['loss'], label='Parallel Training Loss')
@@ -109,8 +112,12 @@ class Plot():
             None
 
         """
+        # Register converters for datetime representation
+        register_matplotlib_converters()
+
         # Get model
-        model = files.load_model(self._identifier)
+        _model = gru.load(self._identifier)
+        model = _model.model
 
         # Intialize key variables realted to data
         normal = self._data.split()

@@ -177,7 +177,7 @@ def main():
     model.fit(
         trainX,
         trainY,
-        epochs=500,
+        epochs=10000,
         batch_size=int(dataset.size * len(devices) / 20),
         verbose=1)
 
