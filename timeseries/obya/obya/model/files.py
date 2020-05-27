@@ -16,6 +16,7 @@ def files(identifier):
     """
     # Set key file locations
     path_prefix = os.path.expanduser('~/obya/obya-{}'.format(identifier))
+
     Files = namedtuple(
         'Files',
         'checkpoint, model_weights, model_parameters, log_dir, history')

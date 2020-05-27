@@ -988,7 +988,7 @@ Directory {} not found. Please create it by training your model first.\
 '''.format(_files.model_parameters))
         sys.exit(0)
 
-    if os.path.isdir(_files.model_weights) is False:
+    if os.path.isfile(_files.model_weights) is False:
         print('File {} not found.'.format(_files.model_weights))
         sys.exit(0)
 
