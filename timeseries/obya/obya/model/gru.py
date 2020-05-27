@@ -19,9 +19,6 @@ from hyperopt import STATUS_OK
 import tensorflow as tf
 import tensorflow_addons as tfa
 
-# Keras imports
-from tensorflow.keras.backend import square, mean
-
 # Custom package imports
 from obya.model import memory
 from obya.model import files
@@ -470,9 +467,9 @@ training_rows, y_train_scaled, x_train_scaled''')
         if os.path.exists(self._files.checkpoint):
             _model.load_weights(self._files.checkpoint)
 
-        optimizer = tf.keras.optimizers.RMSprop(lr=1e-3)
+        optimizer = tfa.optimizers.RectifiedAdam(lr=1e-3)
         _model.compile(
-            loss=model_loss,
+            loss='mse',
             optimizer=optimizer,
             metrics=['accuracy'])
 
@@ -554,47 +551,6 @@ training_rows, y_train_scaled, x_train_scaled''')
         # Delete
         if os.path.exists(self._files.checkpoint):
             os.remove(self._files.checkpoint)
-
-
-def model_loss(y_true, y_pred):
-    """Calculate the Mean Squared Errror.
-
-    Calculate the Mean Squared Error between y_true and y_pred,
-    but ignore the beginning "warmup" part of the sequences.
-
-    We will use Mean Squared Error (MSE) as the loss-function that will be
-    minimized. This measures how closely the model's output matches the
-    true output signals.
-
-    However, at the beginning of a sequence, the model has only seen
-    input-signals for a few time-steps, so its generated output may be very
-    inaccurate. Using the loss-value for the early time-steps may cause the
-    model to distort its later output. We therefore give the model a
-    "warmup-period" of 50 time-steps where we don't use its accuracy in the
-    loss-function, in hope of improving the accuracy for later time-steps
-
-    Args:
-        y_true: Desired output.
-        y_pred: Model's output.
-
-    Returns:
-        mse: Mean Squared Error
-
-    """
-    # The shape of both input tensors are:
-    # [batch_size, sequence_length, y_feature_count].
-
-    # Ignore the "warmup" parts of the sequences
-    # by taking slices of the tensors.
-    y_true_slice = y_true[:, WARMUP_STEPS:, :]
-    y_pred_slice = y_pred[:, WARMUP_STEPS:, :]
-
-    # These sliced tensors both have this shape:
-    # [batch_size, sequence_length - warmup_steps, y_feature_count]
-
-    # Calculate the Mean Squared Error and use it as loss.
-    mse = mean(square(y_true_slice - y_pred_slice))
-    return mse
 
 
 def _batch_generator(parameters):
@@ -752,9 +708,7 @@ Directory {} not found. Please create it by training your model first.\
     https://github.com/keras-team/keras/issues/9377#issuecomment-396187881
     '''
 
-    ai_model = tf.keras.models.load_model(
-        _files.model_parameters,
-        custom_objects={'model_loss': model_loss})
+    ai_model = tf.keras.models.load_model(_files.model_parameters)
 
     # Load weights into new model
     ai_model.load_weights(_files.model_weights, by_name=True)
