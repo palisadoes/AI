@@ -39,7 +39,7 @@ def setup():
     cpu_names = []
 
     # Reduce error logging
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
     # Limit Tensorflow v2 Limit GPU Memory usage
     # https://www.tensorflow.org/guide/gpu

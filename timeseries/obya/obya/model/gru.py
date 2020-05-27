@@ -562,7 +562,17 @@ training_rows, y_train_scaled, x_train_scaled''')
         (_, x_feature_count) = normal.x_train.shape
         (_, y_feature_count) = normal.y_train.shape
 
-        strategy = tf.distribute.MirroredStrategy()
+        # Get GPU information
+        devices = memory.setup()
+        gpus = devices.gpus[:max(1, len(devices.gpus) - 1)]
+        gpus = devices.gpus[:2]
+        cpus = devices.cpus[0]
+
+        # Start creating the model
+        strategy = tf.distribute.MirroredStrategy(
+            gpus,
+            cross_device_ops=tf.distribute.ReductionToOneDevice(
+                reduce_to_device=cpus))
         print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
         # Define the model
