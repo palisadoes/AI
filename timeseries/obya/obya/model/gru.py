@@ -565,7 +565,6 @@ training_rows, y_train_scaled, x_train_scaled''')
         # Get GPU information
         devices = memory.setup()
         gpus = devices.gpus[:max(1, len(devices.gpus) - 1)]
-        gpus = devices.gpus[:2]
         cpus = devices.cpus[0]
 
         # Start creating the model
