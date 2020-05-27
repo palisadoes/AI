@@ -4,8 +4,8 @@
 # Standard imports
 from __future__ import print_function
 import argparse
-import sys
 import os
+import sys
 
 # PIP3 packages
 import pandas as pd
@@ -24,6 +24,7 @@ def main():
     """
     # Initialize key variables
     length = 1000
+    steps_per_day = 288
 
     # Import data
     args = arguments()
@@ -31,6 +32,11 @@ def main():
     # Create an identifier and import data
     identifier = 'test_{}'.format(os.path.basename(args.filename))
     df_ = pd.read_csv(args.filename, names=['timestamp', 'value'], index_col=0)
+
+    # Create a one day moving average
+    df_ = df_.rolling(steps_per_day).mean().iloc[steps_per_day:]
+
+    # Convert data for training
     data = etl.Data(df_)
 
     # Train if necessary
