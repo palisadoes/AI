@@ -17,14 +17,9 @@ from hyperopt import STATUS_OK
 
 # TensorFlow imports
 import tensorflow as tf
+import tensorflow_addons as tfa
 
 # Keras imports
-from keras.models import Sequential
-from keras.layers import Dense, GRU
-from keras.optimizers import RMSprop
-from keras.initializers import RandomUniform
-from keras.callbacks import (
-    EarlyStopping, ModelCheckpoint, TensorBoard, ReduceLROnPlateau)
 from tensorflow.keras.backend import square, mean
 
 # Custom package imports
@@ -179,261 +174,6 @@ class Model():
         print('> Scaled Training Targets Shape: {}'.format(
             scaled.y_train.shape))
 
-    def train(self, params=None):
-        """Train the Recurrent Neural Network.
-
-        Args:
-            None
-
-        Returns:
-            _model: RNN model
-
-        """
-        # Initialize key variables
-        use_sigmoid = True
-
-        # Intialize key variables realted to data
-        normal = self._data.split()
-        scaled = self._data.scaled_split()
-        (training_rows, x_feature_count) = normal.x_train.shape
-        (_, y_feature_count) = normal.y_train.shape
-
-        # Allow overriding parameters
-        if params is None:
-            _hyperparameters = self._hyperparameters
-        else:
-            _hyperparameters = params
-            _hyperparameters.batch_size = int(
-                _hyperparameters.batch_size * self._gpus)
-
-        # Prepare the generator
-        Generator = namedtuple(
-            'Generator',
-            '''batch_size, sequence_length, x_feature_count, y_feature_count, \
-training_rows, y_train_scaled, x_train_scaled''')
-        generator = _batch_generator(Generator(
-            batch_size=_hyperparameters.batch_size,
-            sequence_length=_hyperparameters.sequence_length,
-            x_feature_count=x_feature_count,
-            y_feature_count=y_feature_count,
-            training_rows=training_rows,
-            y_train_scaled=scaled.y_train,
-            x_train_scaled=scaled.x_train
-        ))
-
-        # Validation Set
-
-        '''
-        The neural network trains quickly so we can easily run many training
-        epochs. But then there is a risk of overfitting the model to the
-        training-set so it does not generalize well to unseen data. We will
-        therefore monitor the model's performance on the test-set after each
-        epoch and only save the model's weights if the performance is improved
-        on the test-set.
-
-        The batch-generator randomly selects a batch of short sequences from
-        the training-data and uses that during training. But for the
-        validation-data we will instead run through the entire sequence from
-        the test-set and measure the prediction accuracy on that entire
-        sequence.
-        '''
-
-        validation_data = (
-            np.expand_dims(scaled.x_test, axis=0),
-            np.expand_dims(scaled.y_test, axis=0)
-        )
-
-        '''
-        Instantiate the base model (or "template" model).
-        We recommend doing this with under a CPU device scope,
-        so that the model's weights are hosted on CPU memory.
-        Otherwise they may end up hosted on a GPU, which would
-        complicate weight sharing.
-
-        NOTE: multi_gpu_model values will be way off if you don't do this.
-        '''
-        if bool(self._processors.gpus) is True:
-            with tf.device(self._processors.gpus[0]):
-                ai_model = Sequential()
-        else:
-            with tf.device(self._processors.cpus[0]):
-                ai_model = Sequential()
-
-        '''
-        We can now add a Gated Recurrent Unit (GRU) to the network. This will
-        have 'units' outputs for each time-step in the sequence.
-
-        Note that because this is the first layer in the model, Keras needs to
-        know the shape of its input, which is a batch of sequences of arbitrary
-        length (indicated by None), where each observation has a number of
-        input-signals (x_feature_count).
-        '''
-
-        ai_model.add(GRU(
-            _hyperparameters.units,
-            return_sequences=True,
-            recurrent_dropout=_hyperparameters.dropout,
-            input_shape=(None, x_feature_count)))
-
-        for _ in range(1, abs(_hyperparameters.layers)):
-            ai_model.add(GRU(
-                _hyperparameters.units,
-                recurrent_dropout=_hyperparameters.dropout,
-                return_sequences=True))
-
-        '''
-        The GRU outputs a batch from keras_contrib.layers.advanced_activations
-        of sequences of 'units' values. We want to predict
-        'y_feature_count' output-signals, so we add a fully-connected (or
-        dense) layer which maps 'units' values down to only 'y_feature_count'
-        values.
-
-        The output-signals in the data-set have been limited to be between 0
-        and 1 using a scaler-object. So we also limit the output of the neural
-        network using the Sigmoid activation function, which squashes the
-        output to be between 0 and 1.
-        '''
-
-        if bool(use_sigmoid) is True:
-            ai_model.add(Dense(y_feature_count, activation='sigmoid'))
-
-        '''
-        A problem with using the Sigmoid activation function, is that we can
-        now only output values in the same range as the training-data.
-
-        For example, if the training-data only has values between -20 and +30,
-        then the scaler-object will map -20 to 0 and +30 to 1. So if we limit
-        the output of the neural network to be between 0 and 1 using the
-        Sigmoid function, this can only be mapped back to values between
-        -20 and +30.
-
-        We can use a linear activation function on the output instead. This
-        allows for the output to take on arbitrary values. It might work with
-        the standard initialization for a simple network architecture, but for
-        more complicated network architectures e.g. with more layers, it might
-        be necessary to initialize the weights with smaller values to avoid
-        NaN values during training. You may need to experiment with this to
-        get it working.
-        '''
-
-        if bool(use_sigmoid) is False:
-            # Maybe use lower init-ranges.
-            init = RandomUniform(minval=-0.05, maxval=0.05)
-            ai_model.add(Dense(
-                y_feature_count,
-                activation='linear',
-                kernel_initializer=init))
-
-        # Compile Model
-
-        '''
-        This is the optimizer and the beginning learning-rate that we will use.
-        We then compile the Keras model so it is ready for training.
-        '''
-
-        optimizer = RMSprop(lr=1e-3)
-        ai_model.compile(
-            loss=model_loss,
-            optimizer=optimizer,
-            metrics=['accuracy'])
-
-        # Display layers
-
-        '''
-        This is a very small model with only two layers. The output shape of
-        (None, None, 'y_feature_count') means that the model will output a
-        batch with an arbitrary number of sequences, each of which has an
-        arbitrary number of observations, and each observation has
-        'y_feature_count' signals. This corresponds to the 'y_feature_count'
-        target signals we want to predict.
-        '''
-        print('\n> Summary (Parallel):\n')
-        print(ai_model.summary())
-
-        # Callback Functions
-
-        '''
-        During training we want to save checkpoints and log the progress to
-        TensorBoard so we create the appropriate callbacks for Keras.
-
-        This is the callback for writing checkpoints during training.
-        '''
-
-        callback_checkpoint = ModelCheckpoint(
-            filepath=self._files.checkpoint, monitor='val_loss',
-            verbose=1, save_weights_only=True, save_best_only=True
-        )
-
-        '''
-        This is the callback for stopping the optimization when performance
-        worsens on the validation-set.
-        '''
-
-        callback_early_stopping = EarlyStopping(
-            monitor='val_loss', patience=_hyperparameters.patience, verbose=1
-        )
-
-        '''
-        This is the callback for writing the TensorBoard log during training.
-        '''
-
-        callback_tensorboard = TensorBoard(
-            log_dir=self._files.log_dir, histogram_freq=0, write_graph=False
-        )
-
-        '''
-        This callback reduces the learning-rate for the optimizer if the
-        validation-loss has not improved since the last epoch
-        (as indicated by patience=0). The learning-rate will be reduced by
-        multiplying it with the given factor. We set a start learning-rate of
-        1e-3 above, so multiplying it by 0.1 gives a learning-rate of 1e-4.
-        We don't want the learning-rate to go any lower than this.
-        '''
-
-        callback_reduce_lr = ReduceLROnPlateau(
-            monitor='val_loss', factor=0.1, min_lr=1e-4, patience=0, verbose=1
-        )
-
-        callbacks = [callback_early_stopping,
-                     callback_checkpoint,
-                     callback_tensorboard,
-                     callback_reduce_lr]
-
-        # Train the Recurrent Neural Network
-
-        '''We can now train the neural network.
-
-        Note that a single "epoch" does not correspond to a single processing
-        of the training-set, because of how the batch-generator randomly
-        selects sub-sequences from the training-set. Instead we have selected
-        steps_per_epoch so that one "epoch" is processed in a few minutes.
-
-        With these settings, each "epoch" took about 2.5 minutes to process on
-        a GTX 1070. After 14 "epochs" the optimization was stopped because the
-        validation-loss had not decreased for 5 "epochs". This optimization
-        took about 35 minutes to finish.
-
-        Also note that the loss sometimes becomes NaN (not-a-number). This is
-        often resolved by restarting and running the Notebook again. But it may
-        also be caused by your neural network architecture, learning-rate,
-        batch-size, sequence-length, etc. in which case you may have to modify
-        those settings.
-        '''
-
-        print('\n> Parameters for training\n')
-        pprint(_hyperparameters)
-        print('\n> Starting data training\n')
-
-        history = ai_model.fit(
-            x=generator,
-            epochs=_hyperparameters.epochs,
-            steps_per_epoch=_hyperparameters.steps_per_epoch,
-            validation_data=validation_data,
-            callbacks=callbacks)
-
-        # Save model
-        self.save(ai_model, history)
-
     def mtrain(self, params=None):
         """Train the Recurrent Neural Network.
 
@@ -559,17 +299,15 @@ training_rows, y_train_scaled, x_train_scaled''')
 
         # Intialize key variables realted to data
         normal = self._data.split()
-        (_, x_feature_count) = normal.x_train.shape
+        (training_rows, x_feature_count) = normal.x_train.shape
         (_, y_feature_count) = normal.y_train.shape
 
         # Get GPU information
         devices = memory.setup()
-        gpus = devices.gpus[:max(1, len(devices.gpus) - 1)]
         cpus = devices.cpus[0]
 
         # Start creating the model
         strategy = tf.distribute.MirroredStrategy(
-            gpus,
             cross_device_ops=tf.distribute.ReductionToOneDevice(
                 reduce_to_device=cpus))
         print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -658,9 +396,12 @@ training_rows, y_train_scaled, x_train_scaled''')
             use. We then compile the Keras model so it is ready for training.
             '''
 
-            optimizer = tf.keras.optimizers.RMSprop(lr=1e-3)
+            optimizer = tfa.optimizers.RectifiedAdam(
+                lr=1e-3,
+                total_steps=training_rows,
+                warmup_proportion=WARMUP_STEPS/training_rows)
             ai_model.compile(
-                loss=model_loss,
+                loss='mse',
                 optimizer=optimizer,
                 metrics=['accuracy'])
 
@@ -729,7 +470,7 @@ training_rows, y_train_scaled, x_train_scaled''')
         if os.path.exists(self._files.checkpoint):
             _model.load_weights(self._files.checkpoint)
 
-        optimizer = RMSprop(lr=1e-3)
+        optimizer = tf.keras.optimizers.RMSprop(lr=1e-3)
         _model.compile(
             loss=model_loss,
             optimizer=optimizer,
