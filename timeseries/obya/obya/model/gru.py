@@ -3,6 +3,7 @@
 # Standard imports
 from __future__ import print_function
 import os
+import sys
 from copy import deepcopy
 from pprint import pprint
 import gc
@@ -979,6 +980,17 @@ def load(identifier):
 
     # Initialize key Variables
     _files = files.files(identifier)
+
+    # Check for the existence of model files and directories
+    if os.path.isdir(_files.model_parameters) is False:
+        print('''\
+Directory {} not found. Please create it by training your model first.\
+'''.format(_files.model_parameters))
+        sys.exit(0)
+
+    if os.path.isdir(_files.model_weights) is False:
+        print('File {} not found.'.format(_files.model_weights))
+        sys.exit(0)
 
     # Load yaml and create model
     '''
