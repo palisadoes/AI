@@ -1,6 +1,7 @@
 matplotlib
 keras
 tensorflow-gpu
+tensorflow-addons
 pandas
 numpy
 sklearn

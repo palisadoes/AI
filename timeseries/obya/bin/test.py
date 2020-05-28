@@ -37,7 +37,7 @@ def main():
     df_ = df_.rolling(steps_per_day).mean().iloc[steps_per_day:]
 
     # Convert data for training
-    data = etl.Data(df_)
+    data = etl.Data(df_, shift=args.shift)
 
     # Train if necessary
     if args.train is True:
@@ -129,6 +129,11 @@ Test size as decimal fraction of total dataset. Default 0.2 (20 percent)''',
         '-q', '--sequence_length',
         help='Sequence length. Default 10',
         type=int, default=500)
+
+    parser.add_argument(
+        '-S', '--shift',
+        help='Number of predictions into the future to forecast. Default 1',
+        type=int, default=1)
 
     args = parser.parse_args()
     return args
