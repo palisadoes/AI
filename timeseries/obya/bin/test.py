@@ -34,7 +34,7 @@ def main():
     df_ = pd.read_csv(args.filename, names=['timestamp', 'value'], index_col=0)
 
     # Create a one day moving average
-    df_ = df_.rolling(steps_per_day).mean().iloc[steps_per_day:]
+    df_ = df_.rolling(steps_per_day).max().iloc[steps_per_day:]
 
     # Convert data for training
     data = etl.Data(df_, shift=args.shift)

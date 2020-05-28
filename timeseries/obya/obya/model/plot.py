@@ -131,8 +131,8 @@ class Plot():
         # Variables for date formatting
         days = mdates.DayLocator()   # Every day
         months = mdates.MonthLocator()  # Every month
-        months_format = mdates.DateFormatter('%b %Y %H:%M')
-        days_format = mdates.DateFormatter('%d')
+        months_format = mdates.DateFormatter('%b %d, %Y %H:%M')
+        days_format = mdates.DateFormatter('%b %d, %Y %H:%M')
 
         # Assign other variables dependent on the type of data we are plotting
         if train is True:
