@@ -9,11 +9,43 @@ import sys
 
 # PIP3 packages
 import pandas as pd
+import numpy as np
 
 # Obya imports
 from obya.etl import etl
 from obya.model import gru
 from obya.model import plot
+
+
+def process(df_, f_steps=0, p_steps=0):
+    """Pre-process data.
+
+    Args:
+        df_: DataFrame to process. Indexed by epoch timestamp
+
+    Returns:
+        result: processed DataFrame
+
+    """
+    # Look out one week on values
+    future_values = df_['value'].rolling(f_steps).max().shift(-f_steps)
+    future_values = np.array(future_values)[p_steps:-f_steps]
+    print(future_values.shape)
+
+    # Look back one week on time
+    # past_maxes = df_.index.to_series().rolling(p_steps).max()
+    past_maxes = df_.index.to_series().rolling(p_steps).max()
+    past_maxes = np.array(past_maxes).astype('int')[p_steps:-f_steps]
+    print(past_maxes.shape)
+
+    # Recreate
+    result = pd.DataFrame(future_values, index=past_maxes, columns=['value'])
+
+    # Create a one day moving average
+    #result = result.iloc[p_steps:-f_steps].set_index('timestamp')
+
+    # Return
+    return result
 
 
 def main():
@@ -25,6 +57,8 @@ def main():
     # Initialize key variables
     length = 1000
     steps_per_day = 288
+    f_steps = steps_per_day * 7
+    p_steps = steps_per_day * 30
 
     # Import data
     args = arguments()
@@ -33,8 +67,16 @@ def main():
     identifier = 'test_{}'.format(os.path.basename(args.filename))
     df_ = pd.read_csv(args.filename, names=['timestamp', 'value'], index_col=0)
 
-    # Create a one day moving average
-    df_ = df_.rolling(steps_per_day).max().iloc[steps_per_day:]
+    print(df_.columns)
+    print(df_.head(2))
+
+    # Process data
+    df_ = process(df_, f_steps=f_steps, p_steps=p_steps)
+
+    print(df_.columns)
+    print(df_)
+    # print(df_.tail(2))
+    # sys.exit(0)
 
     # Convert data for training
     data = etl.Data(df_, shift=args.shift)
@@ -62,7 +104,7 @@ def main():
     _plot = plot.Plot(data, identifier)
     _plot.history()
     _plot.train(0, length=length)
-    _plot.test(0, length=length)
+    _plot.test(0, length=len(data.values()))
     _plot.train_test()
 
 

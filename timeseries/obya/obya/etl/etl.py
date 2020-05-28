@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 class Data():
-    """Class for processing data."""
+    """Class for processing datsa."""
 
     def __init__(self, df_, shift=1):
         """Intialize the class.
